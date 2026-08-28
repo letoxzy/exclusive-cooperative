@@ -6,6 +6,7 @@ import SavingsTransaction from "../models/SavingsTransaction.js";
 import Loan from "../models/Loan.js";
 import LoanRepayment from "../models/LoanRepayment.js";
 import LoanEligibility from "../models/LoanEligibility.js";
+import CooperativeSetting from "../models/CooperativeSetting.js";
 import {
   DividendDistribution,
   DividendEntry,
@@ -965,6 +966,93 @@ router.patch("/dividends/:id/pay-all", async (req, res) => {
       .sort("-dividendAmount");
 
     res.json({ distribution, entries });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+
+/*
+  ============================
+  TRANSACTIONS
+  ============================
+*/
+
+router.get("/transactions", async (req, res) => {
+  try {
+    const [savings, repayments, loans, dividendEntries] = await Promise.all([
+      SavingsTransaction.find({ status: "approved" }).populate("user", "fullName email").sort("-createdAt"),
+      LoanRepayment.find({ status: "approved" }).populate("user", "fullName email").populate("loan", "loanType").sort("-createdAt"),
+      Loan.find({ status: { $in: ["approved", "active", "completed"] }, disbursedDate: { $ne: null } }).populate("user", "fullName email").sort("-disbursedDate"),
+      DividendEntry.find({ status: "paid" }).populate("user", "fullName email").sort("-paidDate"),
+    ]);
+
+    const transactions = [];
+    savings.forEach((item) => transactions.push({ id: `savings-${item._id}`, date: item.createdAt, memberName: item.user?.fullName, email: item.user?.email, type: "Savings", reference: item.reference || String(item._id), amount: Number(item.amount || 0), direction: "in", status: item.status }));
+    repayments.forEach((item) => transactions.push({ id: `repayment-${item._id}`, date: item.createdAt, memberName: item.user?.fullName, email: item.user?.email, type: "Loan Repayment", reference: String(item._id), amount: Number(item.amount || 0), direction: "in", status: item.status }));
+    loans.forEach((item) => transactions.push({ id: `loan-${item._id}`, date: item.disbursedDate, memberName: item.user?.fullName, email: item.user?.email, type: "Loan Disbursement", reference: String(item._id), amount: Number(item.amount || 0), direction: "out", status: item.status }));
+    dividendEntries.forEach((item) => transactions.push({ id: `dividend-${item._id}`, date: item.paidDate || item.updatedAt, memberName: item.user?.fullName, email: item.user?.email, type: "Dividend", reference: String(item._id), amount: Number(item.dividendAmount || 0), direction: "out", status: item.status }));
+
+    transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+    res.json(transactions);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  ============================
+  REPORTS
+  ============================
+*/
+
+router.get("/reports", async (req, res) => {
+  try {
+    const [memberTotal, approvedMembers, pendingMembers, savingsAgg, loanCount, pendingLoans, disbursedAgg, outstandingAgg, repaymentAgg, pendingRepayments, dividendDistributions, dividendPaidAgg] = await Promise.all([
+      User.countDocuments({ role: "member" }),
+      User.countDocuments({ role: "member", isApprovedMember: true }),
+      Membership.countDocuments({ status: "pending" }),
+      User.aggregate([{ $match: { role: "member" } }, { $group: { _id: null, total: { $sum: "$savingsBalance" } } }]),
+      Loan.countDocuments(),
+      Loan.countDocuments({ status: "pending" }),
+      Loan.aggregate([{ $match: { disbursedDate: { $ne: null } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
+      Loan.aggregate([{ $match: { status: { $in: ["approved", "active"] } } }, { $group: { _id: null, total: { $sum: "$outstandingBalance" } } }]),
+      LoanRepayment.aggregate([{ $match: { status: "approved" } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
+      LoanRepayment.countDocuments({ status: "pending" }),
+      DividendDistribution.countDocuments(),
+      DividendEntry.aggregate([{ $match: { status: "paid" } }, { $group: { _id: null, total: { $sum: "$dividendAmount" } } }]),
+    ]);
+
+    res.json({ generatedAt: new Date(), members: { total: memberTotal, approved: approvedMembers, pending: pendingMembers }, savings: { total: savingsAgg[0]?.total || 0 }, loans: { applications: loanCount, pending: pendingLoans, disbursed: disbursedAgg[0]?.total || 0, outstanding: outstandingAgg[0]?.total || 0 }, repayments: { total: repaymentAgg[0]?.total || 0, pending: pendingRepayments }, dividends: { distributions: dividendDistributions, paid: dividendPaidAgg[0]?.total || 0 } });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  ============================
+  COOPERATIVE SETTINGS
+  ============================
+*/
+
+router.get("/settings", async (req, res) => {
+  try {
+    let settings = await CooperativeSetting.findOne();
+    if (!settings) settings = await CooperativeSetting.create({});
+    res.json(settings);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.put("/settings", async (req, res) => {
+  try {
+    const loanMultiplier = Number(req.body.loanMultiplier);
+    if (!Number.isFinite(loanMultiplier) || loanMultiplier < 0) return res.status(400).json({ message: "Enter a valid loan multiplier." });
+    const updates = { cooperativeName: String(req.body.cooperativeName || "").trim(), officialEmail: String(req.body.officialEmail || "").trim(), phone: String(req.body.phone || "").trim(), address: String(req.body.address || "").trim(), loanMultiplier };
+    const settings = await CooperativeSetting.findOneAndUpdate({}, updates, { new: true, upsert: true, setDefaultsOnInsert: true });
+    res.json(settings);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

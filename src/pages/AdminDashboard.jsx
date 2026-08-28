@@ -1691,29 +1691,450 @@ function AdminDashboard() {
   };
 
   /* ================================
-     PLACEHOLDER SECTIONS
+     LOANS
   ================================= */
 
-  const renderPlaceholder = (title, description) => {
+  const renderLoansManagement = () => {
+    const activeLoans = loans.filter((loan) =>
+      ["approved", "disbursed", "active"].includes(
+        String(loan.status).toLowerCase(),
+      ),
+    );
+    const totalDisbursed = loans.reduce(
+      (sum, loan) =>
+        sum +
+        (["approved", "disbursed", "active"].includes(
+          String(loan.status).toLowerCase(),
+        )
+          ? Number(loan.amount || 0)
+          : 0),
+      0,
+    );
+    const outstanding = loans.reduce(
+      (sum, loan) => sum + Number(loan.outstandingBalance || 0),
+      0,
+    );
+
     return (
       <>
         <div className="admin-page-heading">
           <div>
-            <p className="eyebrow">Coming Next</p>
-            <h1>{title}</h1>
-            <p className="admin-subtitle">{description}</p>
+            <p className="eyebrow">Loans</p>
+            <h1>Loans</h1>
+            <p className="admin-subtitle">
+              Monitor approved, disbursed, and active cooperative loans.
+            </p>
+          </div>
+          <button type="button" className="btn-secondary" onClick={loadLoans}>
+            Refresh
+          </button>
+        </div>
+
+        <div className="admin-stat-grid">
+          <div className="admin-stat-card">
+            <div>
+              <span>Active Loans</span>
+              <strong>{activeLoans.length}</strong>
+            </div>
+          </div>
+          <div className="admin-stat-card">
+            <div>
+              <span>Total Disbursed</span>
+              <strong>₦{totalDisbursed.toLocaleString()}</strong>
+            </div>
+          </div>
+          <div className="admin-stat-card">
+            <div>
+              <span>Outstanding</span>
+              <strong>₦{outstanding.toLocaleString()}</strong>
+            </div>
+          </div>
+          <div className="admin-stat-card">
+            <div>
+              <span>Total Loan Records</span>
+              <strong>{loans.length}</strong>
+            </div>
           </div>
         </div>
 
-        <section className="admin-card admin-placeholder">
-          <div className="admin-placeholder-icon">+</div>
+        <section className="admin-card">
+          {loans.length === 0 ? (
+            <p className="empty-state">No loan records found.</p>
+          ) : (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Outstanding</th>
+                    <th>Term</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loans.map((loan) => (
+                    <tr key={loan._id}>
+                      <td>
+                        <strong>{loan.user?.fullName || "—"}</strong>
+                        <br />
+                        <span className="muted">{loan.user?.email || "—"}</span>
+                      </td>
+                      <td>
+                        <span className="loan-type-badge">
+                          {loan.loanType || "—"}
+                        </span>
+                      </td>
+                      <td>₦{Number(loan.amount || 0).toLocaleString()}</td>
+                      <td>
+                        ₦{Number(loan.outstandingBalance || 0).toLocaleString()}
+                      </td>
+                      <td>
+                        {loan.termMonths ? `${loan.termMonths} months` : "—"}
+                      </td>
+                      <td>
+                        <span className={`status-badge ${loan.status}`}>
+                          {loan.status || "—"}
+                        </span>
+                      </td>
+                      <td>
+                        {loan.applicationDate
+                          ? new Date(loan.applicationDate).toLocaleDateString()
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </>
+    );
+  };
 
-          <h2>{title}</h2>
+  /* ================================
+     TRANSACTIONS
+  ================================= */
 
-          <p>
-            This section is ready for the next phase of the cooperative
-            management system.
-          </p>
+  const renderTransactions = () => {
+    const transactions = [
+      ...requests.map((item) => ({
+        id: `s-${item._id}`,
+        date: item.createdAt,
+        member: item.user?.fullName || "—",
+        type: "Savings",
+        direction: "Money In",
+        amount: Number(item.amount || 0),
+        status: item.status,
+        reference: item.reference || item._id,
+      })),
+      ...loanRepayments.map((item) => ({
+        id: `r-${item._id}`,
+        date: item.createdAt,
+        member: item.user?.fullName || "—",
+        type: "Loan Repayment",
+        direction: "Money In",
+        amount: Number(item.amount || 0),
+        status: item.status,
+        reference: item.reference || item._id,
+      })),
+      ...loans
+        .filter((item) =>
+          ["disbursed", "active"].includes(String(item.status).toLowerCase()),
+        )
+        .map((item) => ({
+          id: `l-${item._id}`,
+          date: item.disbursementDate || item.applicationDate || item.createdAt,
+          member: item.user?.fullName || "—",
+          type: "Loan Disbursement",
+          direction: "Money Out",
+          amount: Number(item.amount || 0),
+          status: item.status,
+          reference: item.reference || item._id,
+        })),
+    ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+    const moneyIn = transactions
+      .filter(
+        (item) => item.direction === "Money In" && item.status === "approved",
+      )
+      .reduce((sum, item) => sum + item.amount, 0);
+
+    const moneyOut = transactions
+      .filter(
+        (item) => item.direction === "Money Out" && item.status !== "rejected",
+      )
+      .reduce((sum, item) => sum + item.amount, 0);
+
+    return (
+      <>
+        <div className="admin-page-heading">
+          <div>
+            <p className="eyebrow">Finance</p>
+            <h1>Transactions</h1>
+            <p className="admin-subtitle">
+              View financial activity recorded in the cooperative system.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() =>
+              Promise.all([loadRequests(), loadLoanRepayments(), loadLoans()])
+            }
+          >
+            Refresh
+          </button>
+        </div>
+
+        <div className="admin-stat-grid">
+          <div className="admin-stat-card">
+            <div>
+              <span>Money In</span>
+              <strong>₦{moneyIn.toLocaleString()}</strong>
+            </div>
+          </div>
+          <div className="admin-stat-card">
+            <div>
+              <span>Money Out</span>
+              <strong>₦{moneyOut.toLocaleString()}</strong>
+            </div>
+          </div>
+          <div className="admin-stat-card">
+            <div>
+              <span>Transactions</span>
+              <strong>{transactions.length}</strong>
+            </div>
+          </div>
+          <div className="admin-stat-card">
+            <div>
+              <span>Net Movement</span>
+              <strong>₦{(moneyIn - moneyOut).toLocaleString()}</strong>
+            </div>
+          </div>
+        </div>
+
+        <section className="admin-card">
+          {transactions.length === 0 ? (
+            <p className="empty-state">No transactions found.</p>
+          ) : (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Member</th>
+                    <th>Type</th>
+                    <th>Reference</th>
+                    <th>Direction</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((transaction) => (
+                    <tr key={transaction.id}>
+                      <td>
+                        {transaction.date
+                          ? new Date(transaction.date).toLocaleDateString()
+                          : "—"}
+                      </td>
+                      <td>{transaction.member}</td>
+                      <td>{transaction.type}</td>
+                      <td>{transaction.reference}</td>
+                      <td>{transaction.direction}</td>
+                      <td>₦{transaction.amount.toLocaleString()}</td>
+                      <td>
+                        <span className={`status-badge ${transaction.status}`}>
+                          {transaction.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </>
+    );
+  };
+
+  /* ================================
+     REPORTS
+  ================================= */
+
+  const renderReports = () => {
+    const approvedMembers = members.filter((member) => member.role !== "admin");
+    const totalSavingsReport = approvedMembers.reduce(
+      (sum, member) => sum + Number(member.savingsBalance || 0),
+      0,
+    );
+    const totalLoanAmount = loans.reduce(
+      (sum, loan) => sum + Number(loan.amount || 0),
+      0,
+    );
+    const totalOutstanding = loans.reduce(
+      (sum, loan) => sum + Number(loan.outstandingBalance || 0),
+      0,
+    );
+    const totalRepayments = loanRepayments
+      .filter((item) => item.status === "approved")
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const totalDividendPaid = dividends.reduce(
+      (sum, item) => sum + Number(item.paidAmount || 0),
+      0,
+    );
+
+    return (
+      <>
+        <div className="admin-page-heading">
+          <div>
+            <p className="eyebrow">Reports</p>
+            <h1>Reports</h1>
+            <p className="admin-subtitle">
+              Financial and membership summaries based on current records.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() =>
+              Promise.all([
+                loadMembers(),
+                loadLoans(),
+                loadLoanRepayments(),
+                loadDividends(),
+                loadRequests(),
+              ])
+            }
+          >
+            Refresh Data
+          </button>
+        </div>
+
+        <div className="admin-stat-grid">
+          <div className="admin-stat-card">
+            <div>
+              <span>Members</span>
+              <strong>{approvedMembers.length}</strong>
+            </div>
+          </div>
+          <div className="admin-stat-card">
+            <div>
+              <span>Total Savings</span>
+              <strong>₦{totalSavingsReport.toLocaleString()}</strong>
+            </div>
+          </div>
+          <div className="admin-stat-card">
+            <div>
+              <span>Total Loans</span>
+              <strong>₦{totalLoanAmount.toLocaleString()}</strong>
+            </div>
+          </div>
+          <div className="admin-stat-card">
+            <div>
+              <span>Outstanding Loans</span>
+              <strong>₦{totalOutstanding.toLocaleString()}</strong>
+            </div>
+          </div>
+        </div>
+
+        <section className="admin-card">
+          <div className="admin-card-header">
+            <div>
+              <p className="eyebrow">Financial Summary</p>
+              <h2>Cooperative Report</h2>
+            </div>
+          </div>
+
+          <div className="admin-mini-stat">
+            <span>Approved Repayments</span>
+            <strong>₦{totalRepayments.toLocaleString()}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Dividend Records</span>
+            <strong>{dividends.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Recorded Dividend Paid Amount</span>
+            <strong>₦{totalDividendPaid.toLocaleString()}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Membership Applications</span>
+            <strong>{applications.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Loan Applications</span>
+            <strong>{loans.length}</strong>
+          </div>
+        </section>
+      </>
+    );
+  };
+
+  /* ================================
+     SETTINGS
+  ================================= */
+
+  const renderSettings = () => {
+    return (
+      <>
+        <div className="admin-page-heading">
+          <div>
+            <p className="eyebrow">Administration</p>
+            <h1>Settings</h1>
+            <p className="admin-subtitle">
+              Manage administrator and cooperative configuration.
+            </p>
+          </div>
+        </div>
+
+        <section className="admin-card">
+          <div className="admin-card-header">
+            <div>
+              <p className="eyebrow">Administrator</p>
+              <h2>Account Information</h2>
+            </div>
+          </div>
+
+          <div className="admin-mini-stat">
+            <span>Name</span>
+            <strong>{user?.fullName || "—"}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Email</span>
+            <strong>{user?.email || "—"}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Role</span>
+            <strong>{user?.role || "Administrator"}</strong>
+          </div>
+        </section>
+
+        <section className="admin-card">
+          <div className="admin-card-header">
+            <div>
+              <p className="eyebrow">System</p>
+              <h2>Current Dashboard Status</h2>
+            </div>
+          </div>
+
+          <div className="admin-mini-stat">
+            <span>Members loaded</span>
+            <strong>{members.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Loan records loaded</span>
+            <strong>{loans.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Dividend distributions loaded</span>
+            <strong>{dividends.length}</strong>
+          </div>
         </section>
       </>
     );
@@ -1738,7 +2159,7 @@ function AdminDashboard() {
         return renderSavings();
 
       case "loans":
-        return renderPlaceholder("Loans", "Manage active cooperative loans.");
+        return renderLoansManagement();
 
       case "loan-eligibility":
         return renderLoanEligibility();
@@ -1753,22 +2174,13 @@ function AdminDashboard() {
         return renderDividends();
 
       case "transactions":
-        return renderPlaceholder(
-          "Transactions",
-          "View cooperative financial transactions.",
-        );
+        return renderTransactions();
 
       case "reports":
-        return renderPlaceholder(
-          "Reports",
-          "View cooperative financial and membership reports.",
-        );
+        return renderReports();
 
       case "settings":
-        return renderPlaceholder(
-          "Settings",
-          "Manage administrator and cooperative settings.",
-        );
+        return renderSettings();
 
       default:
         return renderOverview();

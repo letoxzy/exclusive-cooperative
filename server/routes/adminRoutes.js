@@ -6,7 +6,6 @@ import SavingsTransaction from "../models/SavingsTransaction.js";
 import Loan from "../models/Loan.js";
 import LoanRepayment from "../models/LoanRepayment.js";
 import LoanEligibility from "../models/LoanEligibility.js";
-import CooperativeSetting from "../models/CooperativeSetting.js";
 import {
   DividendDistribution,
   DividendEntry,
@@ -766,7 +765,7 @@ router.get("/dividends", async (req, res) => {
 */
 router.post("/dividends", async (req, res) => {
   try {
-    const { financialYear, pool, distributionDate } = req.body;
+    const { financialYear, pool, distributionDate, periodStartDate, periodEndDate } = req.body;
 
     const year = Number(financialYear);
     const poolAmount = Number(pool);
@@ -779,10 +778,26 @@ router.post("/dividends", async (req, res) => {
       return res.status(400).json({ message: "Enter a valid dividend pool amount." });
     }
 
+    const startDate = periodStartDate ? new Date(periodStartDate) : null;
+    const endDate = periodEndDate ? new Date(periodEndDate) : null;
+
+    if (startDate && Number.isNaN(startDate.getTime())) {
+      return res.status(400).json({ message: "Enter a valid dividend period start date." });
+    }
+    if (endDate && Number.isNaN(endDate.getTime())) {
+      return res.status(400).json({ message: "Enter a valid dividend period end date." });
+    }
+    if (startDate && endDate && startDate > endDate) {
+      return res.status(400).json({ message: "Dividend period start date must be before the end date." });
+    }
+
     const distribution = await DividendDistribution.create({
       financialYear: year,
       pool: poolAmount,
       distributionDate: distributionDate || "",
+      periodStartDate: startDate,
+      periodEndDate: endDate,
+      calculationBasis: "loan-interest-paid",
       status: "draft",
     });
 
@@ -839,51 +854,61 @@ router.post("/dividends/:id/calculate", async (req, res) => {
     if (!distribution) {
       return res.status(404).json({ message: "Dividend distribution not found" });
     }
-
     if (distribution.status === "completed") {
-      return res.status(400).json({
-        message: "This distribution has already been completed and can't be recalculated.",
-      });
+      return res.status(400).json({ message: "This distribution has already been completed and can't be recalculated." });
     }
+    if (!distribution.periodStartDate || !distribution.periodEndDate) {
+      return res.status(400).json({ message: "Set the dividend calculation period before calculating dividends." });
+    }
+
+    const periodEnd = new Date(distribution.periodEndDate);
+    periodEnd.setHours(23, 59, 59, 999);
+
+    const completedLoans = await Loan.find({
+      status: "completed",
+      completedDate: { $gte: distribution.periodStartDate, $lte: periodEnd },
+    }).select("user amount totalRepayment interestRate completedDate");
 
     const eligibleMembers = await User.find({
       isApprovedMember: true,
       membershipType: "interest-bearing",
-      savingsBalance: { $gt: 0 },
-    }).select("_id savingsBalance");
+    }).select("_id");
+    const eligibleIds = new Set(eligibleMembers.map((member) => String(member._id)));
+    const interestByMember = new Map();
 
-    const totalEligibleContributions = eligibleMembers.reduce(
-      (sum, m) => sum + Number(m.savingsBalance || 0),
+    for (const loan of completedLoans) {
+      const userId = String(loan.user);
+      if (!eligibleIds.has(userId)) continue;
+      const interestPaid = Math.max(0, Number(loan.totalRepayment || 0) - Number(loan.amount || 0));
+      interestByMember.set(userId, (interestByMember.get(userId) || 0) + interestPaid);
+    }
+
+    const qualifyingMembers = Array.from(interestByMember.entries())
+      .filter(([, interest]) => interest > 0)
+      .map(([user, qualifyingInterest]) => ({ user, qualifyingInterest }));
+
+    const totalEligibleInterest = qualifyingMembers.reduce(
+      (sum, member) => sum + member.qualifyingInterest,
       0
     );
 
-    // Clear any previous entries so recalculation doesn't duplicate rows.
     await DividendEntry.deleteMany({ distribution: distribution._id });
 
-    if (totalEligibleContributions > 0) {
-      const entries = eligibleMembers.map((member) => {
-        const contribution = Number(member.savingsBalance || 0);
-
-        const dividendAmount = Math.round(
-          (contribution / totalEligibleContributions) * distribution.pool
-        );
-
-        return {
-          distribution: distribution._id,
-          user: member._id,
-          contribution,
-          dividendAmount,
-          status: "pending",
-        };
-      });
-
+    if (totalEligibleInterest > 0) {
+      const entries = qualifyingMembers.map(({ user, qualifyingInterest }) => ({
+        distribution: distribution._id,
+        user,
+        contribution: qualifyingInterest,
+        qualifyingInterest,
+        dividendAmount: Math.round((qualifyingInterest / totalEligibleInterest) * distribution.pool),
+        status: "pending",
+      }));
       await DividendEntry.insertMany(entries);
     }
 
-    distribution.totalEligibleContributions = totalEligibleContributions;
+    distribution.totalEligibleInterest = totalEligibleInterest;
     distribution.status = "calculated";
     distribution.calculatedDate = new Date();
-
     await distribution.save();
 
     const entries = await DividendEntry.find({ distribution: distribution._id })
@@ -966,93 +991,6 @@ router.patch("/dividends/:id/pay-all", async (req, res) => {
       .sort("-dividendAmount");
 
     res.json({ distribution, entries });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-
-
-/*
-  ============================
-  TRANSACTIONS
-  ============================
-*/
-
-router.get("/transactions", async (req, res) => {
-  try {
-    const [savings, repayments, loans, dividendEntries] = await Promise.all([
-      SavingsTransaction.find({ status: "approved" }).populate("user", "fullName email").sort("-createdAt"),
-      LoanRepayment.find({ status: "approved" }).populate("user", "fullName email").populate("loan", "loanType").sort("-createdAt"),
-      Loan.find({ status: { $in: ["approved", "active", "completed"] }, disbursedDate: { $ne: null } }).populate("user", "fullName email").sort("-disbursedDate"),
-      DividendEntry.find({ status: "paid" }).populate("user", "fullName email").sort("-paidDate"),
-    ]);
-
-    const transactions = [];
-    savings.forEach((item) => transactions.push({ id: `savings-${item._id}`, date: item.createdAt, memberName: item.user?.fullName, email: item.user?.email, type: "Savings", reference: item.reference || String(item._id), amount: Number(item.amount || 0), direction: "in", status: item.status }));
-    repayments.forEach((item) => transactions.push({ id: `repayment-${item._id}`, date: item.createdAt, memberName: item.user?.fullName, email: item.user?.email, type: "Loan Repayment", reference: String(item._id), amount: Number(item.amount || 0), direction: "in", status: item.status }));
-    loans.forEach((item) => transactions.push({ id: `loan-${item._id}`, date: item.disbursedDate, memberName: item.user?.fullName, email: item.user?.email, type: "Loan Disbursement", reference: String(item._id), amount: Number(item.amount || 0), direction: "out", status: item.status }));
-    dividendEntries.forEach((item) => transactions.push({ id: `dividend-${item._id}`, date: item.paidDate || item.updatedAt, memberName: item.user?.fullName, email: item.user?.email, type: "Dividend", reference: String(item._id), amount: Number(item.dividendAmount || 0), direction: "out", status: item.status }));
-
-    transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-    res.json(transactions);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-/*
-  ============================
-  REPORTS
-  ============================
-*/
-
-router.get("/reports", async (req, res) => {
-  try {
-    const [memberTotal, approvedMembers, pendingMembers, savingsAgg, loanCount, pendingLoans, disbursedAgg, outstandingAgg, repaymentAgg, pendingRepayments, dividendDistributions, dividendPaidAgg] = await Promise.all([
-      User.countDocuments({ role: "member" }),
-      User.countDocuments({ role: "member", isApprovedMember: true }),
-      Membership.countDocuments({ status: "pending" }),
-      User.aggregate([{ $match: { role: "member" } }, { $group: { _id: null, total: { $sum: "$savingsBalance" } } }]),
-      Loan.countDocuments(),
-      Loan.countDocuments({ status: "pending" }),
-      Loan.aggregate([{ $match: { disbursedDate: { $ne: null } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
-      Loan.aggregate([{ $match: { status: { $in: ["approved", "active"] } } }, { $group: { _id: null, total: { $sum: "$outstandingBalance" } } }]),
-      LoanRepayment.aggregate([{ $match: { status: "approved" } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
-      LoanRepayment.countDocuments({ status: "pending" }),
-      DividendDistribution.countDocuments(),
-      DividendEntry.aggregate([{ $match: { status: "paid" } }, { $group: { _id: null, total: { $sum: "$dividendAmount" } } }]),
-    ]);
-
-    res.json({ generatedAt: new Date(), members: { total: memberTotal, approved: approvedMembers, pending: pendingMembers }, savings: { total: savingsAgg[0]?.total || 0 }, loans: { applications: loanCount, pending: pendingLoans, disbursed: disbursedAgg[0]?.total || 0, outstanding: outstandingAgg[0]?.total || 0 }, repayments: { total: repaymentAgg[0]?.total || 0, pending: pendingRepayments }, dividends: { distributions: dividendDistributions, paid: dividendPaidAgg[0]?.total || 0 } });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-/*
-  ============================
-  COOPERATIVE SETTINGS
-  ============================
-*/
-
-router.get("/settings", async (req, res) => {
-  try {
-    let settings = await CooperativeSetting.findOne();
-    if (!settings) settings = await CooperativeSetting.create({});
-    res.json(settings);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-router.put("/settings", async (req, res) => {
-  try {
-    const loanMultiplier = Number(req.body.loanMultiplier);
-    if (!Number.isFinite(loanMultiplier) || loanMultiplier < 0) return res.status(400).json({ message: "Enter a valid loan multiplier." });
-    const updates = { cooperativeName: String(req.body.cooperativeName || "").trim(), officialEmail: String(req.body.officialEmail || "").trim(), phone: String(req.body.phone || "").trim(), address: String(req.body.address || "").trim(), loanMultiplier };
-    const settings = await CooperativeSetting.findOneAndUpdate({}, updates, { new: true, upsert: true, setDefaultsOnInsert: true });
-    res.json(settings);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

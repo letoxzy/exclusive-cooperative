@@ -23,17 +23,6 @@ function AdminDashboard() {
     useState([]);
   const [loanRepayments, setLoanRepayments] = useState([]);
   const [dividends, setDividends] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  const [reports, setReports] = useState(null);
-  const [settings, setSettings] = useState(null);
-  const [settingsForm, setSettingsForm] = useState({
-    cooperativeName: "Exclusive Cooperative",
-    officialEmail: "",
-    phone: "",
-    address: "",
-    loanMultiplier: 2,
-  });
-  const [settingsSaving, setSettingsSaving] = useState(false);
   const [selectedDividendId, setSelectedDividendId] = useState(null);
   const [selectedDividend, setSelectedDividend] = useState(null);
   const [dividendEntries, setDividendEntries] = useState([]);
@@ -41,6 +30,8 @@ function AdminDashboard() {
   const [dividendForm, setDividendForm] = useState({
     financialYear: new Date().getFullYear(),
     pool: "",
+    periodStartDate: "",
+    periodEndDate: "",
     distributionDate: "",
   });
   const [dividendActionLoading, setDividendActionLoading] = useState(false);
@@ -111,37 +102,6 @@ function AdminDashboard() {
 
     setLoanRepayments(data);
   }, [user.token]);
-
-  const loadTransactions = useCallback(async () => {
-    const data = await request("/admin/transactions", {
-      token: user.token,
-    });
-
-    setTransactions(data);
-  }, [user.token]);
-
-  const loadReports = useCallback(async () => {
-    const data = await request("/admin/reports", {
-      token: user.token,
-    });
-
-    setReports(data);
-  }, [user.token]);
-
-  const loadSettings = useCallback(async () => {
-    const data = await request("/admin/settings", {
-      token: user.token,
-    });
-
-    setSettings(data);
-    setSettingsForm({
-      cooperativeName: data.cooperativeName || "Exclusive Cooperative",
-      officialEmail: data.officialEmail || "",
-      phone: data.phone || "",
-      address: data.address || "",
-      loanMultiplier: Number(data.loanMultiplier ?? 2),
-    });
-  }, [user.token]);
   /* ================================
      LOAD DATA WHEN SECTION CHANGES
   ================================= */
@@ -181,12 +141,6 @@ function AdminDashboard() {
       loader = loadLoanRepayments;
     } else if (activeSection === "dividends") {
       loader = loadDividends;
-    } else if (activeSection === "transactions") {
-      loader = loadTransactions;
-    } else if (activeSection === "reports") {
-      loader = loadReports;
-    } else if (activeSection === "settings") {
-      loader = loadSettings;
     }
 
     if (!loader) {
@@ -206,9 +160,6 @@ function AdminDashboard() {
     loadLoanEligibilityApplications,
     loadLoanRepayments,
     loadDividends,
-    loadTransactions,
-    loadReports,
-    loadSettings,
   ]);
 
   /* ================================
@@ -393,6 +344,8 @@ function AdminDashboard() {
         body: {
           financialYear: Number(dividendForm.financialYear),
           pool: Number(dividendForm.pool),
+          periodStartDate: dividendForm.periodStartDate,
+          periodEndDate: dividendForm.periodEndDate,
           distributionDate: dividendForm.distributionDate,
         },
       });
@@ -401,6 +354,8 @@ function AdminDashboard() {
       setDividendForm({
         financialYear: new Date().getFullYear(),
         pool: "",
+        periodStartDate: "",
+        periodEndDate: "",
         distributionDate: "",
       });
 
@@ -1035,9 +990,9 @@ function AdminDashboard() {
                   : "Dividend Distribution"}
               </h1>
               <p className="admin-subtitle">
-                Only interest-bearing members with a savings balance are
-                eligible. Shares are split proportional to each member's savings
-                contribution.
+                Only interest-bearing members with fully settled loans in the
+                selected period are eligible. Shares are based on the loan
+                interest actually paid by each member.
               </p>
             </div>
 
@@ -1065,11 +1020,11 @@ function AdminDashboard() {
               </div>
 
               <div>
-                <strong>Total Eligible Contributions</strong>
+                <strong>Total Eligible Interest</strong>
                 <span>
                   ₦
                   {Number(
-                    selectedDividend.totalEligibleContributions || 0,
+                    selectedDividend.totalEligibleInterest || 0,
                   ).toLocaleString()}
                 </span>
               </div>
@@ -1125,7 +1080,7 @@ function AdminDashboard() {
                   <thead>
                     <tr>
                       <th>Member</th>
-                      <th>Contribution</th>
+                      <th>Interest Paid</th>
                       <th>Dividend</th>
                       <th>Status</th>
                       <th>Action</th>
@@ -1144,7 +1099,10 @@ function AdminDashboard() {
                         </td>
 
                         <td>
-                          ₦{Number(entry.contribution || 0).toLocaleString()}
+                          ₦
+                          {Number(
+                            entry.qualifyingInterest || entry.contribution || 0,
+                          ).toLocaleString()}
                         </td>
 
                         <td>
@@ -1190,8 +1148,9 @@ function AdminDashboard() {
             <p className="eyebrow">Dividends</p>
             <h1>Dividends</h1>
             <p className="admin-subtitle">
-              Create a yearly dividend pool and split it across eligible
-              (interest-bearing) members based on their savings contribution.
+              Create a dividend pool from the cooperative's accumulated interest
+              and distribute it among interest-bearing members based on
+              qualifying loan interest actually paid during the selected period.
             </p>
           </div>
 
@@ -1228,7 +1187,9 @@ function AdminDashboard() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="pool">Dividend Pool (₦)</label>
+                <label htmlFor="pool">
+                  Dividend Pool from Accumulated Interest (₦)
+                </label>
                 <input
                   id="pool"
                   type="number"
@@ -1240,6 +1201,38 @@ function AdminDashboard() {
                     setDividendForm((prev) => ({
                       ...prev,
                       pool: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="periodStartDate">Interest Period Start</label>
+                <input
+                  id="periodStartDate"
+                  type="date"
+                  required
+                  value={dividendForm.periodStartDate}
+                  onChange={(e) =>
+                    setDividendForm((prev) => ({
+                      ...prev,
+                      periodStartDate: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="periodEndDate">Interest Period End</label>
+                <input
+                  id="periodEndDate"
+                  type="date"
+                  required
+                  value={dividendForm.periodEndDate}
+                  onChange={(e) =>
+                    setDividendForm((prev) => ({
+                      ...prev,
+                      periodEndDate: e.target.value,
                     }))
                   }
                 />
@@ -1698,471 +1691,6 @@ function AdminDashboard() {
   };
 
   /* ================================
-     LOAN PORTFOLIO
-  ================================= */
-
-  const renderLoanPortfolio = () => {
-    const activeLoans = loans.filter((loan) =>
-      ["approved", "active"].includes(loan.status),
-    );
-    const totalDisbursed = activeLoans.reduce(
-      (sum, loan) => sum + Number(loan.amount || 0),
-      0,
-    );
-    const outstanding = activeLoans.reduce(
-      (sum, loan) => sum + Number(loan.outstandingBalance || 0),
-      0,
-    );
-    const amountPaid = activeLoans.reduce(
-      (sum, loan) => sum + Number(loan.amountPaid || 0),
-      0,
-    );
-
-    return (
-      <>
-        <div className="admin-page-heading">
-          <div>
-            <p className="eyebrow">Loan Management</p>
-            <h1>Loans</h1>
-            <p className="admin-subtitle">
-              Monitor approved and active loans currently recorded in the
-              cooperative system.
-            </p>
-          </div>
-          <button
-            className="admin-link-btn"
-            onClick={() => setActiveSection("loan-requests")}
-          >
-            Loan Requests
-          </button>
-        </div>
-
-        <div className="admin-stat-grid">
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon loan-icon">₦</div>
-            <div>
-              <span>Active Loans</span>
-              <strong>{activeLoans.length}</strong>
-            </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon loan-icon">₦</div>
-            <div>
-              <span>Disbursed</span>
-              <strong>₦{totalDisbursed.toLocaleString()}</strong>
-            </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon pending-icon">₦</div>
-            <div>
-              <span>Outstanding</span>
-              <strong>₦{outstanding.toLocaleString()}</strong>
-            </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon savings-icon">₦</div>
-            <div>
-              <span>Paid Back</span>
-              <strong>₦{amountPaid.toLocaleString()}</strong>
-            </div>
-          </div>
-        </div>
-
-        <section className="admin-card">
-          {activeLoans.length === 0 ? (
-            <p className="empty-state">
-              No approved or active loans are currently recorded.
-            </p>
-          ) : (
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Member</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                    <th>Paid</th>
-                    <th>Outstanding</th>
-                    <th>Term</th>
-                    <th>Status</th>
-                    <th>Disbursed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeLoans.map((loan) => (
-                    <tr key={loan._id}>
-                      <td>
-                        <strong>{loan.user?.fullName || "—"}</strong>
-                        <br />
-                        <span className="muted">{loan.user?.email || "—"}</span>
-                      </td>
-                      <td>
-                        <span className="loan-type-badge">{loan.loanType}</span>
-                      </td>
-                      <td>₦{Number(loan.amount || 0).toLocaleString()}</td>
-                      <td>₦{Number(loan.amountPaid || 0).toLocaleString()}</td>
-                      <td>
-                        ₦{Number(loan.outstandingBalance || 0).toLocaleString()}
-                      </td>
-                      <td>{loan.termMonths} months</td>
-                      <td>
-                        <span className={`status-badge ${loan.status}`}>
-                          {loan.status}
-                        </span>
-                      </td>
-                      <td>
-                        {loan.disbursedDate
-                          ? new Date(loan.disbursedDate).toLocaleDateString()
-                          : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      </>
-    );
-  };
-
-  /* ================================
-     TRANSACTIONS
-  ================================= */
-
-  const renderTransactions = () => {
-    const moneyIn = transactions
-      .filter((item) => item.direction === "in")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const moneyOut = transactions
-      .filter((item) => item.direction === "out")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-    return (
-      <>
-        <div className="admin-page-heading">
-          <div>
-            <p className="eyebrow">Finance</p>
-            <h1>Transactions</h1>
-            <p className="admin-subtitle">
-              A real-time view of financial transactions recorded in the
-              cooperative database.
-            </p>
-          </div>
-        </div>
-        <div className="admin-stat-grid">
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon savings-icon">₦</div>
-            <div>
-              <span>Money In</span>
-              <strong>₦{moneyIn.toLocaleString()}</strong>
-            </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon pending-icon">₦</div>
-            <div>
-              <span>Money Out</span>
-              <strong>₦{moneyOut.toLocaleString()}</strong>
-            </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon loan-icon">₦</div>
-            <div>
-              <span>Net Movement</span>
-              <strong>₦{(moneyIn - moneyOut).toLocaleString()}</strong>
-            </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon members-icon">#</div>
-            <div>
-              <span>Transactions</span>
-              <strong>{transactions.length}</strong>
-            </div>
-          </div>
-        </div>
-        <section className="admin-card">
-          {transactions.length === 0 ? (
-            <p className="empty-state">
-              No financial transactions have been recorded yet.
-            </p>
-          ) : (
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Member</th>
-                    <th>Type</th>
-                    <th>Reference</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        {item.date ? new Date(item.date).toLocaleString() : "—"}
-                      </td>
-                      <td>
-                        <strong>{item.memberName || "—"}</strong>
-                        <br />
-                        <span className="muted">{item.email || "—"}</span>
-                      </td>
-                      <td>
-                        <span className="loan-type-badge">{item.type}</span>
-                      </td>
-                      <td>{item.reference || "—"}</td>
-                      <td
-                        className={
-                          item.direction === "out"
-                            ? "transaction-out"
-                            : "transaction-in"
-                        }
-                      >
-                        {item.direction === "out" ? "−" : "+"}₦
-                        {Number(item.amount || 0).toLocaleString()}
-                      </td>
-                      <td>
-                        <span className={`status-badge ${item.status}`}>
-                          {item.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      </>
-    );
-  };
-
-  /* ================================
-     REPORTS
-  ================================= */
-
-  const renderReports = () => {
-    const r = reports || {};
-    return (
-      <>
-        <div className="admin-page-heading">
-          <div>
-            <p className="eyebrow">Management</p>
-            <h1>Reports</h1>
-            <p className="admin-subtitle">
-              Live summaries generated from your membership, savings, loan,
-              repayment and dividend records.
-            </p>
-          </div>
-        </div>
-        <div className="admin-stat-grid">
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon members-icon">#</div>
-            <div>
-              <span>Approved Members</span>
-              <strong>{r.members?.approved ?? 0}</strong>
-            </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon savings-icon">₦</div>
-            <div>
-              <span>Total Savings</span>
-              <strong>₦{Number(r.savings?.total || 0).toLocaleString()}</strong>
-            </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon loan-icon">₦</div>
-            <div>
-              <span>Loans Disbursed</span>
-              <strong>
-                ₦{Number(r.loans?.disbursed || 0).toLocaleString()}
-              </strong>
-            </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-icon pending-icon">₦</div>
-            <div>
-              <span>Outstanding Loans</span>
-              <strong>
-                ₦{Number(r.loans?.outstanding || 0).toLocaleString()}
-              </strong>
-            </div>
-          </div>
-        </div>
-        <section className="admin-card admin-report-grid">
-          <div>
-            <span>Total Members</span>
-            <strong>{r.members?.total ?? 0}</strong>
-          </div>
-          <div>
-            <span>Pending Memberships</span>
-            <strong>{r.members?.pending ?? 0}</strong>
-          </div>
-          <div>
-            <span>Loan Applications</span>
-            <strong>{r.loans?.applications ?? 0}</strong>
-          </div>
-          <div>
-            <span>Pending Loan Requests</span>
-            <strong>{r.loans?.pending ?? 0}</strong>
-          </div>
-          <div>
-            <span>Total Repayments</span>
-            <strong>
-              ₦{Number(r.repayments?.total || 0).toLocaleString()}
-            </strong>
-          </div>
-          <div>
-            <span>Pending Repayments</span>
-            <strong>{r.repayments?.pending ?? 0}</strong>
-          </div>
-          <div>
-            <span>Dividend Pools</span>
-            <strong>{r.dividends?.distributions ?? 0}</strong>
-          </div>
-          <div>
-            <span>Dividends Paid</span>
-            <strong>₦{Number(r.dividends?.paid || 0).toLocaleString()}</strong>
-          </div>
-        </section>
-        <section className="admin-card">
-          <div className="admin-card-header">
-            <div>
-              <p className="eyebrow">System</p>
-              <h2>Report Generated</h2>
-            </div>
-          </div>
-          <p className="admin-muted">
-            {r.generatedAt
-              ? new Date(r.generatedAt).toLocaleString()
-              : "Loading..."}
-          </p>
-        </section>
-      </>
-    );
-  };
-
-  /* ================================
-     SETTINGS
-  ================================= */
-
-  const handleSettingsChange = (e) =>
-    setSettingsForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-
-  const handleSettingsSave = async (e) => {
-    e.preventDefault();
-    try {
-      setError("");
-      setSettingsSaving(true);
-      const updated = await request("/admin/settings", {
-        method: "PUT",
-        token: user.token,
-        body: {
-          ...settingsForm,
-          loanMultiplier: Number(settingsForm.loanMultiplier),
-        },
-      });
-      setSettings(updated);
-      setSettingsForm({
-        cooperativeName: updated.cooperativeName || "",
-        officialEmail: updated.officialEmail || "",
-        phone: updated.phone || "",
-        address: updated.address || "",
-        loanMultiplier: Number(updated.loanMultiplier ?? 2),
-      });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSettingsSaving(false);
-    }
-  };
-
-  const renderSettings = () => (
-    <>
-      <div className="admin-page-heading">
-        <div>
-          <p className="eyebrow">Administration</p>
-          <h1>Settings</h1>
-          <p className="admin-subtitle">
-            Manage cooperative information and operational rules saved in the
-            database.
-          </p>
-        </div>
-      </div>
-      <section className="admin-card">
-        <form className="admin-settings-form" onSubmit={handleSettingsSave}>
-          <div className="admin-form-grid">
-            <label>
-              Cooperative Name
-              <input
-                name="cooperativeName"
-                value={settingsForm.cooperativeName}
-                onChange={handleSettingsChange}
-                required
-              />
-            </label>
-            <label>
-              Official Email
-              <input
-                type="email"
-                name="officialEmail"
-                value={settingsForm.officialEmail}
-                onChange={handleSettingsChange}
-              />
-            </label>
-            <label>
-              Phone
-              <input
-                name="phone"
-                value={settingsForm.phone}
-                onChange={handleSettingsChange}
-              />
-            </label>
-            <label>
-              Loan Eligibility Multiplier
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                name="loanMultiplier"
-                value={settingsForm.loanMultiplier}
-                onChange={handleSettingsChange}
-                required
-              />
-            </label>
-            <label className="admin-form-full">
-              Cooperative Address
-              <textarea
-                name="address"
-                rows="3"
-                value={settingsForm.address}
-                onChange={handleSettingsChange}
-              />
-            </label>
-          </div>
-          <div className="admin-settings-note">
-            <strong>Loan eligibility rule</strong>
-            <p>
-              The current multiplier determines the maximum eligibility amount
-              from a member's savings balance. Your current rule is{" "}
-              {Number(settingsForm.loanMultiplier || 0)}× savings.
-            </p>
-          </div>
-          <button
-            className="btn-primary"
-            type="submit"
-            disabled={settingsSaving}
-          >
-            {settingsSaving ? "Saving..." : "Save Settings"}
-          </button>
-        </form>
-      </section>
-    </>
-  );
-
-  /* ================================
      PLACEHOLDER SECTIONS
   ================================= */
 
@@ -2210,7 +1738,7 @@ function AdminDashboard() {
         return renderSavings();
 
       case "loans":
-        return renderLoanPortfolio();
+        return renderPlaceholder("Loans", "Manage active cooperative loans.");
 
       case "loan-eligibility":
         return renderLoanEligibility();
@@ -2225,13 +1753,22 @@ function AdminDashboard() {
         return renderDividends();
 
       case "transactions":
-        return renderTransactions();
+        return renderPlaceholder(
+          "Transactions",
+          "View cooperative financial transactions.",
+        );
 
       case "reports":
-        return renderReports();
+        return renderPlaceholder(
+          "Reports",
+          "View cooperative financial and membership reports.",
+        );
 
       case "settings":
-        return renderSettings();
+        return renderPlaceholder(
+          "Settings",
+          "Manage administrator and cooperative settings.",
+        );
 
       default:
         return renderOverview();

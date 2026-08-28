@@ -31,11 +31,22 @@ const dividendDistributionSchema = new mongoose.Schema(
       default: "interest-bearing",
     },
 
-    // Fixed for now — dividend share is proportional to each
-    // member's savings balance (their "contribution").
+    // Dividend allocation is based on qualifying loan interest actually
+    // paid on completed interest-bearing loans during the selected period.
     calculationBasis: {
       type: String,
-      default: "contribution",
+      enum: ["loan-interest-paid"],
+      default: "loan-interest-paid",
+    },
+
+    periodStartDate: {
+      type: Date,
+      default: null,
+    },
+
+    periodEndDate: {
+      type: Date,
+      default: null,
     },
 
     distributionDate: {
@@ -52,7 +63,8 @@ const dividendDistributionSchema = new mongoose.Schema(
       default: "draft",
     },
 
-    totalEligibleContributions: {
+    // Total qualifying interest paid by eligible members in the period.
+    totalEligibleInterest: {
       type: Number,
       default: 0,
     },
@@ -91,9 +103,16 @@ const dividendEntrySchema = new mongoose.Schema(
       required: true,
     },
 
+    // Qualifying loan interest actually paid by this member.
     contribution: {
       type: Number,
       required: true,
+    },
+
+    qualifyingInterest: {
+      type: Number,
+      required: true,
+      default: 0,
     },
 
     dividendAmount: {

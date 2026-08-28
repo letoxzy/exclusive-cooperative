@@ -69,4 +69,31 @@ router.get("/me/savings-requests", protect, async (req, res) => {
   res.json(txns);
 });
 
+// GET /api/users/me/transactions
+// Member transaction history
+router.get("/me/transactions", protect, async (req, res) => {
+  try {
+    const savingsTransactions = await SavingsTransaction.find({
+      user: req.user._id,
+    }).sort("-createdAt");
+
+    const transactions = savingsTransactions.map((transaction) => ({
+      _id: transaction._id,
+      type: "savings",
+      description: "Savings Deposit",
+      amount: Number(transaction.amount || 0),
+      status: transaction.status,
+      reference: transaction.reference || null,
+      date: transaction.createdAt,
+    }));
+
+    res.json(transactions);
+  } catch (err) {
+    console.error("Transaction history error:", err);
+    res.status(500).json({
+      message: "Failed to load transactions",
+    });
+  }
+});
+
 export default router;

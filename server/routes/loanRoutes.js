@@ -63,7 +63,9 @@ router.get(
     try {
       const application = await LoanEligibility.findOne({
         user: req.user._id,
-      }).sort("-createdAt");
+      })
+        .select("-bvn")
+        .sort("-createdAt");
 
       res.json(application);
     } catch (err) {
@@ -162,7 +164,56 @@ router.post(
         submittedDate: new Date(),
       });
 
-      res.status(201).json(application);
+      // Never return the member's raw BVN to the browser. The BVN is
+      // retained server-side for the eventual authorized verification
+      // provider integration, while the frontend only receives
+      // verification statuses and application details.
+      const safeApplication = await LoanEligibility.findById(application._id).select(
+        "-bvn"
+      );
+
+      res.status(201).json(safeApplication);
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
+
+/*
+  GET /api/loans/eligibility-application/verification-status
+
+  Returns only the verification state needed by the member-facing UI.
+  Raw BVN data is intentionally excluded from this response.
+*/
+router.get(
+  "/eligibility-application/verification-status",
+  protect,
+  requireApprovedMember,
+  async (req, res) => {
+    try {
+      const application = await LoanEligibility.findOne({
+        user: req.user._id,
+      })
+        .select(
+          "consentStatus bvnVerificationStatus identityMatchStatus faceVerificationStatus verificationReference consentGrantedAt verifiedAt status"
+        )
+        .sort("-createdAt");
+
+      if (!application) {
+        return res.json({
+          exists: false,
+          consentStatus: "not_started",
+          bvnVerificationStatus: "not_started",
+          identityMatchStatus: "not_started",
+          faceVerificationStatus: "not_started",
+          status: null,
+        });
+      }
+
+      res.json({
+        exists: true,
+        ...application.toObject(),
+      });
     } catch (err) {
       res.status(500).json({ message: err.message });
     }

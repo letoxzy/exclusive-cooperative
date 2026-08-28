@@ -28,7 +28,16 @@ function Dashboard() {
   const [loanLoading, setLoanLoading] = useState(true);
 
   const eligibleLoan = Number(user?.savingsBalance || 0) * 2;
-  const isApproved = user?.isApprovedMember;
+
+  // Prefer the freshly-fetched membership application status over
+  // the cached `user.isApprovedMember` flag from AuthContext, which
+  // only updates on login/logout — not when an admin approves the
+  // member mid-session. Falls back to the cached flag only while
+  // membershipApp hasn't loaded yet.
+  const isApproved =
+    membershipApp !== undefined
+      ? membershipApp?.status === "approved"
+      : user?.isApprovedMember;
 
   /*
    * ================================

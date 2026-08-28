@@ -1,15 +1,69 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import "../styles/profile.css";
+
+const EMPTY_MEMBERSHIP = {
+  fullName: "",
+  gender: "",
+  phone: "",
+  employmentStatus: "",
+  employmentOther: "",
+  lga: "",
+  dob: "",
+  maritalStatus: "",
+  whatsapp: "",
+  occupation: "",
+  stateOfOrigin: "",
+  address: "",
+  kinName: "",
+  kinPhone: "",
+  kinAddress: "",
+  kinRelationship: "",
+  kinAltPhone: "",
+  kinEmail: "",
+  beneficiaryName: "",
+  beneficiaryPhone: "",
+  beneficiaryAddress: "",
+  beneficiaryRelationship: "",
+};
+
+const EDITABLE_FIELDS = [
+  ["fullName", "Full Name"],
+  ["gender", "Gender"],
+  ["phone", "Phone"],
+  ["email", "Email"],
+  ["dob", "Date of Birth"],
+  ["maritalStatus", "Marital Status"],
+  ["whatsapp", "WhatsApp"],
+  ["occupation", "Occupation"],
+  ["employmentStatus", "Employment Status"],
+  ["employmentOther", "Employment Details"],
+  ["lga", "LGA"],
+  ["stateOfOrigin", "State of Origin"],
+  ["address", "Address"],
+  ["kinName", "Next of Kin Name"],
+  ["kinPhone", "Next of Kin Phone"],
+  ["kinAddress", "Next of Kin Address"],
+  ["kinRelationship", "Next of Kin Relationship"],
+  ["kinAltPhone", "Next of Kin Alternative Phone"],
+  ["kinEmail", "Next of Kin Email"],
+  ["beneficiaryName", "Beneficiary Name"],
+  ["beneficiaryPhone", "Beneficiary Phone"],
+  ["beneficiaryAddress", "Beneficiary Address"],
+  ["beneficiaryRelationship", "Beneficiary Relationship"],
+];
 
 function Profile() {
   const { user, refreshUser } = useAuth();
   const fileInputRef = useRef(null);
 
-  const [fullName, setFullName] = useState(user?.fullName || "");
-  const [savingName, setSavingName] = useState(false);
-  const [nameMsg, setNameMsg] = useState("");
+  const [membership, setMembership] = useState(null);
+  const [membershipForm, setMembershipForm] = useState(EMPTY_MEMBERSHIP);
+  const [membershipLoading, setMembershipLoading] = useState(true);
+  const [membershipSaving, setMembershipSaving] = useState(false);
+  const [membershipMsg, setMembershipMsg] = useState("");
+  const [membershipError, setMembershipError] = useState("");
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
@@ -22,6 +76,27 @@ function Profile() {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState("");
   const [pwError, setPwError] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+
+    setMembershipLoading(true);
+    request("/membership/me", { token: user.token })
+      .then((data) => {
+        setMembership(data);
+        if (data) {
+          setMembershipForm((prev) => {
+            const next = { ...prev };
+            EDITABLE_FIELDS.forEach(([field]) => {
+              next[field] = data[field] || "";
+            });
+            return next;
+          });
+        }
+      })
+      .catch(() => setMembership(null))
+      .finally(() => setMembershipLoading(false));
+  }, [user]);
 
   const initials = (user?.fullName || "")
     .split(" ")
@@ -56,25 +131,38 @@ function Profile() {
       setAvatarError(err.message);
     } finally {
       setAvatarUploading(false);
+      e.target.value = "";
     }
   };
 
-  const handleNameSave = async (e) => {
+  const updateMembershipField = (field) => (e) => {
+    setMembershipForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleMembershipSave = async (e) => {
     e.preventDefault();
-    setNameMsg("");
-    setSavingName(true);
+    setMembershipMsg("");
+    setMembershipError("");
+    setMembershipSaving(true);
+
+    const body = {};
+    EDITABLE_FIELDS.forEach(([field]) => {
+      body[field] = membershipForm[field];
+    });
+
     try {
-      await request("/users/me", {
+      const updated = await request("/membership/me", {
         method: "PATCH",
         token: user.token,
-        body: { fullName },
+        body,
       });
+      setMembership(updated);
+      setMembershipMsg("Membership details updated successfully.");
       await refreshUser();
-      setNameMsg("Saved.");
     } catch (err) {
-      setNameMsg(err.message);
+      setMembershipError(err.message);
     } finally {
-      setSavingName(false);
+      setMembershipSaving(false);
     }
   };
 
@@ -138,9 +226,7 @@ function Profile() {
           <h1>{user?.fullName}</h1>
           <p className="profile-meta">
             {user?.email} · Member since {memberSince}
-            {user?.role === "admin" && (
-              <span className="role-badge">Admin</span>
-            )}
+            {user?.role === "admin" && <span className="role-badge">Admin</span>}
           </p>
         </div>
       </header>
@@ -148,17 +234,63 @@ function Profile() {
       {avatarError && <p className="form-error">{avatarError}</p>}
 
       <section className="profile-form-card">
-        <h2>Edit Name</h2>
-        <form onSubmit={handleNameSave} className="inline-form">
-          <input
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-          />
-          <button type="submit" disabled={savingName}>
-            {savingName ? "Saving..." : "Save"}
-          </button>
-        </form>
-        {nameMsg && <p className="form-note">{nameMsg}</p>}
+        <div className="section-heading-row">
+          <div>
+            <h2>Edit Membership Details</h2>
+            <p className="section-help">
+              Keep your membership information up to date. These details are
+              also used when your loan eligibility is reviewed.
+            </p>
+          </div>
+          {membership?.status && (
+            <span className={`membership-status ${membership.status}`}>
+              {membership.status}
+            </span>
+          )}
+        </div>
+
+        {membershipLoading ? (
+          <p className="form-note">Loading membership details...</p>
+        ) : !membership ? (
+          <p className="form-note">
+            No membership application is linked to this account yet.
+          </p>
+        ) : (
+          <form onSubmit={handleMembershipSave} className="membership-edit-form">
+            <div className="profile-edit-grid">
+              {EDITABLE_FIELDS.map(([field, label]) => (
+                <div
+                  className={`form-group ${field === "address" || field.includes("Address") ? "full-width" : ""}`}
+                  key={field}
+                >
+                  <label htmlFor={`profile-${field}`}>{label}</label>
+                  {field === "address" || field.includes("Address") ? (
+                    <textarea
+                      id={`profile-${field}`}
+                      value={membershipForm[field]}
+                      onChange={updateMembershipField(field)}
+                      rows={3}
+                    />
+                  ) : (
+                    <input
+                      id={`profile-${field}`}
+                      type={field === "dob" ? "date" : "text"}
+                      value={membershipForm[field]}
+                      onChange={updateMembershipField(field)}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {membershipError && <p className="form-error">{membershipError}</p>}
+            {membershipMsg && <p className="form-note">{membershipMsg}</p>}
+
+            <button type="submit" className="btn-primary" disabled={membershipSaving}>
+              {membershipSaving ? "Saving changes..." : "Save Membership Details"}
+            </button>
+          </form>
+        )}
       </section>
 
       <section className="profile-form-card">

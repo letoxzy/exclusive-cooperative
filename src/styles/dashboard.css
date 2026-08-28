@@ -1,0 +1,777 @@
+.dashboard-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 48px 20px 80px;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.dashboard-header .eyebrow {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.dashboard-header h1 {
+  color: var(--navy);
+  font-size: 26px;
+}
+
+.logout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  border-color: var(--navy);
+  color: var(--navy);
+}
+
+/* =================================
+   DASHBOARD SUMMARY
+================================= */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.dash-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dash-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.dash-figure {
+  color: var(--navy);
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.dash-figure.gold {
+  color: var(--gold);
+}
+
+/* =================================
+   FORM CARDS
+================================= */
+
+.dash-form-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.dash-form-card h2 {
+  color: var(--navy);
+  font-size: 17px;
+  margin-bottom: 6px;
+}
+
+.dash-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.dash-form-card form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dash-form-card input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.dash-form-card input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.dash-form-card button {
+  background: var(--navy);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  padding: 0 20px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dash-form-card button:hover {
+  background: var(--gold);
+  color: var(--navy);
+}
+
+.dash-form-card button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* =================================
+   FORM MESSAGES
+================================= */
+
+.form-error {
+  color: #b42318;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.form-success {
+  color: #065f46;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+/* =================================
+   DEPOSIT REQUESTS
+================================= */
+
+.requests-list {
+  margin-top: 20px;
+}
+
+.requests-ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.requests-ul li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+
+.req-date {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.status-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.method-tag {
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-left: 6px;
+}
+
+/* =================================
+   MEMBERSHIP BANNERS
+================================= */
+
+.membership-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13.5px;
+  color: var(--text);
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.membership-banner.pending {
+  background: #fef3c7;
+  border-color: #f2c14e;
+}
+
+.membership-banner.rejected {
+  background: #fee2e2;
+  border-color: #f2a8a8;
+}
+
+.banner-link {
+  color: var(--navy);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* =================================
+   DASHBOARD SUBNAV
+================================= */
+
+.dashboard-subnav {
+  margin-bottom: 20px;
+}
+
+.dashboard-subnav a {
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* =================================
+   PAYMENT STATUS
+================================= */
+
+.payment-status-card {
+  max-width: 440px;
+  margin: 80px auto;
+  text-align: center;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px 28px;
+}
+
+.payment-status-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: var(--white);
+  font-size: 22px;
+  margin-bottom: 16px;
+}
+
+.payment-status-mark.error {
+  background: #991b1b;
+}
+
+.payment-status-card h2 {
+  color: var(--navy);
+  margin-bottom: 10px;
+}
+
+.payment-status-card p {
+  color: var(--muted);
+  font-size: 14.5px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+/* =================================
+   PAYSTACK
+================================= */
+
+.paystack-btn {
+  background: var(--navy);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  padding: 0 20px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.paystack-btn:hover {
+  background: var(--gold);
+  color: var(--navy);
+}
+
+.paystack-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* =================================
+   LOCKED NOTICE
+================================= */
+
+.locked-notice {
+  background: var(--light);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  color: var(--muted);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+/* =================================
+   ACTIVE LOAN
+================================= */
+
+.loan-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.loan-card-header {
+  margin-bottom: 20px;
+}
+
+.loan-card-eyebrow {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.loan-card-title {
+  color: var(--navy);
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.loan-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 5px 12px;
+  margin-top: 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.loan-status.active {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.loan-status.approved {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.loan-status.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.loan-status.completed {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.loan-status.rejected,
+.loan-status.defaulted,
+.loan-status.cancelled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* =================================
+   LOAN FINANCIAL SUMMARY
+================================= */
+
+.loan-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.loan-summary-item {
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.loan-summary-label {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.loan-summary-value {
+  display: block;
+  color: var(--navy);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.loan-summary-value.owing {
+  color: #b42318;
+}
+
+.loan-summary-value.paid {
+  color: #065f46;
+}
+
+/* =================================
+   LOAN DETAILS
+================================= */
+
+.loan-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 24px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.loan-detail {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  font-size: 13.5px;
+}
+
+.loan-detail-label {
+  color: var(--muted);
+}
+
+.loan-detail-value {
+  color: var(--navy);
+  font-weight: 700;
+  text-align: right;
+}
+
+/* =================================
+   LOAN NOTICE
+================================= */
+
+.loan-notice {
+  margin-top: 18px;
+  padding: 13px 15px;
+  background: var(--light);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.loan-notice strong {
+  color: var(--navy);
+}
+
+/* =================================
+   NO ACTIVE LOAN
+================================= */
+
+.no-loan-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.no-loan-card h2 {
+  color: var(--navy);
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.no-loan-card p {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* =================================
+   RESPONSIVE
+================================= */
+
+@media (max-width: 700px) {
+  .loan-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-details {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-detail {
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-page {
+    padding: 32px 16px 60px;
+  }
+
+  .dashboard-header {
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .dashboard-header h1 {
+    font-size: 23px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-form-card form {
+    flex-direction: column;
+  }
+
+  .dash-form-card input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .dash-form-card button,
+  .paystack-btn {
+    min-height: 44px;
+    padding: 10px 20px;
+  }
+
+  .requests-ul li {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .loan-card {
+    padding: 20px;
+  }
+
+  .loan-card-title {
+    font-size: 18px;
+  }
+}
+
+
+.loan-card {
+  transition: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.loan-card:hover {
+  transition: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: var(--border) !important;
+}
+/* Eye toggle for balance visibility */
+.dash-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.eye-toggle {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.eye-toggle:hover {
+  color: var(--navy);
+}
+
+/* Loan repayment section */
+.repayment-section {
+  border-top: 1px solid var(--border);
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.repayment-section h3 {
+  color: var(--navy);
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+.repayment-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.repayment-form input {
+  flex: 1;
+  min-width: 160px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.repayment-form input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.repayment-form button {
+  background: var(--navy);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  padding: 0 20px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.repayment-form button:hover {
+  background: var(--gold);
+  color: var(--navy);
+}
+
+.repayment-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.repayment-history {
+  margin-top: 14px;
+}
+
+/* Top-up card */
+.topup-card .dash-note {
+  margin-bottom: 14px;
+}
+
+.quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.quick-amount-chip {
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.quick-amount-chip:hover {
+  border-color: var(--gold);
+}
+
+.quick-amount-chip.active {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: var(--white);
+}
+
+.topup-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.topup-form input {
+  flex: 1;
+  min-width: 180px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.topup-form input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.topup-btn {
+  background: var(--gold);
+  color: var(--navy);
+  border: none;
+  border-radius: 8px;
+  padding: 0 26px;
+  font-weight: 700;
+  font-size: 14.5px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.topup-btn:hover {
+  opacity: 0.9;
+}
+
+.topup-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

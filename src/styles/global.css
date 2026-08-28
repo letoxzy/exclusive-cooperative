@@ -1,0 +1,47 @@
+:root {
+  --navy: #0b1f3a;
+  --white: #ffffff;
+  --light: #f5f7fa;
+  --text: #172033;
+  --muted: #667085;
+  --gold: #c9a227;
+
+  --navy-soft: #0b1f3a0d;
+  --gold-soft: #c9a2271a;
+  --border: #e5e7eb;
+
+  --radius: 10px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: var(--white);
+    color: var(--text);
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+img {
+    max-width: 100%;
+    display: block;
+}

@@ -1,0 +1,973 @@
+import express from "express";
+
+import User from "../models/User.js";
+import Membership from "../models/Membership.js";
+import SavingsTransaction from "../models/SavingsTransaction.js";
+import Loan from "../models/Loan.js";
+import LoanRepayment from "../models/LoanRepayment.js";
+import LoanEligibility from "../models/LoanEligibility.js";
+import {
+  DividendDistribution,
+  DividendEntry,
+} from "../models/Dividend.js";
+
+import { protect } from "../middleware/authMiddleware.js";
+import { adminOnly } from "../middleware/adminMiddleware.js";
+
+const router = express.Router();
+
+// Every route below requires a logged-in admin
+router.use(protect, adminOnly);
+
+/*
+  ============================
+  USERS
+  ============================
+*/
+
+// GET /api/admin/users
+router.get("/users", async (req, res) => {
+  try {
+    const users = await User.find()
+      .select("-password")
+      .sort("-createdAt");
+
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
+/*
+  ============================
+  SAVINGS REQUESTS
+  ============================
+*/
+
+// GET /api/admin/savings-requests?status=pending
+router.get("/savings-requests", async (req, res) => {
+  try {
+    const filter = req.query.status
+      ? { status: req.query.status }
+      : {};
+
+    const requests = await SavingsTransaction.find(filter)
+      .populate("user", "fullName email savingsBalance")
+      .sort("-createdAt");
+
+    res.json(requests);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
+// PATCH /api/admin/savings-requests/:id
+// body: { action: "approve" | "reject" }
+
+router.patch("/savings-requests/:id", async (req, res) => {
+  try {
+    const { action } = req.body;
+
+    const txn = await SavingsTransaction.findById(req.params.id);
+
+    if (!txn) {
+      return res.status(404).json({
+        message: "Request not found",
+      });
+    }
+
+    if (txn.status !== "pending") {
+      return res.status(400).json({
+        message: "This request has already been handled",
+      });
+    }
+
+    if (action === "approve") {
+      const user = await User.findById(txn.user);
+
+      if (!user) {
+        return res.status(404).json({
+          message: "Member not found",
+        });
+      }
+
+      user.savingsBalance += txn.amount;
+
+      await user.save();
+
+      txn.status = "approved";
+    } else if (action === "reject") {
+      txn.status = "rejected";
+    } else {
+      return res.status(400).json({
+        message: "Invalid action",
+      });
+    }
+
+    await txn.save();
+
+    res.json(txn);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
+/*
+  ============================
+  MEMBERSHIP
+  ============================
+*/
+
+// GET /api/admin/membership
+router.get("/membership", async (req, res) => {
+  try {
+    const apps = await Membership.find()
+      .populate("user", "fullName email")
+      .sort("-createdAt");
+
+    res.json(apps);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
+// Fields an admin is allowed to edit directly. Deliberately excludes
+// _id, user, passportPhotoUrl, signatureUrl — those aren't meant to be
+// hand-edited through this form.
+const EDITABLE_MEMBERSHIP_FIELDS = [
+  "fullName", "gender", "phone", "email", "employmentStatus", "employmentOther",
+  "lga", "dob", "maritalStatus", "whatsapp", "occupation", "stateOfOrigin", "address",
+  "frequency", "voluntarySavings", "referralSource", "proposedAmount", "startDate",
+  "membershipCategory", "membershipType", "kinName", "kinPhone", "kinAddress", "kinRelationship",
+  "kinAltPhone", "kinEmail", "beneficiaryName", "beneficiaryPhone",
+  "beneficiaryAddress", "beneficiaryRelationship", "declarationName",
+  "declarationDate", "declarationPhone",
+];
+
+// PATCH /api/admin/membership/:id
+// body: { status?: "approved"|"rejected"|"pending", ...any editable field }
+// Status changes and full detail edits both go through this one endpoint —
+// the admin can do either or both in a single save.
+router.patch("/membership/:id", async (req, res) => {
+  try {
+    const updates = {};
+
+    if (req.body.status !== undefined) {
+      if (!["approved", "rejected", "pending"].includes(req.body.status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+      updates.status = req.body.status;
+    }
+
+    for (const field of EDITABLE_MEMBERSHIP_FIELDS) {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    }
+
+    const app = await Membership.findByIdAndUpdate(
+      req.params.id,
+      updates,
+      { new: true }
+    );
+
+    if (!app) {
+      return res.status(404).json({
+        message: "Application not found",
+      });
+    }
+
+    if (app.user && updates.status !== undefined) {
+      const userUpdates = {
+        isApprovedMember: updates.status === "approved",
+      };
+
+      // Sync the member's interest-bearing/interest-free choice onto
+      // the User record when their membership is approved, so loan
+      // interest and dividend eligibility can be checked without
+      // joining back to Membership every time.
+      if (updates.status === "approved") {
+        userUpdates.membershipType = app.membershipType || "interest-bearing";
+      }
+
+      await User.findByIdAndUpdate(app.user, userUpdates);
+    } else if (
+      app.user &&
+      app.status === "approved" &&
+      updates.membershipType !== undefined
+    ) {
+      // Admin edited membershipType on an already-approved
+      // application (no status change in this request) — keep User
+      // in sync so it takes effect immediately.
+      await User.findByIdAndUpdate(app.user, {
+        membershipType: updates.membershipType,
+      });
+    }
+
+    res.json(app);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
+/*
+  ============================
+  LOAN ELIGIBILITY APPLICATIONS
+  (Full Loan Application: BVN + bio-data review)
+  ============================
+*/
+
+/*
+  GET /api/admin/loan-eligibility-applications
+
+  Optional:
+  /api/admin/loan-eligibility-applications?status=pending
+*/
+router.get("/loan-eligibility-applications", async (req, res) => {
+  try {
+    const filter = req.query.status ? { status: req.query.status } : {};
+
+    const applications = await LoanEligibility.find(filter)
+      .populate("user", "fullName email savingsBalance isApprovedMember")
+      .sort("-createdAt");
+
+    res.json(applications);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  PATCH /api/admin/loan-eligibility-applications/:id
+
+  Approve or reject a pending Full Loan Application.
+
+  Approve:
+  { action: "approve" }
+
+  Reject:
+  { action: "reject", rejectionReason: "Reason here" }
+
+  Approving sets User.isLoanEligible = true, which is what unlocks
+  the "Apply for Loan" flow for that member.
+*/
+router.patch("/loan-eligibility-applications/:id", async (req, res) => {
+  try {
+    const { action, rejectionReason } = req.body;
+
+    const application = await LoanEligibility.findById(req.params.id);
+
+    if (!application) {
+      return res.status(404).json({
+        message: "Loan eligibility application not found",
+      });
+    }
+
+    if (application.status !== "pending") {
+      return res.status(400).json({
+        message: "This application has already been reviewed",
+      });
+    }
+
+    if (action === "reject") {
+      application.status = "rejected";
+      application.rejectionReason = rejectionReason?.trim() || "";
+      application.reviewedDate = new Date();
+
+      await application.save();
+
+      const populated = await LoanEligibility.findById(
+        application._id
+      ).populate("user", "fullName email savingsBalance isApprovedMember");
+
+      return res.json(populated);
+    }
+
+    if (action === "approve") {
+      application.status = "approved";
+      application.reviewedDate = new Date();
+
+      await application.save();
+
+      await User.findByIdAndUpdate(application.user, {
+        isLoanEligible: true,
+      });
+
+      const populated = await LoanEligibility.findById(
+        application._id
+      ).populate("user", "fullName email savingsBalance isApprovedMember");
+
+      return res.json(populated);
+    }
+
+    return res.status(400).json({
+      message: "Invalid action. Use approve or reject.",
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  ============================
+  LOAN REQUESTS
+  ============================
+*/
+
+/*
+  GET /api/admin/loans
+
+  Optional:
+  /api/admin/loans?status=pending
+*/
+
+router.get("/loans", async (req, res) => {
+  try {
+    const filter = req.query.status
+      ? { status: req.query.status }
+      : {};
+
+    const loans = await Loan.find(filter)
+      .populate(
+        "user",
+        "fullName email phone savingsBalance isApprovedMember"
+      )
+      .sort("-createdAt");
+
+    res.json(loans);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
+/*
+  GET /api/admin/loans/:id
+
+  Returns the complete loan application.
+*/
+
+router.get("/loans/:id", async (req, res) => {
+  try {
+    const loan = await Loan.findById(req.params.id).populate(
+      "user",
+      "fullName email phone savingsBalance isApprovedMember createdAt"
+    );
+
+    if (!loan) {
+      return res.status(404).json({
+        message: "Loan application not found",
+      });
+    }
+
+    res.json(loan);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
+/*
+  PATCH /api/admin/loans/:id
+
+  Approve or reject a pending loan.
+
+  Approve:
+  {
+    action: "approve"
+  }
+
+  Reject:
+  {
+    action: "reject",
+    rejectionReason: "Reason here"
+  }
+*/
+
+router.patch("/loans/:id", async (req, res) => {
+  try {
+    const { action, rejectionReason } = req.body;
+
+    const loan = await Loan.findById(req.params.id);
+
+    if (!loan) {
+      return res.status(404).json({
+        message: "Loan application not found",
+      });
+    }
+
+    if (loan.status !== "pending") {
+      return res.status(400).json({
+        message: "This loan application has already been reviewed",
+      });
+    }
+
+    /*
+      ============================
+      REJECT LOAN
+      ============================
+    */
+
+    if (action === "reject") {
+      loan.status = "rejected";
+      loan.rejectionReason = rejectionReason?.trim() || "";
+      loan.rejectedDate = new Date();
+
+      await loan.save();
+
+      const populatedLoan = await Loan.findById(loan._id).populate(
+        "user",
+        "fullName email phone savingsBalance isApprovedMember"
+      );
+
+      return res.json(populatedLoan);
+    }
+
+    /*
+      ============================
+      APPROVE LOAN
+      ============================
+    */
+
+    if (action === "approve") {
+      const member = await User.findById(loan.user);
+
+      if (!member) {
+        return res.status(404).json({
+          message: "Member associated with this loan was not found",
+        });
+      }
+
+      if (!member.isApprovedMember) {
+        return res.status(400).json({
+          message:
+            "This member is no longer an approved cooperative member",
+        });
+      }
+
+      /*
+        Re-check current savings before approval.
+
+        This is important because the member's savings
+        could have changed after they submitted the application.
+      */
+
+      const currentSavings = Number(member.savingsBalance || 0);
+      const currentEligibility = currentSavings * 2;
+
+      if (loan.amount > currentEligibility) {
+        return res.status(400).json({
+          message:
+            `This loan can no longer be approved because the ` +
+            `requested amount of ₦${loan.amount.toLocaleString()} ` +
+            `is above the member's current eligibility of ` +
+            `₦${currentEligibility.toLocaleString()}.`,
+        });
+      }
+
+      /*
+        Prevent another active/approved loan.
+      */
+
+      const existingLoan = await Loan.findOne({
+        user: loan.user,
+        _id: { $ne: loan._id },
+        status: {
+          $in: ["approved", "active"],
+        },
+      });
+
+      if (existingLoan) {
+        return res.status(400).json({
+          message:
+            "This member already has an approved or active loan.",
+        });
+      }
+
+      /*
+        Interest was already calculated and stored when the member
+        submitted the application (loan.interestRate /
+        loan.totalRepayment) — reuse those values here rather than
+        recalculating, since amount/term don't change between
+        application and approval.
+      */
+
+      const totalRepayment = loan.totalRepayment;
+
+      /*
+        Generate repayment schedule.
+
+        Example:
+        ₦60,000 / 6 months = ₦10,000 per month.
+      */
+
+      const monthlyPayment =
+        Math.round((totalRepayment / loan.termMonths) * 100) / 100;
+
+      const schedule = [];
+
+      const approvalDate = new Date();
+
+      for (let i = 1; i <= loan.termMonths; i++) {
+        const dueDate = new Date(approvalDate);
+
+        dueDate.setMonth(dueDate.getMonth() + i);
+
+        let amountDue = monthlyPayment;
+
+        /*
+          Make sure the final installment corrects
+          any rounding difference.
+        */
+
+        if (i === loan.termMonths) {
+          const previousTotal = schedule.reduce(
+            (sum, installment) => sum + installment.amountDue,
+            0
+          );
+
+          amountDue =
+            Math.round((totalRepayment - previousTotal) * 100) / 100;
+        }
+
+        schedule.push({
+          installmentNumber: i,
+          dueDate,
+          amountDue,
+          amountPaid: 0,
+          paidDate: null,
+          status: "pending",
+        });
+      }
+
+      loan.status = "approved";
+      loan.approvedDate = approvalDate;
+      loan.amountPaid = 0;
+      loan.outstandingBalance = totalRepayment;
+      loan.repaymentSchedule = schedule;
+
+      await loan.save();
+
+      const populatedLoan = await Loan.findById(loan._id).populate(
+        "user",
+        "fullName email phone savingsBalance isApprovedMember"
+      );
+
+      return res.json(populatedLoan);
+    }
+
+    return res.status(400).json({
+      message: "Invalid action. Use approve or reject.",
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
+// PATCH /api/admin/loans/:id/disburse
+router.patch("/loans/:id/disburse", async (req, res) => {
+  try {
+    const loan = await Loan.findById(req.params.id);
+
+    if (!loan) {
+      return res.status(404).json({
+        message: "Loan application not found",
+      });
+    }
+
+    if (loan.status !== "approved") {
+      return res.status(400).json({
+        message: "Only approved loans can be disbursed.",
+      });
+    }
+
+    loan.status = "active";
+    loan.disbursedDate = new Date();
+
+    // The member now officially owes the loan amount.
+    loan.amountPaid = 0;
+    loan.outstandingBalance = loan.totalRepayment;
+
+    await loan.save();
+
+    // Credit the disbursed amount straight into the member's balance —
+    // they see it land immediately, like a real bank transfer. This is
+    // balanced out installment-by-installment as repayments are
+    // confirmed below, so it doesn't permanently inflate their real
+    // savings once the loan is fully repaid.
+    await User.findByIdAndUpdate(loan.user, {
+      $inc: { savingsBalance: loan.amount },
+    });
+
+    const populatedLoan = await Loan.findById(loan._id).populate(
+      "user",
+      "fullName email phone savingsBalance isApprovedMember"
+    );
+
+    res.json(populatedLoan);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
+/*
+  GET /api/admin/loan-repayments
+  Optional: /api/admin/loan-repayments?status=pending
+*/
+router.get("/loan-repayments", async (req, res) => {
+  try {
+    const filter = req.query.status ? { status: req.query.status } : {};
+
+    const repayments = await LoanRepayment.find(filter)
+      .populate("user", "fullName email")
+      .populate("loan", "loanType amount outstandingBalance status")
+      .sort("-createdAt");
+
+    res.json(repayments);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  PATCH /api/admin/loan-repayments/:id
+  body: { action: "approve" | "reject" }
+
+  Approving applies the payment to the loan's outstanding balance and the
+  next unpaid installment(s) in its schedule, and reduces the member's
+  balance by the same amount (mirroring the credit they got at disbursement).
+*/
+router.patch("/loan-repayments/:id", async (req, res) => {
+  try {
+    const { action } = req.body;
+    const repayment = await LoanRepayment.findById(req.params.id);
+
+    if (!repayment) {
+      return res.status(404).json({ message: "Repayment request not found" });
+    }
+    if (repayment.status !== "pending") {
+      return res.status(400).json({ message: "This request has already been handled" });
+    }
+
+    if (action === "reject") {
+      repayment.status = "rejected";
+      await repayment.save();
+      return res.json(repayment);
+    }
+
+    if (action !== "approve") {
+      return res.status(400).json({ message: "Invalid action" });
+    }
+
+    const loan = await Loan.findById(repayment.loan);
+    if (!loan) {
+      return res.status(404).json({ message: "Loan not found" });
+    }
+
+    let remaining = repayment.amount;
+
+    // Apply the payment across the schedule, oldest unpaid installment first.
+    for (const installment of loan.repaymentSchedule) {
+      if (remaining <= 0) break;
+      if (installment.status === "paid") continue;
+
+      const stillOwedOnThis = installment.amountDue - installment.amountPaid;
+      const applied = Math.min(stillOwedOnThis, remaining);
+
+      installment.amountPaid += applied;
+      remaining -= applied;
+
+      if (installment.amountPaid >= installment.amountDue) {
+        installment.status = "paid";
+        installment.paidDate = new Date();
+      } else if (installment.amountPaid > 0) {
+        installment.status = "partial";
+      }
+    }
+
+    loan.amountPaid += repayment.amount;
+    loan.outstandingBalance = Math.max(0, loan.outstandingBalance - repayment.amount);
+
+    if (loan.outstandingBalance === 0) {
+      loan.status = "completed";
+      loan.completedDate = new Date();
+    }
+
+    await loan.save();
+
+    repayment.status = "approved";
+    await repayment.save();
+
+    // Balance out the earlier disbursement credit as the loan gets repaid.
+    await User.findByIdAndUpdate(loan.user, {
+      $inc: { savingsBalance: -repayment.amount },
+    });
+
+    res.json({ repayment, loan });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  ============================
+  DIVIDENDS
+  ============================
+*/
+
+/*
+  GET /api/admin/dividends
+
+  Lists all dividend distributions (most recent first).
+*/
+router.get("/dividends", async (req, res) => {
+  try {
+    const distributions = await DividendDistribution.find().sort(
+      "-createdAt"
+    );
+
+    res.json(distributions);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  POST /api/admin/dividends
+
+  Create a new dividend distribution for a financial year. This does
+  NOT calculate per-member amounts yet — that's a separate step
+  (POST /:id/calculate) so the admin can review the pool before the
+  system splits it.
+
+  Body:
+  {
+    financialYear: 2026,
+    pool: 7000000,
+    distributionDate: "2026-12-31"
+  }
+*/
+router.post("/dividends", async (req, res) => {
+  try {
+    const { financialYear, pool, distributionDate } = req.body;
+
+    const year = Number(financialYear);
+    const poolAmount = Number(pool);
+
+    if (!Number.isFinite(year) || year <= 0) {
+      return res.status(400).json({ message: "Enter a valid financial year." });
+    }
+
+    if (!Number.isFinite(poolAmount) || poolAmount <= 0) {
+      return res.status(400).json({ message: "Enter a valid dividend pool amount." });
+    }
+
+    const distribution = await DividendDistribution.create({
+      financialYear: year,
+      pool: poolAmount,
+      distributionDate: distributionDate || "",
+      status: "draft",
+    });
+
+    res.status(201).json(distribution);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  GET /api/admin/dividends/:id
+
+  Returns a distribution along with its per-member entries (if any
+  have been calculated yet).
+*/
+router.get("/dividends/:id", async (req, res) => {
+  try {
+    const distribution = await DividendDistribution.findById(req.params.id);
+
+    if (!distribution) {
+      return res.status(404).json({ message: "Dividend distribution not found" });
+    }
+
+    const entries = await DividendEntry.find({ distribution: distribution._id })
+      .populate("user", "fullName email membershipType")
+      .sort("-dividendAmount");
+
+    res.json({ distribution, entries });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  POST /api/admin/dividends/:id/calculate
+
+  Calculates each eligible member's dividend share, proportional to
+  their savings contribution:
+
+    memberDividend = (memberContribution / totalEligibleContributions) * pool
+
+  Only approved, interest-bearing members with a savings balance
+  above zero are eligible — interest-free members are excluded
+  entirely, matching the membership-type rule.
+
+  Re-running this on a distribution that's already been calculated
+  replaces its entries (e.g. if savings balances changed since the
+  last run), but only while it's not yet "completed".
+*/
+router.post("/dividends/:id/calculate", async (req, res) => {
+  try {
+    const distribution = await DividendDistribution.findById(req.params.id);
+
+    if (!distribution) {
+      return res.status(404).json({ message: "Dividend distribution not found" });
+    }
+
+    if (distribution.status === "completed") {
+      return res.status(400).json({
+        message: "This distribution has already been completed and can't be recalculated.",
+      });
+    }
+
+    const eligibleMembers = await User.find({
+      isApprovedMember: true,
+      membershipType: "interest-bearing",
+      savingsBalance: { $gt: 0 },
+    }).select("_id savingsBalance");
+
+    const totalEligibleContributions = eligibleMembers.reduce(
+      (sum, m) => sum + Number(m.savingsBalance || 0),
+      0
+    );
+
+    // Clear any previous entries so recalculation doesn't duplicate rows.
+    await DividendEntry.deleteMany({ distribution: distribution._id });
+
+    if (totalEligibleContributions > 0) {
+      const entries = eligibleMembers.map((member) => {
+        const contribution = Number(member.savingsBalance || 0);
+
+        const dividendAmount = Math.round(
+          (contribution / totalEligibleContributions) * distribution.pool
+        );
+
+        return {
+          distribution: distribution._id,
+          user: member._id,
+          contribution,
+          dividendAmount,
+          status: "pending",
+        };
+      });
+
+      await DividendEntry.insertMany(entries);
+    }
+
+    distribution.totalEligibleContributions = totalEligibleContributions;
+    distribution.status = "calculated";
+    distribution.calculatedDate = new Date();
+
+    await distribution.save();
+
+    const entries = await DividendEntry.find({ distribution: distribution._id })
+      .populate("user", "fullName email membershipType")
+      .sort("-dividendAmount");
+
+    res.json({ distribution, entries });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  PATCH /api/admin/dividends/:id/entries/:entryId
+
+  Mark a single member's dividend entry as paid.
+*/
+router.patch("/dividends/:id/entries/:entryId", async (req, res) => {
+  try {
+    const entry = await DividendEntry.findOne({
+      _id: req.params.entryId,
+      distribution: req.params.id,
+    });
+
+    if (!entry) {
+      return res.status(404).json({ message: "Dividend entry not found" });
+    }
+
+    entry.status = "paid";
+    entry.paidDate = new Date();
+
+    await entry.save();
+
+    const remainingPending = await DividendEntry.countDocuments({
+      distribution: req.params.id,
+      status: "pending",
+    });
+
+    if (remainingPending === 0) {
+      await DividendDistribution.findByIdAndUpdate(req.params.id, {
+        status: "completed",
+      });
+    }
+
+    const populated = await DividendEntry.findById(entry._id).populate(
+      "user",
+      "fullName email membershipType"
+    );
+
+    res.json(populated);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  PATCH /api/admin/dividends/:id/pay-all
+
+  Mark every pending entry in a distribution as paid in one go, and
+  mark the distribution as completed.
+*/
+router.patch("/dividends/:id/pay-all", async (req, res) => {
+  try {
+    const distribution = await DividendDistribution.findById(req.params.id);
+
+    if (!distribution) {
+      return res.status(404).json({ message: "Dividend distribution not found" });
+    }
+
+    await DividendEntry.updateMany(
+      { distribution: distribution._id, status: "pending" },
+      { status: "paid", paidDate: new Date() }
+    );
+
+    distribution.status = "completed";
+    await distribution.save();
+
+    const entries = await DividendEntry.find({ distribution: distribution._id })
+      .populate("user", "fullName email membershipType")
+      .sort("-dividendAmount");
+
+    res.json({ distribution, entries });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+export default router;

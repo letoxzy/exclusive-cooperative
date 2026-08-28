@@ -1,0 +1,253 @@
+.profile-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 48px 20px 80px;
+}
+
+.profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.avatar-wrap {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 3px solid var(--gold);
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--navy);
+  color: var(--gold);
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 31, 58, 0.75);
+  color: var(--white);
+  font-size: 10.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.avatar-wrap:hover .avatar-overlay {
+  opacity: 1;
+}
+
+.profile-hero h1 {
+  color: var(--navy);
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.profile-meta {
+  color: var(--muted);
+  font-size: 13.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.role-badge {
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.profile-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dash-label {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.dash-figure {
+  color: var(--navy);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.dash-figure.gold {
+  color: var(--gold);
+}
+
+.dash-figure.small {
+  font-size: 15px;
+}
+
+.card-link {
+  color: var(--gold);
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.profile-form-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  margin-bottom: 20px;
+}
+
+.profile-form-card h2 {
+  color: var(--navy);
+  font-size: 16px;
+  margin-bottom: 14px;
+}
+
+.inline-form {
+  display: flex;
+  gap: 10px;
+}
+
+.inline-form input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.inline-form button {
+  background: var(--navy);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  padding: 0 20px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.inline-form button:hover {
+  background: var(--gold);
+  color: var(--navy);
+}
+
+.stacked-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 360px;
+}
+
+.stacked-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stacked-form label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.stacked-form input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.stacked-form input:focus,
+.inline-form input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.btn-primary {
+  background: var(--gold);
+  color: var(--navy);
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 14px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.form-note {
+  color: #065f46;
+  font-size: 13px;
+}
+
+.form-error {
+  color: #b42318;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .profile-hero {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-form {
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,229 @@
+.loan-application-page {
+  min-height: 70vh;
+  background: var(--light);
+  padding: 60px 20px 80px;
+}
+
+.loan-application-card {
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px;
+  box-shadow: 0 10px 30px rgba(11, 31, 58, 0.08);
+}
+
+.loan-application-header {
+  margin-bottom: 28px;
+}
+
+.loan-application-header .eyebrow {
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.loan-application-header h1 {
+  color: var(--navy);
+  font-size: 28px;
+  margin-bottom: 10px;
+}
+
+.loan-application-header p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.loan-application-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.form-group label {
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--text);
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.form-group small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.loan-form-notice {
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.loan-form-notice strong {
+  display: block;
+  color: var(--navy);
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.loan-form-notice p {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.loan-form-message {
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.loan-form-message.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.loan-form-message.success {
+  background: #ecfdf3;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.loan-form-message.success strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.loan-form-message.success p {
+  margin: 0 0 15px;
+}
+
+.loan-form-message.pending-message {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.loan-form-message.pending-message strong {
+  display: block;
+  color: #92400e;
+  margin-bottom: 5px;
+}
+
+.loan-form-message.pending-message p {
+  margin: 0;
+  color: #92400e;
+}
+
+.loan-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding-top: 5px;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 18px;
+  background: var(--white);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: var(--navy);
+  color: var(--navy);
+}
+
+.loan-form-actions .btn-primary,
+.loan-form-message .btn-primary {
+  border: none;
+  cursor: pointer;
+}
+
+.loan-form-actions .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loan-application-card > .btn-primary {
+  display: inline-block;
+  margin-top: 15px;
+}
+
+@media (max-width: 600px) {
+  .loan-application-page {
+    padding: 35px 15px 60px;
+  }
+
+  .loan-application-card {
+    padding: 24px 20px;
+  }
+
+  .loan-application-header h1 {
+    font-size: 24px;
+  }
+
+  .loan-form-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .loan-form-actions .btn-primary,
+  .loan-form-actions .btn-secondary {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+  }
+}

@@ -1,0 +1,327 @@
+.membership-page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 20px 80px;
+}
+
+/* ---------- Hero ---------- */
+.membership-hero {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.hero-eyebrow {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+
+.membership-hero h1 {
+  color: var(--navy);
+  font-size: clamp(28px, 4vw, 38px);
+  margin: 0 0 10px;
+}
+
+.hero-sub {
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+/* ---------- Section tracker ---------- */
+.section-tracker {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 36px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tracker-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.tracker-index {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: var(--white);
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tracker-label {
+  font-size: 11px;
+  color: var(--muted);
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .tracker-label {
+    display: block;
+  }
+}
+
+/* ---------- Form cards ---------- */
+.form-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  margin-bottom: 24px;
+}
+
+.form-card h2 {
+  color: var(--navy);
+  font-size: 19px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+
+.section-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-size: 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.section-note,
+.declaration-text {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: -8px 0 20px;
+}
+
+.declaration-text {
+  background: var(--light);
+  border-left: 3px solid var(--gold);
+  padding: 14px 16px;
+  border-radius: 6px;
+  color: var(--text);
+}
+
+/* ---------- Grid & fields ---------- */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group.span-2 {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.hint {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--white);
+  font-family: inherit;
+}
+
+.form-group input:disabled {
+  background: var(--light);
+  color: var(--muted);
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.form-group textarea {
+  resize: vertical;
+}
+
+.file-name {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- Pill radio groups ---------- */
+.pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.pill:has(input:checked) {
+  border-color: var(--navy);
+  background: var(--navy-soft);
+  color: var(--navy);
+  font-weight: 600;
+}
+
+.pill input {
+  accent-color: var(--navy);
+}
+
+/* ---------- Declaration checkbox ---------- */
+.agree-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--text);
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.agree-checkbox input {
+  margin-top: 3px;
+  accent-color: var(--navy);
+}
+
+.form-error {
+  color: #b42318;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+/* ---------- Submit ---------- */
+.submit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.fee-note {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.submit-btn {
+  background: var(--navy);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  padding: 13px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.submit-btn:hover {
+  background: var(--gold);
+}
+
+/* ---------- Success state ---------- */
+.membership-success {
+  max-width: 460px;
+  margin: 80px auto;
+  text-align: center;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px 28px;
+}
+
+.success-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: var(--white);
+  font-size: 22px;
+  margin-bottom: 16px;
+}
+
+.membership-success h2 {
+  color: var(--navy);
+  margin: 0 0 10px;
+}
+
+.membership-success p {
+  color: var(--muted);
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-card {
+    padding: 20px;
+  }
+
+  .submit-row {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .submit-btn {
+    width: 100%;
+  }
+}

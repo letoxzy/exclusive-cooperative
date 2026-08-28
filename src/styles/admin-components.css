@@ -1,0 +1,309 @@
+/* ================================
+   ADMIN SIDEBAR
+================================ */
+
+.admin-sidebar {
+  width: 255px;
+  min-width: 255px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  background: var(--white);
+  border-right: 1px solid var(--border);
+
+  padding: 24px 16px;
+}
+
+/* Brand */
+
+.admin-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 4px 10px 28px;
+}
+
+.admin-brand img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+.admin-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.admin-brand-text strong {
+  color: var(--navy);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.admin-brand-text span {
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* Navigation */
+
+.admin-navigation {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.admin-nav-label {
+  margin: 4px 12px 12px;
+
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+.admin-nav-item {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  gap: 13px;
+
+  border: none;
+  background: transparent;
+
+  color: var(--text);
+
+  padding: 12px 13px;
+  margin-bottom: 4px;
+
+  border-radius: 9px;
+
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+
+  text-align: left;
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.admin-nav-item:hover {
+  background: var(--light);
+  color: var(--navy);
+}
+
+.admin-nav-item.active {
+  background: var(--navy);
+  color: var(--white);
+}
+
+.admin-nav-icon {
+  width: 16px;
+  min-width: 16px;
+  font-size: 15px;
+}
+
+.admin-nav-item.active .admin-nav-icon {
+  color: var(--gold);
+}
+
+/* Bottom */
+
+.admin-sidebar-bottom {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin-top: 14px;
+}
+
+.logout-item {
+  color: #a12828;
+}
+
+.logout-item:hover {
+  color: #8b1e1e;
+  background: #fff5f5;
+}
+
+.logout-item .admin-nav-icon {
+  color: #a12828;
+}
+
+/* Mobile */
+
+@media (max-width: 900px) {
+  .admin-sidebar {
+    width: 76px;
+    min-width: 76px;
+    padding: 20px 10px;
+  }
+
+  .admin-brand {
+    justify-content: center;
+    padding: 4px 0 24px;
+  }
+
+  .admin-brand img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .admin-brand-text,
+  .admin-nav-label,
+  .admin-nav-item span {
+    display: none;
+  }
+
+  .admin-nav-item {
+    justify-content: center;
+    padding: 13px 8px;
+  }
+
+  .admin-nav-icon {
+    width: 18px;
+    font-size: 17px;
+  }
+}
+/* =========================
+   Loan type badges + full application details (Loans tab)
+========================= */
+
+.loan-type-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--navy);
+  background: var(--light);
+  text-transform: capitalize;
+}
+
+button.loan-type-badge.full-application-badge {
+  cursor: pointer;
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  color: var(--navy);
+}
+
+.loan-details-row td {
+  background: var(--light);
+  padding: 18px 20px !important;
+}
+
+.full-application-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.full-application-details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.full-application-details strong {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+}
+
+.full-application-details span {
+  font-size: 13.5px;
+  color: var(--navy);
+  word-break: break-word;
+}
+
+.full-application-details .full-application-purpose {
+  grid-column: 1 / -1;
+}
+
+/* =========================
+   Dividends
+========================= */
+
+.dividend-summary-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+
+.dividend-summary-card > div:not(.dividend-summary-actions) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dividend-summary-card strong {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+}
+
+.dividend-summary-card > div span:not(.status-badge) {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.dividend-summary-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.dividend-create-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+}
+
+.dividend-create-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.dividend-create-form label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.dividend-create-form input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  color: var(--navy);
+}
+
+.dividend-create-form input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.dividend-create-form button {
+  height: 38px;
+}

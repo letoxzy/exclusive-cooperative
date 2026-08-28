@@ -1,0 +1,63 @@
+.applicant-details-summary {
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-bottom: 24px;
+}
+
+.applicant-details-summary strong {
+  display: block;
+  color: var(--navy);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.applicant-details-summary dl {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  row-gap: 8px;
+  column-gap: 10px;
+  margin: 0 0 14px;
+}
+
+.applicant-details-summary dt {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.applicant-details-summary dd {
+  color: var(--text);
+  font-size: 13.5px;
+  margin: 0;
+  word-break: break-word;
+}
+
+.applicant-details-summary small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.applicant-details-summary small a {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.loan-loading-text {
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .applicant-details-summary dl {
+    grid-template-columns: 1fr;
+    row-gap: 4px;
+  }
+
+  .applicant-details-summary dt {
+    margin-top: 8px;
+  }
+}

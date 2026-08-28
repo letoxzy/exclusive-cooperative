@@ -775,3 +775,114 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* =================================
+   TRANSACTIONS
+================================= */
+
+.transactions-card {
+  margin-top: 20px;
+}
+
+.transactions-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.transactions-header .dash-note {
+  margin-bottom: 0;
+}
+
+.transaction-refresh-btn {
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 0 16px !important;
+  background: var(--light) !important;
+  color: var(--navy) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transaction-refresh-btn:hover {
+  background: var(--navy) !important;
+  color: var(--white) !important;
+}
+
+.transaction-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.transactions-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.transactions-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+}
+
+.transactions-table th,
+.transactions-table td {
+  padding: 13px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.transactions-table th {
+  color: var(--muted);
+  background: var(--light);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.transactions-table tr:last-child td {
+  border-bottom: none;
+}
+
+.transactions-table td strong,
+.transactions-table td span {
+  display: block;
+}
+
+.transactions-table td span:not(.status-badge) {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.transaction-amount {
+  white-space: nowrap;
+  font-weight: 800;
+  text-align: right !important;
+}
+
+.transaction-amount.credit {
+  color: #065f46;
+}
+
+.transaction-amount.debit {
+  color: #b42318;
+}
+
+@media (max-width: 600px) {
+  .transactions-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transaction-refresh-btn {
+    align-self: flex-start;
+  }
+}

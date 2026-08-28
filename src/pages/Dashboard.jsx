@@ -15,6 +15,9 @@ function Dashboard() {
 
   const [repaymentAmount, setRepaymentAmount] = useState("");
   const [repayments, setRepayments] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const [transactionsError, setTransactionsError] = useState("");
   const [repaymentLoading, setRepaymentLoading] = useState(false);
   const [repaymentError, setRepaymentError] = useState("");
   const [repaymentSuccess, setRepaymentSuccess] = useState("");
@@ -76,6 +79,34 @@ function Dashboard() {
    * LOAD MEMBER LOANS
    * ================================
    */
+  /*
+   * ================================
+   * LOAD TRANSACTIONS
+   * ================================
+   */
+  const loadTransactions = useCallback(async () => {
+    if (!user?.token) {
+      setTransactionsLoading(false);
+      return;
+    }
+
+    try {
+      setTransactionsLoading(true);
+      setTransactionsError("");
+
+      const data = await request("/users/me/transactions", {
+        token: user.token,
+      });
+
+      setTransactions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setTransactionsError(err.message);
+      setTransactions([]);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }, [user?.token]);
+
   const loadLoans = useCallback(async () => {
     if (!user?.token) {
       setLoanLoading(false);
@@ -117,6 +148,7 @@ function Dashboard() {
 
     loadRequests();
     loadLoans();
+    loadTransactions();
 
     request("/membership/me", {
       token: user.token,
@@ -127,7 +159,7 @@ function Dashboard() {
       .catch(() => {
         setMembershipApp(null);
       });
-  }, [user?.token, loadRequests, loadLoans]);
+  }, [user?.token, loadRequests, loadLoans, loadTransactions]);
 
   /*
    * ================================
@@ -709,6 +741,76 @@ function Dashboard() {
             {error && <p className="form-error">{error}</p>}
             {success && <p className="form-success">{success}</p>}
           </>
+        )}
+      </section>
+
+      {/* =====================================
+          TRANSACTIONS
+      ====================================== */}
+
+      <section className="dash-form-card transactions-card">
+        <div className="transactions-header">
+          <div>
+            <h2>Transactions</h2>
+            <p className="dash-note">
+              A record of your savings deposits, loan repayments, loan disbursements,
+              and paid dividends.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="transaction-refresh-btn"
+            onClick={loadTransactions}
+            disabled={transactionsLoading}
+          >
+            {transactionsLoading ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+
+        {transactionsError && <p className="form-error">{transactionsError}</p>}
+
+        {transactionsLoading ? (
+          <p className="dash-note">Loading your transactions...</p>
+        ) : transactions.length === 0 ? (
+          <p className="dash-note">No transactions recorded yet.</p>
+        ) : (
+          <div className="transactions-table-wrap">
+            <table className="transactions-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Status</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((transaction) => (
+                  <tr key={transaction.id}>
+                    <td>
+                      {transaction.date
+                        ? new Date(transaction.date).toLocaleDateString()
+                        : "—"}
+                    </td>
+                    <td>
+                      <strong>{transaction.type}</strong>
+                      <span>{transaction.description}</span>
+                    </td>
+                    <td>
+                      <span className={`status-badge ${transaction.status}`}>
+                        {transaction.status}
+                      </span>
+                    </td>
+                    <td className={`transaction-amount ${transaction.direction}`}>
+                      {transaction.direction === "debit" ? "−" : "+"}
+                      {money(transaction.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 

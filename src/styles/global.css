@@ -45,3 +45,8 @@ img {
     max-width: 100%;
     display: block;
 }
+
+/* Reserve space for the fixed public navbar. */
+.site-content {
+    padding-top: 80px;
+}

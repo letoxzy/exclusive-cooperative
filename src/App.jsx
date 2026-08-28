@@ -31,84 +31,86 @@ function App() {
     <>
       {!isAdminPage && <Navbar />}
 
-      <Routes>
-        <Route path="/" element={<Home />} />
+      <div className={!isAdminPage ? "site-content" : ""}>
+        <Routes>
+          <Route path="/" element={<Home />} />
 
-        <Route path="/about" element={<About />} />
+          <Route path="/about" element={<About />} />
 
-        <Route
-          path="/membership"
-          element={
-            <ProtectedRoute>
-              <Membership />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/membership"
+            element={
+              <ProtectedRoute>
+                <Membership />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route path="/savings" element={<Savings />} />
+          <Route path="/savings" element={<Savings />} />
 
-        <Route path="/loans" element={<Loans />} />
+          <Route path="/loans" element={<Loans />} />
 
-        <Route
-          path="/loans/apply"
-          element={
-            <ProtectedRoute>
-              <LoanApplication />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/loans/apply"
+            element={
+              <ProtectedRoute>
+                <LoanApplication />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/loans/apply-full"
-          element={
-            <ProtectedRoute>
-              <FullLoanApplication />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/loans/apply-full"
+            element={
+              <ProtectedRoute>
+                <FullLoanApplication />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route path="/contact" element={<Contact />} />
+          <Route path="/contact" element={<Contact />} />
 
-        <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<Login />} />
 
-        <Route path="/register" element={<Register />} />
+          <Route path="/register" element={<Register />} />
 
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/payment-callback"
-          element={
-            <ProtectedRoute>
-              <PaymentCallback />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/payment-callback"
+            element={
+              <ProtectedRoute>
+                <PaymentCallback />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/admin"
-          element={
-            <AdminRoute>
-              <AdminDashboard />
-            </AdminRoute>
-          }
-        />
-      </Routes>
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminDashboard />
+              </AdminRoute>
+            }
+          />
+        </Routes>
+      </div>
 
       {!isAdminPage && <Footer />}
     </>

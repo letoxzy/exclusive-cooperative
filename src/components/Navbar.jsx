@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { UserIcon, GridIcon, LogOutIcon } from "./Icons";
 import "../styles/navbar.css";
@@ -41,32 +41,32 @@ function Navbar() {
 
         <div className={`navbar-content ${menuOpen ? "open" : ""}`}>
           <div className="navbar-links">
-            <Link to="/" onClick={closeMenu}>
+            <NavLink to="/" end onClick={closeMenu}>
               Home
-            </Link>
-            <Link to="/about" onClick={closeMenu}>
+            </NavLink>
+            <NavLink to="/about" end onClick={closeMenu}>
               About
-            </Link>
-            <Link to="/membership" onClick={closeMenu}>
+            </NavLink>
+            <NavLink to="/membership" end onClick={closeMenu}>
               Membership
-            </Link>
-            <Link to="/savings" onClick={closeMenu}>
+            </NavLink>
+            <NavLink to="/savings" end onClick={closeMenu}>
               Savings
-            </Link>
-            <Link to="/loans" onClick={closeMenu}>
+            </NavLink>
+            <NavLink to="/loans" onClick={closeMenu}>
               Loans
-            </Link>
-            <Link to="/contact" onClick={closeMenu}>
+            </NavLink>
+            <NavLink to="/contact" end onClick={closeMenu}>
               Contact
-            </Link>
+            </NavLink>
           </div>
 
           <div className="navbar-actions">
             {user ? (
               <div className="navbar-icon-group">
-                <Link
+                <NavLink
                   to={user.role === "admin" ? "/admin" : "/dashboard"}
-                  className="icon-btn"
+                  className={({ isActive }) => `icon-btn ${isActive ? "active" : ""}`}
                   onClick={closeMenu}
                   aria-label={
                     user.role === "admin" ? "Admin Panel" : "Dashboard"
@@ -74,16 +74,16 @@ function Navbar() {
                   title={user.role === "admin" ? "Admin Panel" : "Dashboard"}
                 >
                   <GridIcon size={19} />
-                </Link>
-                <Link
+                </NavLink>
+                <NavLink
                   to="/profile"
-                  className="icon-btn"
+                  className={({ isActive }) => `icon-btn ${isActive ? "active" : ""}`}
                   onClick={closeMenu}
                   aria-label="Profile"
                   title="Profile"
                 >
                   <UserIcon size={19} />
-                </Link>
+                </NavLink>
                 <button
                   className="icon-btn"
                   onClick={handleLogout}

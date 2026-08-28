@@ -25,6 +25,53 @@ const loanEligibilitySchema = new mongoose.Schema(
       required: true,
     },
 
+    // Identity-verification state. These fields are populated as the
+    // cooperative connects this application to an authorized BVN/KYC
+    // provider. Keeping the states here lets the member and admin flows
+    // be updated without creating a second eligibility record.
+    consentStatus: {
+      type: String,
+      enum: ["not_started", "pending", "granted", "denied"],
+      default: "not_started",
+    },
+
+    bvnVerificationStatus: {
+      type: String,
+      enum: ["not_started", "pending", "verified", "failed"],
+      default: "not_started",
+    },
+
+    identityMatchStatus: {
+      type: String,
+      enum: ["not_started", "pending", "matched", "mismatch", "failed"],
+      default: "not_started",
+    },
+
+    faceVerificationStatus: {
+      type: String,
+      enum: ["not_started", "pending", "verified", "failed", "not_required"],
+      default: "not_started",
+    },
+
+    // Provider-generated identifiers/timestamps. Do not store provider
+    // secrets or consent tokens here. A real retrieval token should be
+    // handled only through the authorized provider's consent flow.
+    verificationReference: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    consentGrantedAt: {
+      type: Date,
+      default: null,
+    },
+
+    verifiedAt: {
+      type: Date,
+      default: null,
+    },
+
     // Snapshot of the member's bio-data at the time of submission,
     // pulled from their approved Membership record.
     applicantDetails: {

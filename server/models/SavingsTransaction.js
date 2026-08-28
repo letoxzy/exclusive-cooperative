@@ -8,6 +8,8 @@ const savingsTransactionSchema = new mongoose.Schema(
     method: { type: String, enum: ["manual", "paystack"], default: "manual" },
     reference: { type: String, unique: true, sparse: true }, // Paystack transaction reference
     note: String,
+    type: { type: String, enum: ["savings", "withdrawal"], default: "savings" },
+    direction: { type: String, enum: ["credit", "debit"], default: "credit" },
   },
   { timestamps: true }
 );

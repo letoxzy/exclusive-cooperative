@@ -7,6 +7,9 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     savingsBalance: { type: Number, default: 0 },
+    // Amount reserved for withdrawal requests awaiting processing.
+    // This prevents multiple pending withdrawals from spending the same balance.
+    withdrawalReserved: { type: Number, default: 0, min: 0 },
     role: { type: String, enum: ["member", "admin"], default: "member" },
     avatarUrl: { type: String, default: null },
     isApprovedMember: { type: Boolean, default: false },

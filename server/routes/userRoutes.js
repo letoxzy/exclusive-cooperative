@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 import SavingsTransaction from "../models/SavingsTransaction.js";
+import Withdrawal from "../models/Withdrawal.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 
@@ -75,17 +76,41 @@ router.get("/me/transactions", protect, async (req, res) => {
   try {
     const savingsTransactions = await SavingsTransaction.find({
       user: req.user._id,
+      type: { $ne: "withdrawal" },
     }).sort("-createdAt");
 
-    const transactions = savingsTransactions.map((transaction) => ({
-      _id: transaction._id,
-      type: "savings",
-      description: "Savings Deposit",
-      amount: Number(transaction.amount || 0),
-      status: transaction.status,
-      reference: transaction.reference || null,
-      date: transaction.createdAt,
-    }));
+    const withdrawals = await Withdrawal.find({
+      user: req.user._id,
+      status: { $in: ["success", "processing", "failed", "rejected"] },
+    }).sort("-createdAt");
+
+    const transactions = [
+      ...savingsTransactions.map((transaction) => ({
+        id: transaction._id,
+        type: transaction.type === "withdrawal" ? "Withdrawal" : "Savings",
+        description:
+          transaction.type === "withdrawal"
+            ? transaction.note || "Savings Withdrawal"
+            : "Savings Deposit",
+        amount: Number(transaction.amount || 0),
+        direction: transaction.direction || "credit",
+        status: transaction.status,
+        reference: transaction.reference || null,
+        date: transaction.createdAt,
+      })),
+      ...withdrawals.map((withdrawal) => ({
+        id: `withdrawal-${withdrawal._id}`,
+        type: "Withdrawal",
+        description: `Withdrawal to ${withdrawal.bankName} • ${String(
+          withdrawal.accountNumber
+        ).slice(-4).padStart(String(withdrawal.accountNumber).length, "*")}`,
+        amount: Number(withdrawal.amount || 0),
+        direction: "debit",
+        status: withdrawal.status,
+        reference: withdrawal.reference || null,
+        date: withdrawal.createdAt,
+      })),
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     res.json(transactions);
   } catch (err) {

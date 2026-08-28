@@ -247,6 +247,12 @@ function FullLoanApplication() {
                 <dt>Full Name</dt>
                 <dd>{membership.fullName || "—"}</dd>
 
+                <dt>Date of Birth</dt>
+                <dd>{membership.dob || "—"}</dd>
+
+                <dt>Gender</dt>
+                <dd>{membership.gender || "—"}</dd>
+
                 <dt>Phone</dt>
                 <dd>{membership.phone || "—"}</dd>
 
@@ -259,6 +265,12 @@ function FullLoanApplication() {
                 <dt>Occupation</dt>
                 <dd>{membership.occupation || "—"}</dd>
 
+                <dt>Employment Status</dt>
+                <dd>{membership.employmentStatus || "—"}</dd>
+
+                <dt>State of Origin</dt>
+                <dd>{membership.stateOfOrigin || "—"}</dd>
+
                 <dt>Next of Kin</dt>
                 <dd>
                   {membership.kinName || "—"}
@@ -270,6 +282,15 @@ function FullLoanApplication() {
                 Need to update any of this? Update it on your{" "}
                 <Link to="/profile">profile</Link> first, then come back to
                 apply.
+              </small>
+            </div>
+
+            <div className="loan-eligibility-summary">
+              <strong>Current Savings</strong>
+              <p>₦{Number(user.savingsBalance || 0).toLocaleString()}</p>
+              <small>
+                Your savings balance is used by the cooperative to determine
+                your maximum loan eligibility after approval.
               </small>
             </div>
 
@@ -289,7 +310,10 @@ function FullLoanApplication() {
                   required
                 />
 
-                <small>Your 11-digit BVN, required for loan eligibility.</small>
+                <small>
+                  Enter your 11-digit BVN. Your BVN will be used for identity
+                  verification as part of the eligibility review.
+                </small>
               </div>
 
               <div className="loan-form-notice">
@@ -297,8 +321,10 @@ function FullLoanApplication() {
 
                 <p>
                   This is not a loan request — it's the eligibility review
-                  step. Once approved, you'll be able to apply for an
-                  actual loan (amount, term, and purpose) separately.
+                  step. Your membership information is already on file, so you
+                  only need to provide your BVN here. Once approved, you'll be
+                  able to apply for an actual loan (amount, term, and purpose)
+                  separately.
                 </p>
               </div>
 

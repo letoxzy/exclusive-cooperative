@@ -1,13 +1,55 @@
 import express from "express";
 import crypto from "crypto";
-import Withdrawal from "../models/Withdrawal.js";
 import User from "../models/User.js";
+import Loan from "../models/Loan.js";
+import Withdrawal from "../models/Withdrawal.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
+import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 
 const router = express.Router();
 const PAYSTACK_BASE = "https://api.paystack.co";
-const LOCK_PERCENT = 0.20;
+const LOCK_PERCENTAGE = 0.20;
+const AVAILABLE_PERCENTAGE = 0.80;
+
+async function ensureLoanFundsBalance(user) {
+  let loanFunds = Number(user.loanFundsBalance || 0);
+
+  if (loanFunds > 0) return loanFunds;
+
+  const activeLoan = await Loan.findOne({
+    user: user._id,
+    status: "active",
+  }).select("amount totalRepayment outstandingBalance");
+
+  if (!activeLoan) return 0;
+
+  const totalRepayment = Number(activeLoan.totalRepayment || activeLoan.amount || 0);
+  const principalOutstanding = Math.min(
+    Number(activeLoan.amount || 0),
+    totalRepayment > 0
+      ? (Number(activeLoan.outstandingBalance || 0) / totalRepayment) * Number(activeLoan.amount || 0)
+      : 0,
+  );
+
+  loanFunds = Math.max(0, Math.round(principalOutstanding * 100) / 100);
+
+  if (loanFunds > 0) {
+    user.loanFundsBalance = loanFunds;
+    await user.save();
+  }
+
+  return loanFunds;
+}
+
+function getWithdrawalBreakdown(savingsBalance, loanFundsBalance, reserved) {
+  const loanFunds = Math.max(0, Math.min(savingsBalance, loanFundsBalance));
+  const personalSavings = Math.max(0, savingsBalance - loanFunds);
+  const lockedAmount = personalSavings * LOCK_PERCENTAGE;
+  const availableAmount = Math.max(0, loanFunds + personalSavings * AVAILABLE_PERCENTAGE - reserved);
+
+  return { loanFunds, personalSavings, lockedAmount, availableAmount };
+}
 
 async function paystack(path, options = {}) {
   const response = await fetch(`${PAYSTACK_BASE}${path}`, {
@@ -20,183 +62,321 @@ async function paystack(path, options = {}) {
   });
 
   const data = await response.json().catch(() => ({}));
-  return { response, data };
-}
 
-function maskedAccount(accountNumber = "") {
-  return accountNumber.length > 4
-    ? `${"*".repeat(accountNumber.length - 4)}${accountNumber.slice(-4)}`
-    : accountNumber;
+  if (!response.ok || !data.status) {
+    const error = new Error(data.message || "Paystack request failed");
+    error.status = response.status;
+    error.paystack = data;
+    throw error;
+  }
+
+  return data.data;
 }
 
 // GET /api/withdrawals/banks
-router.get("/banks", protect, async (req, res) => {
+router.get("/banks", protect, requireApprovedMember, async (req, res) => {
   try {
-    const { response, data } = await paystack("/bank?currency=NGN&perPage=200");
-    if (!response.ok || !data.status) {
-      return res.status(400).json({ message: data.message || "Could not load banks" });
-    }
+    const data = await paystack("/bank?currency=NGN&country=nigeria&perPage=100");
+    const banks = (Array.isArray(data) ? data : [])
+      .filter((bank) => bank.active && !bank.is_deleted)
+      .map((bank) => ({ name: bank.name, code: bank.code }));
 
-    res.json(
-      (data.data || [])
-        .filter((bank) => bank.active && bank.type === "nuban")
-        .map((bank) => ({ name: bank.name, code: bank.code }))
-        .sort((a, b) => a.name.localeCompare(b.name))
-    );
+    res.json(banks);
   } catch (err) {
-    res.status(500).json({ message: "Unable to load banks right now" });
+    res.status(502).json({ message: err.message });
   }
 });
 
-// POST /api/withdrawals/resolve-account
-router.post("/resolve-account", protect, requireApprovedMember, async (req, res) => {
+// POST /api/withdrawals/verify-account
+router.post("/verify-account", protect, requireApprovedMember, async (req, res) => {
   try {
-    const { accountNumber, bankCode } = req.body;
+    const accountNumber = String(req.body.accountNumber || "").trim();
+    const bankCode = String(req.body.bankCode || "").trim();
 
-    if (!/^\d{10}$/.test(String(accountNumber || "")) || !bankCode) {
-      return res.status(400).json({ message: "Enter a valid 10-digit account number and bank." });
+    if (!/^\d{10}$/.test(accountNumber)) {
+      return res.status(400).json({ message: "Enter a valid 10-digit account number." });
+    }
+    if (!bankCode) {
+      return res.status(400).json({ message: "Select a bank." });
     }
 
-    const { response, data } = await paystack(
+    const data = await paystack(
       `/bank/resolve?account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`
     );
 
-    if (!response.ok || !data.status) {
-      return res.status(400).json({
-        message: data.message || "Could not verify this bank account.",
-      });
-    }
-
     res.json({
-      accountName: data.data?.account_name || "",
-      accountNumber: data.data?.account_number || accountNumber,
+      accountNumber: data.account_number,
+      accountName: data.account_name,
     });
   } catch (err) {
-    res.status(500).json({ message: "Unable to verify the bank account right now." });
+    res.status(400).json({ message: err.message || "Could not verify this bank account." });
   }
 });
 
 // GET /api/withdrawals/me
-router.get("/me", protect, async (req, res) => {
+router.get("/me", protect, requireApprovedMember, async (req, res) => {
   try {
-    const withdrawals = await Withdrawal.find({ user: req.user._id })
-      .select("-accountNumber -gatewayResponse")
-      .sort("-createdAt");
+    const withdrawals = await Withdrawal.find({ user: req.user._id }).sort("-createdAt");
+    const savings = Number(req.user.savingsBalance || 0);
+    const reserved = Number(req.user.withdrawalReserved || 0);
+    const loanFunds = await ensureLoanFundsBalance(req.user);
+    const breakdown = getWithdrawalBreakdown(savings, loanFunds, reserved);
 
-    res.json(withdrawals.map((item) => ({
-      ...item.toObject(),
-      accountNumber: maskedAccount(item.accountNumber),
-    })));
+    res.json({
+      savingsBalance: savings,
+      loanFundsBalance: breakdown.loanFunds,
+      personalSavingsBalance: breakdown.personalSavings,
+      lockedAmount: breakdown.lockedAmount,
+      availableAmount: breakdown.availableAmount,
+      reservedAmount: reserved,
+      withdrawals,
+    });
   } catch (err) {
-    res.status(500).json({ message: "Failed to load withdrawals" });
+    res.status(500).json({ message: err.message });
   }
 });
 
 // POST /api/withdrawals
-// Creates a request only. Admin approval is required before money is sent.
+// Password is verified before any withdrawal reservation is created.
+// Once validated, Paystack transfer is initiated automatically.
 router.post("/", protect, requireApprovedMember, async (req, res) => {
   try {
-    const {
-      amount,
-      bankName,
-      bankCode,
-      accountName,
-      accountNumber,
-      password,
-    } = req.body;
+    const amount = Number(req.body.amount);
+    const password = String(req.body.password || "");
+    const bankCode = String(req.body.bankCode || "").trim();
+    const bankName = String(req.body.bankName || "").trim();
+    const accountNumber = String(req.body.accountNumber || "").trim();
+    const accountName = String(req.body.accountName || "").trim();
 
-    const withdrawalAmount = Number(amount);
-    const balance = Number(req.user.savingsBalance || 0);
-    const lockedAmount = Math.round(balance * LOCK_PERCENT * 100) / 100;
-    const maximumWithdrawable = Math.round((balance - lockedAmount) * 100) / 100;
-
-    if (!Number.isFinite(withdrawalAmount) || withdrawalAmount <= 0) {
-      return res.status(400).json({ message: "Enter a valid withdrawal amount" });
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ message: "Enter a valid withdrawal amount." });
     }
-
     if (!password) {
-      return res.status(400).json({ message: "Enter your account password to confirm this request" });
+      return res.status(400).json({ message: "Enter your login password to confirm the withdrawal." });
+    }
+    if (!bankCode || !bankName) {
+      return res.status(400).json({ message: "Select a valid bank." });
+    }
+    if (!/^\d{10}$/.test(accountNumber)) {
+      return res.status(400).json({ message: "Enter a valid 10-digit account number." });
+    }
+    if (!accountName) {
+      return res.status(400).json({ message: "Verify the bank account before withdrawing." });
     }
 
     const passwordMatches = await req.user.matchPassword(password);
     if (!passwordMatches) {
-      return res.status(401).json({ message: "The password you entered is incorrect" });
+      return res.status(401).json({ message: "Your login password is incorrect." });
     }
 
-    if (!bankName || !bankCode || !accountName || !/^\d{10}$/.test(String(accountNumber || ""))) {
+    // Resolve the account again on the server. Never trust the account name
+    // or bank details supplied by the browser for a money-moving operation.
+    const resolved = await paystack(
+      `/bank/resolve?account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`
+    );
+
+    if (!resolved.account_name) {
+      return res.status(400).json({ message: "We could not verify this bank account." });
+    }
+
+    const savings = Number(req.user.savingsBalance || 0);
+    const reserved = Number(req.user.withdrawalReserved || 0);
+    const loanFunds = await ensureLoanFundsBalance(req.user);
+    const breakdown = getWithdrawalBreakdown(savings, loanFunds, reserved);
+    const available = breakdown.availableAmount;
+
+    if (amount > available) {
       return res.status(400).json({
-        message: "Enter a valid Nigerian bank, account name, and 10-digit account number",
+        message: `You can withdraw up to ₦${available.toLocaleString()} based on your current 20% savings reserve.`,
       });
     }
 
-    if (withdrawalAmount > maximumWithdrawable) {
-      return res.status(400).json({
-        message: `You can withdraw up to ₦${maximumWithdrawable.toLocaleString()}. 20% of your current savings remains protected.`,
-      });
-    }
-
-    // Reserve the amount atomically so two withdrawal requests cannot
-    // spend the same available balance at the same time.
+    // Reserve the amount atomically so two simultaneous withdrawal requests
+    // cannot spend the same available balance.
     const reservedUser = await User.findOneAndUpdate(
       {
         _id: req.user._id,
         $expr: {
-          $lte: [
-            { $add: ["$withdrawalReserved", withdrawalAmount] },
-            { $multiply: ["$savingsBalance", 0.8] },
+          $gte: [
+            {
+              $subtract: [
+                {
+                  $add: [
+                    "$loanFundsBalance",
+                    {
+                      $multiply: [
+                        { $max: [{ $subtract: ["$savingsBalance", "$loanFundsBalance"] }, 0] },
+                        AVAILABLE_PERCENTAGE,
+                      ],
+                    },
+                  ],
+                },
+                "$withdrawalReserved",
+              ],
+            },
+            amount,
           ],
         },
       },
-      { $inc: { withdrawalReserved: withdrawalAmount } },
+      { $inc: { withdrawalReserved: amount } },
       { new: true }
     );
 
     if (!reservedUser) {
-      const freshBalance = Number(req.user.savingsBalance || 0);
-      const freshReserved = Number(req.user.withdrawalReserved || 0);
-      const freshAvailable = Math.max(
-        0,
-        Math.round((freshBalance * 0.8 - freshReserved) * 100) / 100
-      );
-
-      return res.status(400).json({
-        message: `Only ₦${freshAvailable.toLocaleString()} is currently available for withdrawal. 20% of your savings remains protected.`,
+      return res.status(409).json({
+        message: "Your available withdrawal changed. Refresh your balance and try again.",
       });
     }
 
     let withdrawal;
+
     try {
+      const recipient = await paystack("/transferrecipient", {
+        method: "POST",
+        body: JSON.stringify({
+          type: "nuban",
+          name: resolved.account_name,
+          account_number: accountNumber,
+          bank_code: bankCode,
+          currency: "NGN",
+          email: req.user.email,
+        }),
+      });
+
+      const reference = `wd_${crypto.randomUUID().replace(/-/g, "").slice(0, 32)}`;
+
       withdrawal = await Withdrawal.create({
         user: req.user._id,
-        amount: withdrawalAmount,
-        lockedAmountAtRequest: lockedAmount,
-        bankName,
+        amount,
         bankCode,
-        accountName,
-        accountNumber: String(accountNumber),
-        status: "pending",
+        bankName,
+        accountName: resolved.account_name,
+        accountNumberLast4: accountNumber.slice(-4),
+        recipientCode: recipient.recipient_code,
+        reference,
+        status: "processing",
       });
-    } catch (createError) {
-      await User.findByIdAndUpdate(req.user._id, {
-        $inc: { withdrawalReserved: -withdrawalAmount },
-      });
-      throw createError;
-    }
 
-    res.status(201).json({
-      message: "Withdrawal request submitted. An administrator must approve it before the transfer is sent.",
-      withdrawal: {
-        ...withdrawal.toObject(),
-        accountNumber: maskedAccount(withdrawal.accountNumber),
-      },
-      availableBalance: Math.max(0, maximumWithdrawable - Number(reservedUser.withdrawalReserved || 0)),
-      lockedAmount,
-    });
+      const transfer = await paystack("/transfer", {
+        method: "POST",
+        body: JSON.stringify({
+          source: "balance",
+          amount: Math.round(amount * 100),
+          recipient: recipient.recipient_code,
+          reference,
+          reason: `Exclusive Cooperative withdrawal for ${req.user.fullName}`,
+          currency: "NGN",
+        }),
+      });
+
+      withdrawal.transferCode = transfer.transfer_code || null;
+      withdrawal.status = transfer.status === "success" ? "success" : "processing";
+
+      if (withdrawal.status === "success") {
+        await settleWithdrawal(withdrawal, "success");
+      } else {
+        await withdrawal.save();
+      }
+
+      const freshUser = await User.findById(req.user._id).select("savingsBalance withdrawalReserved loanFundsBalance");
+      const freshBreakdown = getWithdrawalBreakdown(
+        Number(freshUser.savingsBalance || 0),
+        Number(freshUser.loanFundsBalance || 0),
+        Number(freshUser.withdrawalReserved || 0),
+      );
+
+      return res.status(201).json({
+        message:
+          withdrawal.status === "success"
+            ? "Withdrawal completed successfully."
+            : "Withdrawal submitted and is being processed by Paystack.",
+        withdrawal,
+        savingsBalance: freshUser.savingsBalance,
+        loanFundsBalance: freshBreakdown.loanFunds,
+        personalSavingsBalance: freshBreakdown.personalSavings,
+        lockedAmount: freshBreakdown.lockedAmount,
+        availableAmount: freshBreakdown.availableAmount,
+        withdrawalReserved: freshUser.withdrawalReserved,
+      });
+    } catch (err) {
+      if (withdrawal) {
+        try {
+          await settleWithdrawal(
+            withdrawal,
+            "failed",
+            err.message || "Paystack transfer could not be initiated."
+          );
+        } catch (settleError) {
+          console.error("Withdrawal settlement error:", settleError);
+        }
+      } else {
+        await User.findByIdAndUpdate(req.user._id, {
+          $inc: { withdrawalReserved: -amount },
+        });
+      }
+
+      return res.status(502).json({
+        message: err.message || "Could not start the bank transfer.",
+      });
+    }
   } catch (err) {
-    console.error("Withdrawal request error:", err);
-    res.status(500).json({ message: "Failed to create withdrawal request" });
+    res.status(500).json({ message: err.message });
   }
 });
 
-export { LOCK_PERCENT };
+// POST /api/withdrawals/paystack/webhook
+// Configure this URL in Paystack Dashboard -> API Keys & Webhooks.
+router.post("/paystack/webhook", async (req, res) => {
+  const signature = req.headers["x-paystack-signature"];
+  const payload = JSON.stringify(req.body);
+  const expected = crypto
+    .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
+    .update(payload)
+    .digest("hex");
+
+  if (!signature) return res.sendStatus(401);
+
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+
+  if (signatureBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
+    return res.sendStatus(401);
+  }
+
+  // Acknowledge immediately; Paystack retries webhook events when it doesn't
+  // receive a 200 response. Processing here is intentionally small/idempotent.
+  res.sendStatus(200);
+
+  try {
+    const { event, data } = req.body || {};
+    if (!data?.reference) return;
+
+    if (!["transfer.success", "transfer.failed", "transfer.reversed"].includes(event)) {
+      return;
+    }
+
+    const withdrawal = await Withdrawal.findOne({ reference: data.reference });
+    if (!withdrawal) return;
+
+    if (event === "transfer.success") {
+      if (withdrawal.status === "success") return;
+      withdrawal.transferCode = data.transfer_code || withdrawal.transferCode;
+      await settleWithdrawal(withdrawal, "success");
+      return;
+    }
+
+    const finalStatus = event === "transfer.reversed" ? "reversed" : "failed";
+    if (["success", "failed", "reversed", "rejected"].includes(withdrawal.status)) return;
+
+    withdrawal.transferCode = data.transfer_code || withdrawal.transferCode;
+    await settleWithdrawal(
+      withdrawal,
+      finalStatus,
+      data.failures || data.message || `Paystack transfer ${finalStatus}.`
+    );
+  } catch (err) {
+    console.error("Paystack withdrawal webhook error:", err);
+  }
+});
+
 export default router;

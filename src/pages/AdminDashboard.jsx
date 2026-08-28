@@ -23,6 +23,7 @@ function AdminDashboard() {
     useState([]);
   const [loanRepayments, setLoanRepayments] = useState([]);
   const [dividends, setDividends] = useState([]);
+  const [withdrawals, setWithdrawals] = useState([]);
   const [selectedDividendId, setSelectedDividendId] = useState(null);
   const [selectedDividend, setSelectedDividend] = useState(null);
   const [dividendEntries, setDividendEntries] = useState([]);
@@ -102,6 +103,14 @@ function AdminDashboard() {
 
     setLoanRepayments(data);
   }, [user.token]);
+
+  const loadWithdrawals = useCallback(async () => {
+    const data = await request("/admin/withdrawals", {
+      token: user.token,
+    });
+
+    setWithdrawals(data);
+  }, [user.token]);
   /* ================================
      LOAD DATA WHEN SECTION CHANGES
   ================================= */
@@ -115,6 +124,7 @@ function AdminDashboard() {
         loadLoans(),
         loadLoanEligibilityApplications(),
         loadLoanRepayments(),
+        loadWithdrawals(),
       ]).catch((err) => {
         setError(err.message);
       });
@@ -141,6 +151,8 @@ function AdminDashboard() {
       loader = loadLoanRepayments;
     } else if (activeSection === "dividends") {
       loader = loadDividends;
+    } else if (activeSection === "withdrawals") {
+      loader = loadWithdrawals;
     }
 
     if (!loader) {
@@ -160,6 +172,7 @@ function AdminDashboard() {
     loadLoanEligibilityApplications,
     loadLoanRepayments,
     loadDividends,
+    loadWithdrawals,
   ]);
 
   /* ================================
@@ -960,6 +973,108 @@ function AdminDashboard() {
                               Reject
                             </button>
                           </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </>
+    );
+  };
+
+  /* ================================
+     WITHDRAWALS
+  ================================= */
+
+  const handleWithdrawalSync = async (id) => {
+    try {
+      setError("");
+      await request(`/admin/withdrawals/${id}/sync`, {
+        method: "POST",
+        token: user.token,
+      });
+      await loadWithdrawals();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const renderWithdrawals = () => {
+    const processing = withdrawals.filter((item) => item.status === "processing");
+    const successful = withdrawals.filter((item) => item.status === "success");
+    const totalPaid = successful.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    return (
+      <>
+        <div className="admin-page-heading">
+          <div>
+            <p className="eyebrow">Finance</p>
+            <h1>Withdrawals</h1>
+            <p className="admin-subtitle">
+              Monitor member withdrawal requests and Paystack transfer status.
+              Withdrawals are paid automatically after the member confirms with their password.
+            </p>
+          </div>
+          <button type="button" className="btn-secondary" onClick={loadWithdrawals}>
+            Refresh
+          </button>
+        </div>
+
+        <div className="admin-stat-grid">
+          <div className="admin-stat-card">
+            <div><span>Processing</span><strong>{processing.length}</strong></div>
+          </div>
+          <div className="admin-stat-card">
+            <div><span>Paid Withdrawals</span><strong>{successful.length}</strong></div>
+          </div>
+          <div className="admin-stat-card">
+            <div><span>Total Paid</span><strong>₦{totalPaid.toLocaleString()}</strong></div>
+          </div>
+          <div className="admin-stat-card">
+            <div><span>Total Records</span><strong>{withdrawals.length}</strong></div>
+          </div>
+        </div>
+
+        <section className="admin-card">
+          {withdrawals.length === 0 ? (
+            <p className="empty-state">No withdrawal records yet.</p>
+          ) : (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>Amount</th>
+                    <th>Bank</th>
+                    <th>Account</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {withdrawals.map((item) => (
+                    <tr key={item._id}>
+                      <td>
+                        <strong>{item.user?.fullName || "—"}</strong><br />
+                        <span className="muted">{item.user?.email || "—"}</span>
+                      </td>
+                      <td>₦{Number(item.amount || 0).toLocaleString()}</td>
+                      <td>{item.bankName}</td>
+                      <td>{item.accountName}<br /><span className="muted">····{item.accountNumberLast4}</span></td>
+                      <td><span className={`status-badge ${item.status}`}>{item.status}</span></td>
+                      <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "—"}</td>
+                      <td className="actions-cell">
+                        {item.status === "processing" ? (
+                          <button className="view-btn" onClick={() => handleWithdrawalSync(item._id)}>
+                            Sync Status
+                          </button>
+                        ) : (
+                          <span className="muted">—</span>
                         )}
                       </td>
                     </tr>
@@ -2175,6 +2290,9 @@ function AdminDashboard() {
 
       case "transactions":
         return renderTransactions();
+
+      case "withdrawals":
+        return renderWithdrawals();
 
       case "reports":
         return renderReports();

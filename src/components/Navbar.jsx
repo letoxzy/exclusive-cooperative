@@ -53,6 +53,11 @@ function Navbar() {
             <NavLink to="/savings" end onClick={closeMenu}>
               Savings
             </NavLink>
+            {user?.role === "member" && (
+              <NavLink to="/withdrawals" end onClick={closeMenu}>
+                Withdrawals
+              </NavLink>
+            )}
             <NavLink to="/loans" onClick={closeMenu}>
               Loans
             </NavLink>

@@ -15,6 +15,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
+import Withdrawals from "./pages/Withdrawals";
 import PaymentCallback from "./pages/PaymentCallback";
 import AdminDashboard from "./pages/AdminDashboard";
 
@@ -88,6 +89,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/withdrawals"
+            element={
+              <ProtectedRoute>
+                <Withdrawals />
               </ProtectedRoute>
             }
           />

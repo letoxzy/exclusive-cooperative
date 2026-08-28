@@ -7,9 +7,12 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     savingsBalance: { type: Number, default: 0 },
-    // Amount reserved for withdrawal requests awaiting processing.
-    // This prevents multiple pending withdrawals from spending the same balance.
-    withdrawalReserved: { type: Number, default: 0, min: 0 },
+    // Amount reserved by withdrawal requests that are still processing.
+    // This does not reduce savingsBalance until Paystack confirms success.
+    withdrawalReserved: { type: Number, default: 0 },
+    // Portion of the displayed balance that came from an outstanding loan
+    // disbursement. Loan funds are not subject to the 20% savings reserve.
+    loanFundsBalance: { type: Number, default: 0 },
     role: { type: String, enum: ["member", "admin"], default: "member" },
     avatarUrl: { type: String, default: null },
     isApprovedMember: { type: Boolean, default: false },

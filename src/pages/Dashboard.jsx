@@ -745,6 +745,27 @@ function Dashboard() {
       </section>
 
       {/* =====================================
+          WITHDRAWALS
+      ====================================== */}
+
+      <section className="dash-form-card withdrawal-dashboard-card">
+        <div className="withdrawal-dashboard-copy">
+          <div>
+            <p className="eyebrow">Savings</p>
+            <h2>Withdraw your savings</h2>
+            <p className="dash-note">
+              Keep 20% of your current savings as the cooperative reserve and
+              withdraw up to the remaining 80%. Your bank account is verified
+              before payment.
+            </p>
+          </div>
+          <Link to="/withdrawals" className="withdraw-dashboard-btn">
+            Withdraw Funds
+          </Link>
+        </div>
+      </section>
+
+      {/* =====================================
           TRANSACTIONS
       ====================================== */}
 

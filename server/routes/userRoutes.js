@@ -1,7 +1,10 @@
 import express from "express";
 import multer from "multer";
 import SavingsTransaction from "../models/SavingsTransaction.js";
+import Loan from "../models/Loan.js";
+import LoanRepayment from "../models/LoanRepayment.js";
 import Withdrawal from "../models/Withdrawal.js";
+import { DividendEntry } from "../models/Dividend.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 
@@ -74,43 +77,71 @@ router.get("/me/savings-requests", protect, async (req, res) => {
 // Member transaction history
 router.get("/me/transactions", protect, async (req, res) => {
   try {
-    const savingsTransactions = await SavingsTransaction.find({
-      user: req.user._id,
-      type: { $ne: "withdrawal" },
-    }).sort("-createdAt");
-
-    const withdrawals = await Withdrawal.find({
-      user: req.user._id,
-      status: { $in: ["success", "processing", "failed", "rejected"] },
-    }).sort("-createdAt");
+    const [savingsTransactions, repayments, loans, withdrawals, dividendEntries] =
+      await Promise.all([
+        SavingsTransaction.find({ user: req.user._id, status: "approved" }).sort("-createdAt"),
+        LoanRepayment.find({ user: req.user._id, status: "approved" }).sort("-createdAt"),
+        Loan.find({
+          user: req.user._id,
+          status: { $in: ["active", "completed"] },
+          disbursedDate: { $ne: null },
+        }).sort("-disbursedDate"),
+        Withdrawal.find({ user: req.user._id }).sort("-createdAt"),
+        DividendEntry.find({ user: req.user._id, status: "paid" }).sort("-paidDate"),
+      ]);
 
     const transactions = [
       ...savingsTransactions.map((transaction) => ({
-        id: transaction._id,
-        type: transaction.type === "withdrawal" ? "Withdrawal" : "Savings",
-        description:
-          transaction.type === "withdrawal"
-            ? transaction.note || "Savings Withdrawal"
-            : "Savings Deposit",
+        id: `savings-${transaction._id}`,
+        type: "Savings Deposit",
+        description: transaction.method === "paystack" ? "Paystack savings top-up" : "Savings deposit",
         amount: Number(transaction.amount || 0),
-        direction: transaction.direction || "credit",
         status: transaction.status,
+        direction: "credit",
         reference: transaction.reference || null,
         date: transaction.createdAt,
+      })),
+      ...repayments.map((repayment) => ({
+        id: `repayment-${repayment._id}`,
+        type: "Loan Repayment",
+        description: "Loan repayment confirmed",
+        amount: Number(repayment.amount || 0),
+        status: repayment.status,
+        direction: "debit",
+        reference: repayment._id,
+        date: repayment.updatedAt || repayment.createdAt,
+      })),
+      ...loans.map((loan) => ({
+        id: `loan-${loan._id}`,
+        type: "Loan Disbursement",
+        description: `${loan.loanType || "Loan"} loan disbursed`,
+        amount: Number(loan.amount || 0),
+        status: "approved",
+        direction: "credit",
+        reference: loan._id,
+        date: loan.disbursedDate || loan.createdAt,
       })),
       ...withdrawals.map((withdrawal) => ({
         id: `withdrawal-${withdrawal._id}`,
         type: "Withdrawal",
-        description: `Withdrawal to ${withdrawal.bankName} • ${String(
-          withdrawal.accountNumber
-        ).slice(-4).padStart(String(withdrawal.accountNumber).length, "*")}`,
+        description: `${withdrawal.bankName} ····${withdrawal.accountNumberLast4}`,
         amount: Number(withdrawal.amount || 0),
-        direction: "debit",
         status: withdrawal.status,
-        reference: withdrawal.reference || null,
-        date: withdrawal.createdAt,
+        direction: "debit",
+        reference: withdrawal.reference,
+        date: withdrawal.paidAt || withdrawal.createdAt,
       })),
-    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+      ...dividendEntries.map((entry) => ({
+        id: `dividend-${entry._id}`,
+        type: "Dividend",
+        description: "Dividend paid",
+        amount: Number(entry.dividendAmount || 0),
+        status: entry.status,
+        direction: "credit",
+        reference: entry._id,
+        date: entry.paidDate || entry.createdAt,
+      })),
+    ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
     res.json(transactions);
   } catch (err) {

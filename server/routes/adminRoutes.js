@@ -1,12 +1,11 @@
 import express from "express";
-import crypto from "crypto";
 
 import User from "../models/User.js";
 import Membership from "../models/Membership.js";
 import SavingsTransaction from "../models/SavingsTransaction.js";
-import Withdrawal from "../models/Withdrawal.js";
 import Loan from "../models/Loan.js";
 import LoanRepayment from "../models/LoanRepayment.js";
+import Withdrawal from "../models/Withdrawal.js";
 import LoanEligibility from "../models/LoanEligibility.js";
 import {
   DividendDistribution,
@@ -15,6 +14,7 @@ import {
 
 import { protect } from "../middleware/authMiddleware.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
+import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 
 const router = express.Router();
 
@@ -612,7 +612,7 @@ router.patch("/loans/:id/disburse", async (req, res) => {
     // confirmed below, so it doesn't permanently inflate their real
     // savings once the loan is fully repaid.
     await User.findByIdAndUpdate(loan.user, {
-      $inc: { savingsBalance: loan.amount },
+      $inc: { savingsBalance: loan.amount, loanFundsBalance: loan.amount },
     });
 
     const populatedLoan = await Loan.findById(loan._id).populate(
@@ -717,11 +717,95 @@ router.patch("/loan-repayments/:id", async (req, res) => {
     await repayment.save();
 
     // Balance out the earlier disbursement credit as the loan gets repaid.
+    // The principal portion reduces the loan-funded balance; the interest
+    // portion comes out of the member's own savings.
+    const totalRepayment = Number(loan.totalRepayment || loan.amount || 0);
+    const principalRatio = loan.amount > 0 ? Number(loan.amount) / totalRepayment : 1;
+    const principalPortion = Math.min(
+      Number(loan.amount || 0),
+      Math.round(Number(repayment.amount || 0) * principalRatio * 100) / 100,
+    );
+
     await User.findByIdAndUpdate(loan.user, {
-      $inc: { savingsBalance: -repayment.amount },
+      $inc: {
+        savingsBalance: -repayment.amount,
+        loanFundsBalance: -principalPortion,
+      },
     });
 
     res.json({ repayment, loan });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/*
+  ============================
+  WITHDRAWALS
+  ============================
+*/
+
+// GET /api/admin/withdrawals
+router.get("/withdrawals", async (req, res) => {
+  try {
+    const filter = req.query.status ? { status: req.query.status } : {};
+
+    const withdrawals = await Withdrawal.find(filter)
+      .populate("user", "fullName email savingsBalance withdrawalReserved")
+      .sort("-createdAt");
+
+    res.json(withdrawals);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/admin/withdrawals/:id/sync
+// Admin can reconcile a processing transfer by asking Paystack for its
+// current status. This is a monitoring/reconciliation action, not approval.
+router.post("/withdrawals/:id/sync", async (req, res) => {
+  try {
+    const withdrawal = await Withdrawal.findById(req.params.id);
+
+    if (!withdrawal) {
+      return res.status(404).json({ message: "Withdrawal not found" });
+    }
+
+    if (["success", "failed", "reversed", "rejected"].includes(withdrawal.status)) {
+      return res.json(withdrawal);
+    }
+
+    const response = await fetch(
+      `https://api.paystack.co/transfer/verify/${encodeURIComponent(withdrawal.reference)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        },
+      },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.status) {
+      return res.status(502).json({
+        message: data.message || "Could not verify the Paystack transfer.",
+      });
+    }
+
+    const transfer = data.data;
+    withdrawal.transferCode = transfer.transfer_code || withdrawal.transferCode;
+
+    if (transfer.status === "success") {
+      await settleWithdrawal(withdrawal, "success");
+    } else if (transfer.status === "failed") {
+      await settleWithdrawal(withdrawal, "failed", transfer.failures || "Paystack marked the transfer as failed.");
+    } else if (transfer.status === "reversed") {
+      await settleWithdrawal(withdrawal, "reversed", "Paystack reversed the transfer.");
+    } else {
+      await withdrawal.save();
+    }
+
+    res.json(withdrawal);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -993,367 +1077,6 @@ router.patch("/dividends/:id/pay-all", async (req, res) => {
       .sort("-dividendAmount");
 
     res.json({ distribution, entries });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-
-/*
-  ============================
-  WITHDRAWALS
-  ============================
-*/
-
-const PAYSTACK_BASE = "https://api.paystack.co";
-
-async function paystack(path, options = {}) {
-  const response = await fetch(`${PAYSTACK_BASE}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
-
-  const data = await response.json().catch(() => ({}));
-  return { response, data };
-}
-
-function safeGatewayResponse(data) {
-  return JSON.stringify({
-    status: data?.status,
-    message: data?.message,
-    data: data?.data
-      ? {
-          status: data.data.status,
-          reference: data.data.reference,
-          transfer_code: data.data.transfer_code,
-          failures: data.data.failures,
-        }
-      : undefined,
-  }).slice(0, 5000);
-}
-
-// GET /api/admin/withdrawals
-router.get("/withdrawals", async (req, res) => {
-  try {
-    const filter = req.query.status ? { status: req.query.status } : {};
-
-    const withdrawals = await Withdrawal.find(filter)
-      .populate("user", "fullName email savingsBalance withdrawalReserved")
-      .sort("-createdAt");
-
-    res.json(withdrawals);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// PATCH /api/admin/withdrawals/:id/reject
-router.patch("/withdrawals/:id/reject", async (req, res) => {
-  try {
-    const withdrawal = await Withdrawal.findById(req.params.id);
-
-    if (!withdrawal) {
-      return res.status(404).json({ message: "Withdrawal not found" });
-    }
-
-    if (withdrawal.status !== "pending") {
-      return res.status(400).json({ message: "Only pending withdrawals can be rejected" });
-    }
-
-    withdrawal.status = "rejected";
-    withdrawal.failureReason = String(req.body.reason || "Withdrawal rejected by administrator").trim();
-    withdrawal.reviewedAt = new Date();
-    await withdrawal.save();
-
-    // Release the reserved amount without changing the member's actual savings.
-    await User.findByIdAndUpdate(withdrawal.user, {
-      $inc: { withdrawalReserved: -withdrawal.amount },
-    });
-
-    res.json(withdrawal);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// PATCH /api/admin/withdrawals/:id/approve
-// Approves a request and initiates the Paystack bank transfer.
-router.patch("/withdrawals/:id/approve", async (req, res) => {
-  try {
-    const withdrawal = await Withdrawal.findOneAndUpdate(
-      { _id: req.params.id, status: "pending" },
-      { status: "processing", reviewedAt: new Date() },
-      { new: true }
-    );
-
-    if (!withdrawal) {
-      return res.status(400).json({
-        message: "Withdrawal was not found or has already been processed.",
-      });
-    }
-
-    if (!process.env.PAYSTACK_SECRET_KEY) {
-      await Withdrawal.findByIdAndUpdate(withdrawal._id, {
-        status: "failed",
-        failureReason: "PAYSTACK_SECRET_KEY is not configured on the server.",
-      });
-      await User.findByIdAndUpdate(withdrawal.user, {
-        $inc: { withdrawalReserved: -withdrawal.amount },
-      });
-      return res.status(500).json({
-        message: "Paystack transfer is not configured on the server.",
-      });
-    }
-
-    // Resolve the Nigerian account before creating the recipient.
-    const { response: resolveResponse, data: resolveData } = await paystack(
-      `/bank/resolve?account_number=${encodeURIComponent(withdrawal.accountNumber)}&bank_code=${encodeURIComponent(withdrawal.bankCode)}`
-    );
-
-    if (!resolveResponse.ok || !resolveData.status) {
-      await Withdrawal.findByIdAndUpdate(withdrawal._id, {
-        status: "failed",
-        failureReason: resolveData.message || "Bank account could not be verified.",
-      });
-      await User.findByIdAndUpdate(withdrawal.user, {
-        $inc: { withdrawalReserved: -withdrawal.amount },
-      });
-
-      return res.status(400).json({
-        message: resolveData.message || "The bank account could not be verified.",
-      });
-    }
-
-    const resolvedName = resolveData.data?.account_name || withdrawal.accountName;
-
-    const { response: recipientResponse, data: recipientData } = await paystack(
-      "/transferrecipient",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          type: "nuban",
-          name: resolvedName,
-          account_number: withdrawal.accountNumber,
-          bank_code: withdrawal.bankCode,
-          currency: "NGN",
-        }),
-      }
-    );
-
-    if (!recipientResponse.ok || !recipientData.status) {
-      await Withdrawal.findByIdAndUpdate(withdrawal._id, {
-        status: "failed",
-        failureReason: recipientData.message || "Could not create transfer recipient.",
-      });
-      await User.findByIdAndUpdate(withdrawal.user, {
-        $inc: { withdrawalReserved: -withdrawal.amount },
-      });
-
-      return res.status(400).json({
-        message: recipientData.message || "Could not create transfer recipient.",
-      });
-    }
-
-    const recipientCode = recipientData.data?.recipient_code;
-
-    // Paystack transfer references must be unique, lowercase, 16-50 chars.
-    const reference = `wd_${crypto.randomUUID()}`.toLowerCase();
-
-    const { response: transferResponse, data: transferData } = await paystack(
-      "/transfer",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          source: "balance",
-          amount: Math.round(withdrawal.amount * 100),
-          recipient: recipientCode,
-          reference,
-          reason: "Exclusive Cooperative savings withdrawal",
-          currency: "NGN",
-        }),
-      }
-    );
-
-    if (!transferResponse.ok || !transferData.status) {
-      await Withdrawal.findByIdAndUpdate(withdrawal._id, {
-        status: "failed",
-        failureReason: transferData.message || "Paystack could not initiate the transfer.",
-        gatewayResponse: safeGatewayResponse(transferData),
-      });
-      await User.findByIdAndUpdate(withdrawal.user, {
-        $inc: { withdrawalReserved: -withdrawal.amount },
-      });
-
-      return res.status(400).json({
-        message: transferData.message || "Paystack could not initiate the transfer.",
-      });
-    }
-
-    const transfer = transferData.data;
-    const transferStatus = transfer?.status;
-
-    await Withdrawal.findByIdAndUpdate(withdrawal._id, {
-      recipientCode,
-      reference,
-      transferCode: transfer?.transfer_code,
-      accountName: resolvedName,
-      gatewayResponse: safeGatewayResponse(transferData),
-      status:
-        transferStatus === "success"
-          ? "success"
-          : transferStatus === "failed"
-            ? "failed"
-            : "processing",
-      processedAt: transferStatus === "success" ? new Date() : undefined,
-    });
-
-    if (transferStatus === "success") {
-      await User.findOneAndUpdate(
-        {
-          _id: withdrawal.user,
-          savingsBalance: { $gte: withdrawal.amount },
-          withdrawalReserved: { $gte: withdrawal.amount },
-        },
-        {
-          $inc: {
-            savingsBalance: -withdrawal.amount,
-            withdrawalReserved: -withdrawal.amount,
-          },
-        }
-      );
-
-      await SavingsTransaction.create({
-        user: withdrawal.user,
-        amount: withdrawal.amount,
-        status: "approved",
-        method: "manual",
-        reference: `withdrawal_${withdrawal._id}`,
-        note: "Savings withdrawal paid via Paystack",
-        type: "withdrawal",
-        direction: "debit",
-      });
-    } else if (transferStatus === "failed") {
-      await User.findByIdAndUpdate(withdrawal.user, {
-        $inc: { withdrawalReserved: -withdrawal.amount },
-      });
-    }
-
-    const fresh = await Withdrawal.findById(withdrawal._id)
-      .populate("user", "fullName email savingsBalance withdrawalReserved");
-
-    res.json({
-      message:
-        transferStatus === "success"
-          ? "Withdrawal approved and paid successfully."
-          : "Withdrawal approved and sent to Paystack for processing.",
-      withdrawal: fresh,
-    });
-  } catch (err) {
-    console.error("Withdrawal approval error:", err);
-    try {
-      const withdrawal = await Withdrawal.findOneAndUpdate(
-        { _id: req.params.id, status: "processing" },
-        { status: "failed", failureReason: err.message },
-        { new: true }
-      );
-      if (withdrawal) {
-        await User.findByIdAndUpdate(withdrawal.user, {
-          $inc: { withdrawalReserved: -withdrawal.amount },
-        });
-      }
-    } catch (_) {}
-
-    res.status(500).json({ message: "Withdrawal processing failed" });
-  }
-});
-
-// PATCH /api/admin/withdrawals/:id/sync
-// Re-checks a processing Paystack transfer. Paystack also supports webhooks;
-// this endpoint gives the admin a manual reconciliation option.
-router.patch("/withdrawals/:id/sync", async (req, res) => {
-  try {
-    const withdrawal = await Withdrawal.findById(req.params.id);
-
-    if (!withdrawal) {
-      return res.status(404).json({ message: "Withdrawal not found" });
-    }
-
-    if (!withdrawal.reference) {
-      return res.status(400).json({ message: "This withdrawal has no Paystack reference" });
-    }
-
-    const { response, data } = await paystack(
-      `/transfer/verify/${encodeURIComponent(withdrawal.reference)}`
-    );
-
-    if (!response.ok || !data.status) {
-      return res.status(400).json({ message: data.message || "Could not verify transfer" });
-    }
-
-    const status = data.data?.status;
-
-    if (status === "success" && withdrawal.status !== "success") {
-      const updated = await Withdrawal.findOneAndUpdate(
-        { _id: withdrawal._id, status: { $in: ["processing", "pending"] } },
-        {
-          status: "success",
-          transferCode: data.data?.transfer_code || withdrawal.transferCode,
-          gatewayResponse: safeGatewayResponse(data),
-          processedAt: new Date(),
-        },
-        { new: true }
-      );
-
-      if (updated) {
-        await User.findOneAndUpdate(
-          {
-            _id: withdrawal.user,
-            savingsBalance: { $gte: withdrawal.amount },
-            withdrawalReserved: { $gte: withdrawal.amount },
-          },
-          {
-            $inc: {
-              savingsBalance: -withdrawal.amount,
-              withdrawalReserved: -withdrawal.amount,
-            },
-          }
-        );
-
-        await SavingsTransaction.create({
-          user: withdrawal.user,
-          amount: withdrawal.amount,
-          status: "approved",
-          method: "manual",
-          reference: `withdrawal_${withdrawal._id}`,
-          note: "Savings withdrawal paid via Paystack",
-          type: "withdrawal",
-          direction: "debit",
-        });
-      }
-    } else if (["failed", "reversed"].includes(status) && withdrawal.status !== "failed") {
-      await Withdrawal.findByIdAndUpdate(withdrawal._id, {
-        status: "failed",
-        failureReason: data.data?.failures || `Paystack transfer ${status}`,
-        gatewayResponse: safeGatewayResponse(data),
-      });
-
-      await User.findByIdAndUpdate(withdrawal.user, {
-        $inc: { withdrawalReserved: -withdrawal.amount },
-      });
-    } else {
-      await Withdrawal.findByIdAndUpdate(withdrawal._id, {
-        gatewayResponse: safeGatewayResponse(data),
-      });
-    }
-
-    const fresh = await Withdrawal.findById(withdrawal._id)
-      .populate("user", "fullName email savingsBalance withdrawalReserved");
-
-    res.json(fresh);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

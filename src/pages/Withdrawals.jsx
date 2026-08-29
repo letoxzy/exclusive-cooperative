@@ -12,6 +12,7 @@ function Withdrawals() {
     lockedAmount: 0,
     availableAmount: 0,
     reservedAmount: 0,
+    loanFundsBalance: 0,
     withdrawals: [],
   });
   const [banks, setBanks] = useState([]);
@@ -70,10 +71,15 @@ function Withdrawals() {
     if (!user?.token) return;
     try {
       setPinLoading(true);
-      const result = await request("/withdrawals/pin/status", { token: user.token });
+      const result = await request("/withdrawals/pin/status", {
+        token: user.token,
+      });
       setHasPin(Boolean(result.hasWithdrawalPin));
-    } catch (err) { setError(err.message); }
-    finally { setPinLoading(false); }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPinLoading(false);
+    }
   }, [user?.token]);
 
   useEffect(() => {
@@ -82,28 +88,65 @@ function Withdrawals() {
     loadPinStatus();
   }, [loadWithdrawals, loadBanks, loadPinStatus]);
 
-  const createPin = async (event) => {
-    event.preventDefault(); setPinMessage("");
-    if (!/^\d{4}$/.test(pin)) return setPinMessage("PIN must be exactly 4 digits.");
-    if (pin !== confirmPin) return setPinMessage("PINs do not match.");
+  const createPin = async () => {
+    setPinMessage("");
+
+    if (!/^\d{4}$/.test(pin)) {
+      setPinMessage("PIN must be exactly 4 digits.");
+      return;
+    }
+
+    if (pin !== confirmPin) {
+      setPinMessage("PINs do not match.");
+      return;
+    }
+
     try {
       setPinSaving(true);
-      const result = await request("/withdrawals/pin", { method: "POST", token: user.token, body: { pin, confirmPin } });
-      setHasPin(true); setPin(""); setConfirmPin(""); setPinMessage(result.message);
-    } catch (err) { setPinMessage(err.message); }
-    finally { setPinSaving(false); }
+
+      const result = await request("/withdrawals/pin", {
+        method: "POST",
+        token: user.token,
+        body: {
+          pin,
+          confirmPin,
+        },
+      });
+
+      setHasPin(true);
+      setPin("");
+      setConfirmPin("");
+
+      setPinMessage(result.message || "Withdrawal PIN created successfully.");
+    } catch (err) {
+      setPinMessage(err.message);
+    } finally {
+      setPinSaving(false);
+    }
   };
 
-  const changePin = async (event) => {
-    event.preventDefault(); setPinMessage("");
-    if (!/^\d{4}$/.test(currentPin) || !/^\d{4}$/.test(pin)) return setPinMessage("All PIN fields must contain exactly 4 digits.");
+  const changePin = async () => {
+    setPinMessage("");
+    if (!/^\d{4}$/.test(currentPin) || !/^\d{4}$/.test(pin))
+      return setPinMessage("All PIN fields must contain exactly 4 digits.");
     if (pin !== confirmPin) return setPinMessage("New PINs do not match.");
     try {
       setPinSaving(true);
-      const result = await request("/withdrawals/pin", { method: "PATCH", token: user.token, body: { currentPin, newPin: pin, confirmPin } });
-      setCurrentPin(""); setPin(""); setConfirmPin(""); setChangePinOpen(false); setPinMessage(result.message);
-    } catch (err) { setPinMessage(err.message); }
-    finally { setPinSaving(false); }
+      const result = await request("/withdrawals/pin", {
+        method: "PATCH",
+        token: user.token,
+        body: { currentPin, newPin: pin, confirmPin },
+      });
+      setCurrentPin("");
+      setPin("");
+      setConfirmPin("");
+      setChangePinOpen(false);
+      setPinMessage(result.message);
+    } catch (err) {
+      setPinMessage(err.message);
+    } finally {
+      setPinSaving(false);
+    }
   };
 
   const verifyAccount = async () => {
@@ -153,8 +196,14 @@ function Withdrawals() {
       setError("Verify your bank account before continuing.");
       return;
     }
-    if (!hasPin) { setError("Create your withdrawal PIN before making a withdrawal."); return; }
-    if (!/^\d{4}$/.test(pin)) { setError("Enter your 4-digit withdrawal PIN."); return; }
+    if (!hasPin) {
+      setError("Create your withdrawal PIN before making a withdrawal.");
+      return;
+    }
+    if (!/^\d{4}$/.test(pin)) {
+      setError("Enter your 4-digit withdrawal PIN.");
+      return;
+    }
 
     const confirmed = window.confirm(
       `Confirm withdrawal of ${money(value)} to ${accountName} at ${selectedBank?.name || "your bank"}, account ending ${accountNumber.slice(-4)}?`,
@@ -223,11 +272,15 @@ function Withdrawals() {
         </div>
         <div className="withdrawal-balance-card">
           <span>Loan Funds Included</span>
-          <strong>{loading ? "Loading..." : money(data.loanFundsBalance)}</strong>
+          <strong>
+            {loading ? "Loading..." : money(data.loanFundsBalance)}
+          </strong>
         </div>
         <div className="withdrawal-balance-card available">
           <span>Available to Withdraw</span>
-          <strong>{loading ? "Loading..." : money(data.availableAmount)}</strong>
+          <strong>
+            {loading ? "Loading..." : money(data.availableAmount)}
+          </strong>
         </div>
       </section>
 
@@ -321,37 +374,160 @@ function Withdrawals() {
           )}
 
           {pinLoading ? (
-            <div className="withdrawal-rule"><strong>Withdrawal security</strong><span>Checking your withdrawal PIN status...</span></div>
+            <div className="withdrawal-rule">
+              <strong>Withdrawal security</strong>
+              <span>Checking your withdrawal PIN status...</span>
+            </div>
           ) : !hasPin ? (
             <div className="withdrawal-pin-box">
               <p className="eyebrow">Security</p>
+
               <h3>Create your 4-digit Withdrawal PIN</h3>
-              <p>This PIN is separate from your login password and is used only to authorize withdrawals.</p>
-              <form onSubmit={createPin} className="withdrawal-pin-form">
-                <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} placeholder="4-digit PIN" disabled={pinSaving || submitting} />
-                <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))} placeholder="Confirm PIN" disabled={pinSaving || submitting} />
-                <button type="submit" className="verify-account-btn" disabled={pinSaving}>{pinSaving ? "Creating..." : "Create PIN"}</button>
-              </form>
-              {pinMessage && <p className="form-error">{pinMessage}</p>}
+
+              <p>
+                This PIN is separate from your login password and is used only
+                to authorize withdrawals.
+              </p>
+
+              <div className="withdrawal-pin-form">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength="4"
+                  autoComplete="off"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                  placeholder="4-digit PIN"
+                  disabled={pinSaving || submitting}
+                />
+
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength="4"
+                  autoComplete="off"
+                  value={confirmPin}
+                  onChange={(e) =>
+                    setConfirmPin(e.target.value.replace(/\D/g, ""))
+                  }
+                  placeholder="Confirm PIN"
+                  disabled={pinSaving || submitting}
+                />
+
+                <button
+                  type="button"
+                  className="verify-account-btn"
+                  onClick={createPin}
+                  disabled={pinSaving || submitting}
+                >
+                  {pinSaving ? "Creating..." : "Create PIN"}
+                </button>
+              </div>
+
+              {pinMessage && (
+                <p
+                  className={
+                    pinMessage.toLowerCase().includes("success")
+                      ? "form-success"
+                      : "form-error"
+                  }
+                >
+                  {pinMessage}
+                </p>
+              )}
             </div>
           ) : (
             <>
               <label>
                 4-Digit Withdrawal PIN
-                <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} placeholder="Enter your withdrawal PIN" disabled={submitting} />
-                <small>Your withdrawal PIN is securely verified on the server and is never shown to administrators.</small>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength="4"
+                  autoComplete="off"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Enter your withdrawal PIN"
+                  disabled={submitting}
+                />
+                <small>
+                  Your withdrawal PIN is securely verified on the server and is
+                  never shown to administrators.
+                </small>
               </label>
-              <button type="button" className="withdraw-refresh-btn" onClick={() => { setChangePinOpen((v) => !v); setPinMessage(""); setCurrentPin(""); setPin(""); setConfirmPin(""); }} disabled={submitting}>
+
+              <button
+                type="button"
+                className="withdraw-refresh-btn"
+                onClick={() => {
+                  setChangePinOpen((v) => !v);
+                  setPinMessage("");
+                  setCurrentPin("");
+                  setPin("");
+                  setConfirmPin("");
+                }}
+                disabled={submitting}
+              >
                 {changePinOpen ? "Cancel PIN Change" : "Change Withdrawal PIN"}
               </button>
+
               {changePinOpen && (
-                <form className="withdrawal-pin-form" onSubmit={changePin}>
-                  <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={currentPin} onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ""))} placeholder="Current PIN" />
-                  <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} placeholder="New PIN" />
-                  <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))} placeholder="Confirm new PIN" />
-                  <button type="submit" className="verify-account-btn" disabled={pinSaving}>{pinSaving ? "Changing..." : "Change PIN"}</button>
-                  {pinMessage && <p className="form-error">{pinMessage}</p>}
-                </form>
+                <div className="withdrawal-pin-form">
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength="4"
+                    autoComplete="off"
+                    value={currentPin}
+                    onChange={(e) =>
+                      setCurrentPin(e.target.value.replace(/\D/g, ""))
+                    }
+                    placeholder="Current PIN"
+                  />
+
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength="4"
+                    autoComplete="off"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                    placeholder="New PIN"
+                  />
+
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength="4"
+                    autoComplete="off"
+                    value={confirmPin}
+                    onChange={(e) =>
+                      setConfirmPin(e.target.value.replace(/\D/g, ""))
+                    }
+                    placeholder="Confirm new PIN"
+                  />
+
+                  <button
+                    type="button"
+                    className="verify-account-btn"
+                    onClick={changePin}
+                    disabled={pinSaving}
+                  >
+                    {pinSaving ? "Changing..." : "Change PIN"}
+                  </button>
+
+                  {pinMessage && (
+                    <p
+                      className={
+                        pinMessage.toLowerCase().includes("success")
+                          ? "form-success"
+                          : "form-error"
+                      }
+                    >
+                      {pinMessage}
+                    </p>
+                  )}
+                </div>
               )}
             </>
           )}
@@ -382,7 +558,7 @@ function Withdrawals() {
           </button>
         </div>
 
-        {data.withdrawals.length === 0 ? (
+        {(data.withdrawals || []).length === 0 ? (
           <p className="withdrawal-empty">No withdrawal requests yet.</p>
         ) : (
           <div className="withdrawal-history-wrap">
@@ -397,7 +573,7 @@ function Withdrawals() {
                 </tr>
               </thead>
               <tbody>
-                {data.withdrawals.map((withdrawal) => (
+                {(data.withdrawals || []).map((withdrawal) => (
                   <tr key={withdrawal._id}>
                     <td>
                       {withdrawal.createdAt
@@ -405,8 +581,13 @@ function Withdrawals() {
                         : "—"}
                     </td>
                     <td>{withdrawal.bankName}</td>
-                    <td>{withdrawal.accountName} ····{withdrawal.accountNumberLast4}</td>
-                    <td className="withdrawal-amount">{money(withdrawal.amount)}</td>
+                    <td>
+                      {withdrawal.accountName} ····
+                      {withdrawal.accountNumberLast4}
+                    </td>
+                    <td className="withdrawal-amount">
+                      {money(withdrawal.amount)}
+                    </td>
                     <td>
                       <span className={`status-badge ${withdrawal.status}`}>
                         {statusLabel(withdrawal.status)}

@@ -17,17 +17,52 @@ const AVAILABLE_PERCENTAGE = 0.80;
 router.post("/pin", protect, requireApprovedMember, async (req, res) => {
   try {
     const { pin, confirmPin } = req.body;
-    if (!/^\d{4}$/.test(String(pin || ""))) return res.status(400).json({ message: "Withdrawal PIN must be exactly 4 digits." });
-    if (pin !== confirmPin) return res.status(400).json({ message: "Withdrawal PINs do not match." });
-    if (req.user.withdrawalPinHash) return res.status(409).json({ message: "You already have a withdrawal PIN." });
-    req.user.withdrawalPinHash = await bcrypt.hash(String(pin), 12);
-    req.user.withdrawalPinFailedAttempts = 0;
-    req.user.withdrawalPinLockedUntil = null;
-    await req.user.save();
-    res.status(201).json({ message: "Withdrawal PIN created successfully." });
+
+    if (!/^\d{4}$/.test(String(pin || ""))) {
+      return res.status(400).json({
+        message: "Withdrawal PIN must be exactly 4 digits.",
+      });
+    }
+
+    if (pin !== confirmPin) {
+      return res.status(400).json({
+        message: "Withdrawal PINs do not match.",
+      });
+    }
+
+    // Get a fresh copy of the member including the hidden PIN fields.
+    const member = await User.findById(req.user._id).select(
+      "+withdrawalPinHash +withdrawalPinFailedAttempts +withdrawalPinLockedUntil"
+    );
+
+    if (!member) {
+      return res.status(404).json({
+        message: "Member account not found.",
+      });
+    }
+
+    if (member.withdrawalPinHash) {
+      return res.status(409).json({
+        message: "You already have a withdrawal PIN.",
+      });
+    }
+
+    member.withdrawalPinHash = await bcrypt.hash(String(pin), 12);
+    member.withdrawalPinFailedAttempts = 0;
+    member.withdrawalPinLockedUntil = null;
+
+    await member.save();
+
+    return res.status(201).json({
+      message: "Withdrawal PIN created successfully.",
+      hasWithdrawalPin: true,
+    });
   } catch (err) {
     console.error("Create withdrawal PIN:", err);
-    res.status(500).json({ message: "Failed to create withdrawal PIN." });
+
+    return res.status(500).json({
+      message: "Failed to create withdrawal PIN.",
+    });
   }
 });
 

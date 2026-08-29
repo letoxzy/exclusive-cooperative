@@ -1,5 +1,6 @@
 import express from "express";
 import multer from "multer";
+import User from "../models/User.js";
 import SavingsTransaction from "../models/SavingsTransaction.js";
 import Loan from "../models/Loan.js";
 import LoanRepayment from "../models/LoanRepayment.js";
@@ -11,98 +12,217 @@ import { validatePassword } from "../utils/passwordPolicy.js";
 
 const router = express.Router();
 
-const uploadAvatar = multer({ storage: multer.memoryStorage() });
+const uploadAvatar = multer({
+  storage: multer.memoryStorage(),
+});
 
-// PATCH /api/users/me   body: { fullName }
+// PATCH /api/users/me
+// body: { fullName }
 router.patch("/me", protect, async (req, res) => {
-  const { fullName } = req.body;
-  if (!fullName || !fullName.trim()) {
-    return res.status(400).json({ message: "Full name cannot be empty" });
-  }
-  req.user.fullName = fullName.trim();
-  await req.user.save();
-  res.json(req.user);
-});
-
-// PATCH /api/users/me/password   body: { currentPassword, newPassword }
-router.patch("/me/password", protect, async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ message: "Both current and new password are required" });
-  }
-  const passwordError = validatePassword(newPassword);
-  if (passwordError) {
-    return res.status(400).json({ message: passwordError });
-  }
-
-  const matches = await req.user.matchPassword(currentPassword);
-  if (!matches) {
-    return res.status(401).json({ message: "Current password is incorrect" });
-  }
-
-  req.user.password = newPassword;
-  await req.user.save();
-  res.json({ message: "Password updated" });
-});
-
-// POST /api/users/me/avatar   (multipart/form-data, field name "avatar")
-router.post("/me/avatar", protect, uploadAvatar.single("avatar"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ message: "No image uploaded" });
-  }
-
   try {
-    const result = await uploadBufferToCloudinary(req.file.buffer, {
-      folder: "exclusive-cooperative/avatars",
-      transformation: [{ width: 400, height: 400, crop: "fill", gravity: "face" }],
-    });
+    const { fullName } = req.body;
 
-    req.user.avatarUrl = result.secure_url;
+    if (!fullName || !fullName.trim()) {
+      return res.status(400).json({
+        message: "Full name cannot be empty",
+      });
+    }
+
+    req.user.fullName = fullName.trim();
+
     await req.user.save();
-    res.json({ avatarUrl: req.user.avatarUrl });
+
+    res.json(req.user);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Profile update error:", err);
+
+    res.status(500).json({
+      message: "Failed to update profile",
+    });
   }
 });
+
+// PATCH /api/users/me/password
+// body: { currentPassword, newPassword }
+router.patch("/me/password", protect, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        message: "Both current and new password are required",
+      });
+    }
+
+    // Validate the new password.
+    // This uses the same password policy used during registration.
+    const passwordError = validatePassword(newPassword);
+
+    if (passwordError) {
+      return res.status(400).json({
+        message: passwordError,
+      });
+    }
+
+    // protect() intentionally removes the password field.
+    // Fetch the user again here so that we have access
+    // to the stored password hash for bcrypt comparison.
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User no longer exists",
+      });
+    }
+
+    // Compare the entered current password with the
+    // hashed password stored in MongoDB.
+    const matches = await user.matchPassword(currentPassword);
+
+    if (!matches) {
+      return res.status(401).json({
+        message: "Current password is incorrect",
+      });
+    }
+
+    // Set the new password.
+    // User.js pre-save middleware will automatically hash it.
+    user.password = newPassword;
+
+    await user.save();
+
+    res.json({
+      message: "Password updated successfully",
+    });
+  } catch (err) {
+    console.error("Password update error:", err);
+
+    res.status(500).json({
+      message: "Failed to update password",
+    });
+  }
+});
+
+// POST /api/users/me/avatar
+// multipart/form-data, field name "avatar"
+router.post(
+  "/me/avatar",
+  protect,
+  uploadAvatar.single("avatar"),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({
+        message: "No image uploaded",
+      });
+    }
+
+    try {
+      const result = await uploadBufferToCloudinary(req.file.buffer, {
+        folder: "exclusive-cooperative/avatars",
+        transformation: [
+          {
+            width: 400,
+            height: 400,
+            crop: "fill",
+            gravity: "face",
+          },
+        ],
+      });
+
+      req.user.avatarUrl = result.secure_url;
+
+      await req.user.save();
+
+      res.json({
+        avatarUrl: req.user.avatarUrl,
+      });
+    } catch (err) {
+      console.error("Avatar upload error:", err);
+
+      res.status(500).json({
+        message: err.message,
+      });
+    }
+  }
+);
 
 // GET /api/users/me/savings-requests
-// History of a member's savings top-ups. Manual/bank-transfer submission
-// was removed — every top-up now comes through Paystack's checkout, so
-// entries here will always be method: "paystack".
+// History of a member's savings top-ups.
+// Every top-up now comes through Paystack checkout.
 router.get("/me/savings-requests", protect, async (req, res) => {
-  const txns = await SavingsTransaction.find({ user: req.user._id }).sort("-createdAt");
-  res.json(txns);
+  try {
+    const txns = await SavingsTransaction.find({
+      user: req.user._id,
+    }).sort("-createdAt");
+
+    res.json(txns);
+  } catch (err) {
+    console.error("Savings requests error:", err);
+
+    res.status(500).json({
+      message: "Failed to load savings requests",
+    });
+  }
 });
 
 // GET /api/users/me/transactions
 // Member transaction history
 router.get("/me/transactions", protect, async (req, res) => {
   try {
-    const [savingsTransactions, repayments, loans, withdrawals, dividendEntries] =
-      await Promise.all([
-        SavingsTransaction.find({ user: req.user._id, status: "approved" }).sort("-createdAt"),
-        LoanRepayment.find({ user: req.user._id, status: "approved" }).sort("-createdAt"),
-        Loan.find({
-          user: req.user._id,
-          status: { $in: ["active", "completed"] },
-          disbursedDate: { $ne: null },
-        }).sort("-disbursedDate"),
-        Withdrawal.find({ user: req.user._id }).sort("-createdAt"),
-        DividendEntry.find({ user: req.user._id, status: "paid" }).sort("-paidDate"),
-      ]);
+    const [
+      savingsTransactions,
+      repayments,
+      loans,
+      withdrawals,
+      dividendEntries,
+    ] = await Promise.all([
+      SavingsTransaction.find({
+        user: req.user._id,
+        status: "approved",
+      }).sort("-createdAt"),
+
+      LoanRepayment.find({
+        user: req.user._id,
+        status: "approved",
+      }).sort("-createdAt"),
+
+      Loan.find({
+        user: req.user._id,
+        status: {
+          $in: ["active", "completed"],
+        },
+        disbursedDate: {
+          $ne: null,
+        },
+      }).sort("-disbursedDate"),
+
+      Withdrawal.find({
+        user: req.user._id,
+      }).sort("-createdAt"),
+
+      DividendEntry.find({
+        user: req.user._id,
+        status: "paid",
+      }).sort("-paidDate"),
+    ]);
 
     const transactions = [
+      // SAVINGS
       ...savingsTransactions.map((transaction) => ({
         id: `savings-${transaction._id}`,
         type: "Savings Deposit",
-        description: transaction.method === "paystack" ? "Paystack savings top-up" : "Savings deposit",
+        description:
+          transaction.method === "paystack"
+            ? "Paystack savings top-up"
+            : "Savings deposit",
         amount: Number(transaction.amount || 0),
         status: transaction.status,
         direction: "credit",
         reference: transaction.reference || null,
         date: transaction.createdAt,
       })),
+
+      // LOAN REPAYMENTS
       ...repayments.map((repayment) => ({
         id: `repayment-${repayment._id}`,
         type: "Loan Repayment",
@@ -113,6 +233,8 @@ router.get("/me/transactions", protect, async (req, res) => {
         reference: repayment._id,
         date: repayment.updatedAt || repayment.createdAt,
       })),
+
+      // LOAN DISBURSEMENTS
       ...loans.map((loan) => ({
         id: `loan-${loan._id}`,
         type: "Loan Disbursement",
@@ -123,6 +245,8 @@ router.get("/me/transactions", protect, async (req, res) => {
         reference: loan._id,
         date: loan.disbursedDate || loan.createdAt,
       })),
+
+      // WITHDRAWALS
       ...withdrawals.map((withdrawal) => ({
         id: `withdrawal-${withdrawal._id}`,
         type: "Withdrawal",
@@ -133,6 +257,8 @@ router.get("/me/transactions", protect, async (req, res) => {
         reference: withdrawal.reference,
         date: withdrawal.paidAt || withdrawal.createdAt,
       })),
+
+      // DIVIDENDS
       ...dividendEntries.map((entry) => ({
         id: `dividend-${entry._id}`,
         type: "Dividend",
@@ -143,11 +269,16 @@ router.get("/me/transactions", protect, async (req, res) => {
         reference: entry._id,
         date: entry.paidDate || entry.createdAt,
       })),
-    ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    ].sort(
+      (a, b) =>
+        new Date(b.date || 0) -
+        new Date(a.date || 0)
+    );
 
     res.json(transactions);
   } catch (err) {
     console.error("Transaction history error:", err);
+
     res.status(500).json({
       message: "Failed to load transactions",
     });

@@ -4,16 +4,31 @@ import bcrypt from "bcryptjs";
 const userSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
     password: { type: String, required: true },
+
     savingsBalance: { type: Number, default: 0 },
+
     // Amount reserved by withdrawal requests that are still processing.
     // This does not reduce savingsBalance until Paystack confirms success.
     withdrawalReserved: { type: Number, default: 0 },
+
     // Portion of the displayed balance that came from an outstanding loan
-    // disbursement. Loan funds are not subject to the 20% savings reserve.
+    // disbursement. Loan funds are not subject to the 50% personal-savings reserve.
     loanFundsBalance: { type: Number, default: 0 },
-    role: { type: String, enum: ["member", "admin"], default: "member" },
+
+    role: {
+      type: String,
+      enum: ["member", "admin"],
+      default: "member",
+    },
+
     avatarUrl: { type: String, default: null },
     isApprovedMember: { type: Boolean, default: false },
 
@@ -31,17 +46,37 @@ const userSchema = new mongoose.Schema(
     // member can submit an actual loan request.
     isLoanEligible: { type: Boolean, default: false },
 
-    withdrawalPinHash: { type: String, default: null, select: false },
-    withdrawalPinFailedAttempts: { type: Number, default: 0, select: false },
-    withdrawalPinLockedUntil: { type: Date, default: null, select: false },
+    // Withdrawal security PIN.
+    // The actual PIN is never stored; only the bcrypt hash is stored.
+    withdrawalPinHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+
+    // Failed PIN attempts are hidden from normal User queries.
+    withdrawalPinFailedAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+
+    // Temporary lock after too many incorrect withdrawal PIN attempts.
+    withdrawalPinLockedUntil: {
+      type: Date,
+      default: null,
+      select: false,
+    },
   },
   { timestamps: true }
 );
 
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
+
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+
   next();
 });
 

@@ -214,9 +214,15 @@
   margin-top: 3px;
 }
 
-.withdrawal-form .form-error {
+.withdrawal-form .form-error,
+.withdrawal-form .form-success {
   grid-column: 1 / -1;
   margin: 0;
+}
+
+.form-success {
+  color: #065f46;
+  font-size: 13px;
 }
 
 .withdraw-submit-btn {
@@ -303,6 +309,193 @@
   color: #991b1b;
 }
 
+/* Withdrawal PIN */
+
+.withdrawal-pin-box {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--light);
+}
+
+.withdrawal-pin-box h3 {
+  color: var(--navy);
+  margin: 4px 0 8px;
+}
+
+.withdrawal-pin-box p {
+  margin: 0 0 14px;
+}
+
+.withdrawal-pin-form {
+  display: grid;
+  gap: 10px;
+}
+
+.withdrawal-pin-form input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Searchable Bank Selector */
+
+.bank-selector-label {
+  position: relative;
+}
+
+.bank-selector {
+  position: relative;
+  width: 100%;
+}
+
+.bank-selector-trigger {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bank-selector-trigger:hover {
+  border-color: #cbd5e1;
+}
+
+.bank-selector.open .bank-selector-trigger {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.bank-selector-trigger:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.bank-selector-trigger .placeholder {
+  color: var(--muted);
+}
+
+.selected-bank-name {
+  color: var(--text);
+}
+
+.bank-chevron {
+  color: var(--navy);
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.bank-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(11, 31, 58, 0.14);
+  overflow: hidden;
+}
+
+.bank-search-wrap {
+  padding: 10px;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+}
+
+.bank-search-input {
+  width: 100% !important;
+  min-height: 44px !important;
+  box-sizing: border-box;
+  border: 1px solid var(--border) !important;
+  border-radius: 7px !important;
+  padding: 0 12px !important;
+  background: var(--light) !important;
+  color: var(--text);
+  font-size: 14px !important;
+}
+
+.bank-search-input:focus {
+  outline: none;
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 3px var(--gold-soft) !important;
+}
+
+.bank-options {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.bank-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 12px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.bank-option:hover {
+  background: var(--light);
+  color: var(--navy);
+}
+
+.bank-option.selected {
+  background: var(--gold-soft);
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.bank-check {
+  color: var(--gold);
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.bank-no-results {
+  padding: 20px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bank-options::-webkit-scrollbar {
+  width: 7px;
+}
+
+.bank-options::-webkit-scrollbar-track {
+  background: var(--light);
+}
+
+.bank-options::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
 @media (max-width: 750px) {
   .withdrawals-page {
     padding: 42px 0 70px;
@@ -328,11 +521,17 @@
   .withdrawal-rule strong {
     white-space: normal;
   }
+
+  .bank-dropdown {
+    max-height: 350px;
+  }
+
+  .bank-options {
+    max-height: 280px;
+  }
+
+  .bank-option {
+    padding: 13px 12px;
+    font-size: 14px;
+  }
 }
-
-
-.withdrawal-pin-box { margin-top: 8px; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background: #f8fafc; }
-.withdrawal-pin-box h3 { margin: 4px 0 8px; }
-.withdrawal-pin-box p { margin: 0 0 14px; }
-.withdrawal-pin-form { display: grid; gap: 10px; }
-.withdrawal-pin-form input { width: 100%; box-sizing: border-box; }

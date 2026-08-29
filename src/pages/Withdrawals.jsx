@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import "../styles/withdrawals.css";
@@ -7,6 +7,7 @@ const money = (value) => `₦${Number(value || 0).toLocaleString()}`;
 
 function Withdrawals() {
   const { user, refreshUser } = useAuth();
+
   const [data, setData] = useState({
     savingsBalance: 0,
     lockedAmount: 0,
@@ -15,23 +16,29 @@ function Withdrawals() {
     loanFundsBalance: 0,
     withdrawals: [],
   });
+
   const [banks, setBanks] = useState([]);
   const [bankCode, setBankCode] = useState("");
+  const [bankSearch, setBankSearch] = useState("");
+  const [bankOpen, setBankOpen] = useState(false);
+  const bankSelectorRef = useRef(null);
+
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
   const [amount, setAmount] = useState("");
+
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
-  const [currentPin, setCurrentPin] = useState("");
   const [hasPin, setHasPin] = useState(false);
   const [pinLoading, setPinLoading] = useState(true);
   const [pinSaving, setPinSaving] = useState(false);
-  const [changePinOpen, setChangePinOpen] = useState(false);
   const [pinMessage, setPinMessage] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [banksLoading, setBanksLoading] = useState(true);
   const [verifyingAccount, setVerifyingAccount] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [accountError, setAccountError] = useState("");
@@ -41,11 +48,21 @@ function Withdrawals() {
     [banks, bankCode],
   );
 
+  const filteredBanks = useMemo(() => {
+    const search = bankSearch.trim().toLowerCase();
+    if (!search) return banks;
+
+    return banks.filter((bank) => bank.name.toLowerCase().includes(search));
+  }, [banks, bankSearch]);
+
   const loadWithdrawals = useCallback(async () => {
     if (!user?.token) return;
+
     try {
       setLoading(true);
-      const result = await request("/withdrawals/me", { token: user.token });
+      const result = await request("/withdrawals/me", {
+        token: user.token,
+      });
       setData(result);
     } catch (err) {
       setError(err.message);
@@ -56,9 +73,12 @@ function Withdrawals() {
 
   const loadBanks = useCallback(async () => {
     if (!user?.token) return;
+
     try {
       setBanksLoading(true);
-      const result = await request("/withdrawals/banks", { token: user.token });
+      const result = await request("/withdrawals/banks", {
+        token: user.token,
+      });
       setBanks(Array.isArray(result) ? result : []);
     } catch (err) {
       setError(err.message);
@@ -69,6 +89,7 @@ function Withdrawals() {
 
   const loadPinStatus = useCallback(async () => {
     if (!user?.token) return;
+
     try {
       setPinLoading(true);
       const result = await request("/withdrawals/pin/status", {
@@ -87,6 +108,23 @@ function Withdrawals() {
     loadBanks();
     loadPinStatus();
   }, [loadWithdrawals, loadBanks, loadPinStatus]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        bankSelectorRef.current &&
+        !bankSelectorRef.current.contains(event.target)
+      ) {
+        setBankOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const createPin = async () => {
     setPinMessage("");
@@ -107,16 +145,12 @@ function Withdrawals() {
       const result = await request("/withdrawals/pin", {
         method: "POST",
         token: user.token,
-        body: {
-          pin,
-          confirmPin,
-        },
+        body: { pin, confirmPin },
       });
 
       setHasPin(true);
       setPin("");
       setConfirmPin("");
-
       setPinMessage(result.message || "Withdrawal PIN created successfully.");
     } catch (err) {
       setPinMessage(err.message);
@@ -124,31 +158,6 @@ function Withdrawals() {
       setPinSaving(false);
     }
   };
-
-  const changePin = async () => {
-    setPinMessage("");
-    if (!/^\d{4}$/.test(currentPin) || !/^\d{4}$/.test(pin))
-      return setPinMessage("All PIN fields must contain exactly 4 digits.");
-    if (pin !== confirmPin) return setPinMessage("New PINs do not match.");
-    try {
-      setPinSaving(true);
-      const result = await request("/withdrawals/pin", {
-        method: "PATCH",
-        token: user.token,
-        body: { currentPin, newPin: pin, confirmPin },
-      });
-      setCurrentPin("");
-      setPin("");
-      setConfirmPin("");
-      setChangePinOpen(false);
-      setPinMessage(result.message);
-    } catch (err) {
-      setPinMessage(err.message);
-    } finally {
-      setPinSaving(false);
-    }
-  };
-
   const verifyAccount = async () => {
     setAccountError("");
     setAccountName("");
@@ -157,6 +166,7 @@ function Withdrawals() {
       setAccountError("Select your bank first.");
       return;
     }
+
     if (!/^\d{10}$/.test(accountNumber)) {
       setAccountError("Enter a valid 10-digit account number.");
       return;
@@ -164,11 +174,13 @@ function Withdrawals() {
 
     try {
       setVerifyingAccount(true);
+
       const result = await request("/withdrawals/verify-account", {
         method: "POST",
         token: user.token,
         body: { accountNumber, bankCode },
       });
+
       setAccountName(result.accountName || "");
     } catch (err) {
       setAccountError(err.message);
@@ -188,31 +200,38 @@ function Withdrawals() {
       setError("Enter a valid withdrawal amount.");
       return;
     }
+
     if (value > Number(data.availableAmount || 0)) {
       setError(`You can withdraw up to ${money(data.availableAmount)}.`);
       return;
     }
+
     if (!accountName) {
       setError("Verify your bank account before continuing.");
       return;
     }
+
     if (!hasPin) {
       setError("Create your withdrawal PIN before making a withdrawal.");
       return;
     }
+
     if (!/^\d{4}$/.test(pin)) {
       setError("Enter your 4-digit withdrawal PIN.");
       return;
     }
 
     const confirmed = window.confirm(
-      `Confirm withdrawal of ${money(value)} to ${accountName} at ${selectedBank?.name || "your bank"}, account ending ${accountNumber.slice(-4)}?`,
+      `Confirm withdrawal of ${money(value)} to ${accountName} at ${
+        selectedBank?.name || "your bank"
+      }, account ending ${accountNumber.slice(-4)}?`,
     );
 
     if (!confirmed) return;
 
     try {
       setSubmitting(true);
+
       const result = await request("/withdrawals", {
         method: "POST",
         token: user.token,
@@ -229,6 +248,7 @@ function Withdrawals() {
       setSuccess(result.message || "Withdrawal submitted successfully.");
       setAmount("");
       setPin("");
+
       await Promise.all([loadWithdrawals(), refreshUser()]);
     } catch (err) {
       setError(err.message);
@@ -266,16 +286,19 @@ function Withdrawals() {
           <span>Current Savings</span>
           <strong>{loading ? "Loading..." : money(data.savingsBalance)}</strong>
         </div>
+
         <div className="withdrawal-balance-card locked">
-          <span>20% Locked Reserve</span>
+          <span>50% Locked Reserve</span>
           <strong>{loading ? "Loading..." : money(data.lockedAmount)}</strong>
         </div>
+
         <div className="withdrawal-balance-card">
           <span>Loan Funds Included</span>
           <strong>
             {loading ? "Loading..." : money(data.loanFundsBalance)}
           </strong>
         </div>
+
         <div className="withdrawal-balance-card available">
           <span>Available to Withdraw</span>
           <strong>
@@ -293,9 +316,9 @@ function Withdrawals() {
         </div>
 
         <div className="withdrawal-rule">
-          <strong>20% savings reserve</strong>
+          <strong>50% savings reserve</strong>
           <span>
-            You can withdraw up to 80% of your current savings. An outstanding
+            You can withdraw up to 50% of your current savings. An outstanding
             loan does not create an additional 20% lock.
           </span>
         </div>
@@ -315,26 +338,79 @@ function Withdrawals() {
             />
           </label>
 
-          <label>
+          <label className="bank-selector-label">
             Bank
-            <select
-              value={bankCode}
-              onChange={(e) => {
-                setBankCode(e.target.value);
-                setAccountName("");
-                setAccountError("");
-              }}
-              disabled={banksLoading || submitting}
+            <div
+              className={`bank-selector ${bankOpen ? "open" : ""}`}
+              ref={bankSelectorRef}
             >
-              <option value="">
-                {banksLoading ? "Loading banks..." : "Select your bank"}
-              </option>
-              {banks.map((bank) => (
-                <option key={bank.code} value={bank.code}>
-                  {bank.name}
-                </option>
-              ))}
-            </select>
+              <button
+                type="button"
+                className="bank-selector-trigger"
+                onClick={() => {
+                  if (!banksLoading && !submitting) {
+                    setBankOpen((prev) => !prev);
+                  }
+                }}
+                disabled={banksLoading || submitting}
+              >
+                <span
+                  className={
+                    selectedBank ? "selected-bank-name" : "placeholder"
+                  }
+                >
+                  {banksLoading
+                    ? "Loading banks..."
+                    : selectedBank?.name || "Select your bank"}
+                </span>
+
+                <span className="bank-chevron">{bankOpen ? "⌃" : "⌄"}</span>
+              </button>
+
+              {bankOpen && !banksLoading && (
+                <div className="bank-dropdown">
+                  <div className="bank-search-wrap">
+                    <input
+                      type="text"
+                      className="bank-search-input"
+                      placeholder="Search bank..."
+                      value={bankSearch}
+                      onChange={(e) => setBankSearch(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="bank-options">
+                    {filteredBanks.length === 0 ? (
+                      <div className="bank-no-results">No bank found</div>
+                    ) : (
+                      filteredBanks.map((bank) => (
+                        <button
+                          type="button"
+                          key={bank.code}
+                          className={`bank-option ${
+                            bank.code === bankCode ? "selected" : ""
+                          }`}
+                          onClick={() => {
+                            setBankCode(bank.code);
+                            setAccountName("");
+                            setAccountError("");
+                            setBankSearch("");
+                            setBankOpen(false);
+                          }}
+                        >
+                          <span>{bank.name}</span>
+                          {bank.code === bankCode && (
+                            <span className="bank-check">✓</span>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </label>
 
           <label>
@@ -353,6 +429,7 @@ function Withdrawals() {
                 placeholder="10-digit account number"
                 disabled={submitting}
               />
+
               <button
                 type="button"
                 className="verify-account-btn"
@@ -381,9 +458,7 @@ function Withdrawals() {
           ) : !hasPin ? (
             <div className="withdrawal-pin-box">
               <p className="eyebrow">Security</p>
-
               <h3>Create your 4-digit Withdrawal PIN</h3>
-
               <p>
                 This PIN is separate from your login password and is used only
                 to authorize withdrawals.
@@ -455,80 +530,6 @@ function Withdrawals() {
                   never shown to administrators.
                 </small>
               </label>
-
-              <button
-                type="button"
-                className="withdraw-refresh-btn"
-                onClick={() => {
-                  setChangePinOpen((v) => !v);
-                  setPinMessage("");
-                  setCurrentPin("");
-                  setPin("");
-                  setConfirmPin("");
-                }}
-                disabled={submitting}
-              >
-                {changePinOpen ? "Cancel PIN Change" : "Change Withdrawal PIN"}
-              </button>
-
-              {changePinOpen && (
-                <div className="withdrawal-pin-form">
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    maxLength="4"
-                    autoComplete="off"
-                    value={currentPin}
-                    onChange={(e) =>
-                      setCurrentPin(e.target.value.replace(/\D/g, ""))
-                    }
-                    placeholder="Current PIN"
-                  />
-
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    maxLength="4"
-                    autoComplete="off"
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                    placeholder="New PIN"
-                  />
-
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    maxLength="4"
-                    autoComplete="off"
-                    value={confirmPin}
-                    onChange={(e) =>
-                      setConfirmPin(e.target.value.replace(/\D/g, ""))
-                    }
-                    placeholder="Confirm new PIN"
-                  />
-
-                  <button
-                    type="button"
-                    className="verify-account-btn"
-                    onClick={changePin}
-                    disabled={pinSaving}
-                  >
-                    {pinSaving ? "Changing..." : "Change PIN"}
-                  </button>
-
-                  {pinMessage && (
-                    <p
-                      className={
-                        pinMessage.toLowerCase().includes("success")
-                          ? "form-success"
-                          : "form-error"
-                      }
-                    >
-                      {pinMessage}
-                    </p>
-                  )}
-                </div>
-              )}
             </>
           )}
 
@@ -548,6 +549,7 @@ function Withdrawals() {
             <p className="eyebrow">History</p>
             <h2>Your Withdrawals</h2>
           </div>
+
           <button
             type="button"
             className="withdraw-refresh-btn"
@@ -572,6 +574,7 @@ function Withdrawals() {
                   <th>Status</th>
                 </tr>
               </thead>
+
               <tbody>
                 {(data.withdrawals || []).map((withdrawal) => (
                   <tr key={withdrawal._id}>
@@ -580,14 +583,18 @@ function Withdrawals() {
                         ? new Date(withdrawal.createdAt).toLocaleDateString()
                         : "—"}
                     </td>
+
                     <td>{withdrawal.bankName}</td>
+
                     <td>
                       {withdrawal.accountName} ····
                       {withdrawal.accountNumberLast4}
                     </td>
+
                     <td className="withdrawal-amount">
                       {money(withdrawal.amount)}
                     </td>
+
                     <td>
                       <span className={`status-badge ${withdrawal.status}`}>
                         {statusLabel(withdrawal.status)}

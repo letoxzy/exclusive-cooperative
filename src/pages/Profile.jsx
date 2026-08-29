@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
-import { isStrongPassword } from "../utils/passwordPolicy";
+import { getPasswordChecks, isStrongPassword } from "../utils/passwordPolicy";
 import "../styles/profile.css";
 
 const EMPTY_MEMBERSHIP = {
@@ -91,6 +91,9 @@ function Profile() {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState("");
   const [pwError, setPwError] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Withdrawal PIN
   const [hasPin, setHasPin] = useState(false);
@@ -251,6 +254,19 @@ function Profile() {
       setMembershipSaving(false);
     }
   };
+
+  const passwordChecks = getPasswordChecks(pwForm.newPassword);
+  const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
+  const passwordStrength =
+    passwordScore === 0
+      ? ""
+      : passwordScore <= 1
+        ? "Weak"
+        : passwordScore === 2
+          ? "Fair"
+          : passwordScore === 3
+            ? "Good"
+            : "Strong";
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
@@ -597,55 +613,121 @@ function Profile() {
               <div className="form-group">
                 <label htmlFor="currentPassword">Current Password</label>
 
-                <input
-                  id="currentPassword"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  value={pwForm.currentPassword}
-                  onChange={(e) =>
-                    setPwForm((prev) => ({
-                      ...prev,
-                      currentPassword: e.target.value,
-                    }))
-                  }
-                />
+                <div className="profile-password-wrapper">
+                  <input
+                    id="currentPassword"
+                    type={showCurrentPassword ? "text" : "password"}
+                    required
+                    autoComplete="current-password"
+                    value={pwForm.currentPassword}
+                    onChange={(e) =>
+                      setPwForm((prev) => ({
+                        ...prev,
+                        currentPassword: e.target.value,
+                      }))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="profile-password-toggle"
+                    onClick={() => setShowCurrentPassword((prev) => !prev)}
+                    aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
+                  >
+                    {showCurrentPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
 
               <div className="form-group">
                 <label htmlFor="newPassword">New Password</label>
 
-                <input
-                  id="newPassword"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  value={pwForm.newPassword}
-                  onChange={(e) =>
-                    setPwForm((prev) => ({
-                      ...prev,
-                      newPassword: e.target.value,
-                    }))
-                  }
-                />
+                <div className={`profile-password-wrapper ${passwordStrength === "Strong" ? "password-strong" : ""}`}>
+                  <input
+                    id="newPassword"
+                    type={showNewPassword ? "text" : "password"}
+                    required
+                    autoComplete="new-password"
+                    value={pwForm.newPassword}
+                    onChange={(e) =>
+                      setPwForm((prev) => ({
+                        ...prev,
+                        newPassword: e.target.value,
+                      }))
+                    }
+                    aria-describedby="profile-password-requirements"
+                  />
+                  <button
+                    type="button"
+                    className="profile-password-toggle"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                  >
+                    {showNewPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+
+                {pwForm.newPassword && (
+                  <div className="password-strength" aria-live="polite">
+                    <div className="strength-header">
+                      <span>Password strength</span>
+                      <strong className={`strength-${passwordStrength.toLowerCase()}`}>
+                        {passwordStrength}
+                      </strong>
+                    </div>
+
+                    <div className="strength-bars" aria-hidden="true">
+                      {[1, 2, 3, 4].map((bar) => (
+                        <span
+                          key={bar}
+                          className={`strength-bar ${bar <= passwordScore ? `active strength-${passwordStrength.toLowerCase()}` : ""}`}
+                        />
+                      ))}
+                    </div>
+
+                    <ul id="profile-password-requirements" className="password-requirements">
+                      <li className={passwordChecks.length ? "met" : ""}>
+                        At least 8 characters
+                      </li>
+                      <li className={passwordChecks.upperLower ? "met" : ""}>
+                        Uppercase and lowercase letters
+                      </li>
+                      <li className={passwordChecks.number ? "met" : ""}>
+                        At least one number
+                      </li>
+                      <li className={passwordChecks.special ? "met" : ""}>
+                        At least one special character
+                      </li>
+                    </ul>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
                 <label htmlFor="confirmNewPassword">Confirm New Password</label>
 
-                <input
-                  id="confirmNewPassword"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  value={pwForm.confirmPassword}
-                  onChange={(e) =>
-                    setPwForm((prev) => ({
-                      ...prev,
-                      confirmPassword: e.target.value,
-                    }))
-                  }
-                />
+                <div className="profile-password-wrapper">
+                  <input
+                    id="confirmNewPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    autoComplete="new-password"
+                    value={pwForm.confirmPassword}
+                    onChange={(e) =>
+                      setPwForm((prev) => ({
+                        ...prev,
+                        confirmPassword: e.target.value,
+                      }))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="profile-password-toggle"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}
+                  >
+                    {showConfirmPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
             </div>
 

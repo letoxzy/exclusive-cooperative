@@ -301,6 +301,114 @@
 }
 
 /* =========================
+   PASSWORD SECURITY
+========================= */
+
+.profile-password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.profile-password-wrapper input {
+  padding-right: 68px;
+}
+
+.profile-password-toggle {
+  position: absolute;
+  right: 10px;
+  border: none;
+  background: transparent;
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.profile-password-toggle:hover {
+  color: var(--navy);
+}
+
+.password-strength {
+  margin-top: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.strength-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.strength-header strong {
+  font-size: 12px;
+}
+
+.strength-weak { color: #b42318; }
+.strength-fair { color: #92400e; }
+.strength-good { color: #8a6b00; }
+.strength-strong { color: #047857; }
+
+.strength-bars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  margin: 8px 0 9px;
+}
+
+.strength-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.strength-bar.active.strength-weak { background: #b42318; }
+.strength-bar.active.strength-fair { background: #d97706; }
+.strength-bar.active.strength-good { background: #b59b00; }
+.strength-bar.active.strength-strong { background: #047857; }
+
+.password-requirements {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 12px;
+}
+
+.password-requirements li {
+  position: relative;
+  padding-left: 17px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.password-requirements li::before {
+  content: "○";
+  position: absolute;
+  left: 0;
+  color: #94a3b8;
+}
+
+.password-requirements li.met {
+  color: #047857;
+}
+
+.password-requirements li.met::before {
+  content: "✓";
+  color: #047857;
+  font-weight: 800;
+}
+
+/* =========================
    BUTTONS
 ========================= */
 
@@ -629,6 +737,10 @@
   }
 
   .security-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .password-requirements {
     grid-template-columns: 1fr;
   }
 

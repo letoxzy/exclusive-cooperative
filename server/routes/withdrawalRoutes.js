@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import express from "express";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import Loan from "../models/Loan.js";
 import Withdrawal from "../models/Withdrawal.js";
@@ -379,6 +380,53 @@ router.get(
     }
   }
 );
+
+// GET /api/withdrawals/:id/receipt
+// Returns receipt data only for the member who owns a successful withdrawal.
+router.get("/:id/receipt", protect, requireApprovedMember, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid withdrawal ID." });
+    }
+
+    const withdrawal = await Withdrawal.findOne({
+      _id: req.params.id,
+      user: req.user._id,
+    }).lean();
+
+    if (!withdrawal) {
+      return res.status(404).json({ message: "Withdrawal not found." });
+    }
+
+    if (withdrawal.status !== "success") {
+      return res.status(409).json({
+        message: "A receipt is available only after the withdrawal is successful.",
+      });
+    }
+
+    const member = await User.findById(req.user._id)
+      .select("fullName email")
+      .lean();
+
+    return res.json({
+      cooperativeName: "EXCLUSIVE (OSHODI/ISOLO) COOPERATIVE MULTIPURPOSE SOCIETY LIMITED",
+      memberName: member?.fullName || "Member",
+      memberEmail: member?.email || "",
+      amount: withdrawal.amount,
+      bankName: withdrawal.bankName,
+      accountName: withdrawal.accountName,
+      accountNumberLast4: withdrawal.accountNumberLast4,
+      reference: withdrawal.reference,
+      transferCode: withdrawal.transferCode || null,
+      createdAt: withdrawal.createdAt,
+      paidAt: withdrawal.paidAt || withdrawal.updatedAt || withdrawal.createdAt,
+      status: withdrawal.status,
+    });
+  } catch (err) {
+    console.error("Get withdrawal receipt:", err);
+    return res.status(500).json({ message: "Could not load withdrawal receipt." });
+  }
+});
 
 // POST /api/withdrawals
 //

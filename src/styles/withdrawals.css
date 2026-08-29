@@ -535,3 +535,38 @@
     font-size: 14px;
   }
 }
+
+
+/* Withdrawal receipt */
+.withdraw-receipt-btn {
+  border: 1px solid var(--navy);
+  background: var(--navy);
+  color: var(--white);
+  border-radius: 7px;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.withdraw-receipt-btn:hover {
+  background: var(--gold);
+  color: var(--navy);
+  border-color: var(--gold);
+}
+
+.withdraw-receipt-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.receipt-unavailable {
+  color: var(--muted);
+}
+
+@media print {
+  .withdrawals-page {
+    padding-bottom: 0;
+  }
+}

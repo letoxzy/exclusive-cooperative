@@ -5,6 +5,14 @@ import "../styles/withdrawals.css";
 
 const money = (value) => `₦${Number(value || 0).toLocaleString()}`;
 
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
 function Withdrawals() {
   const { user, refreshUser } = useAuth();
 
@@ -42,6 +50,7 @@ function Withdrawals() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [accountError, setAccountError] = useState("");
+  const [receiptLoading, setReceiptLoading] = useState("");
 
   const selectedBank = useMemo(
     () => banks.find((bank) => bank.code === bankCode),
@@ -65,6 +74,7 @@ function Withdrawals() {
       });
       setData(result);
     } catch (err) {
+      receiptWindow.close();
       setError(err.message);
     } finally {
       setLoading(false);
@@ -254,6 +264,229 @@ function Withdrawals() {
       setError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openReceipt = async (withdrawal) => {
+    if (withdrawal.status !== "success") return;
+
+    const receiptWindow = window.open("", "_blank", "width=760,height=900");
+
+    if (!receiptWindow) {
+      setError("Please allow pop-ups to view your receipt.");
+      return;
+    }
+
+    try {
+      setReceiptLoading(withdrawal._id);
+
+      const receipt = await request(`/withdrawals/${withdrawal._id}/receipt`, {
+        token: user.token,
+      });
+
+      const amountFormatted = money(receipt.amount);
+      const dateFormatted = receipt.createdAt
+        ? new Date(receipt.createdAt).toLocaleString()
+        : "—";
+      const paidDateFormatted = receipt.paidAt
+        ? new Date(receipt.paidAt).toLocaleString()
+        : "—";
+
+      receiptWindow.document.write(`
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Withdrawal Receipt - ${escapeHtml(receipt.reference)}</title>
+            <style>
+              * { box-sizing: border-box; }
+              body {
+                margin: 0;
+                padding: 32px 18px;
+                background: #f5f7fa;
+                color: #172033;
+                font-family: Arial, Helvetica, sans-serif;
+              }
+              .receipt {
+                width: 100%;
+                max-width: 680px;
+                margin: 0 auto;
+                background: #fff;
+                border: 1px solid #e5e7eb;
+                border-radius: 14px;
+                overflow: hidden;
+              }
+              .header {
+                padding: 30px;
+                text-align: center;
+                border-bottom: 1px solid #e5e7eb;
+              }
+              .brand {
+                color: #0b1f3a;
+                font-size: 22px;
+                font-weight: 800;
+                letter-spacing: 1px;
+                margin: 0 0 8px;
+              }
+              .cooperative {
+                color: #667085;
+                font-size: 12px;
+                line-height: 1.5;
+                margin: 0;
+              }
+              .success {
+                display: inline-block;
+                margin-top: 18px;
+                padding: 7px 14px;
+                border-radius: 999px;
+                background: #d1fae5;
+                color: #065f46;
+                font-size: 12px;
+                font-weight: 800;
+                text-transform: uppercase;
+              }
+              .amount {
+                padding: 28px 30px;
+                text-align: center;
+                border-bottom: 1px solid #e5e7eb;
+              }
+              .amount-label {
+                color: #667085;
+                font-size: 12px;
+                margin-bottom: 8px;
+              }
+              .amount-value {
+                color: #0b1f3a;
+                font-size: 34px;
+                font-weight: 800;
+              }
+              .details {
+                padding: 24px 30px;
+              }
+              .row {
+                display: flex;
+                justify-content: space-between;
+                gap: 24px;
+                padding: 12px 0;
+                border-bottom: 1px solid #f0f2f5;
+              }
+              .row:last-child { border-bottom: none; }
+              .label { color: #667085; font-size: 12px; }
+              .value {
+                color: #172033;
+                font-size: 13px;
+                font-weight: 700;
+                text-align: right;
+                word-break: break-word;
+              }
+              .footer {
+                padding: 20px 30px 28px;
+                color: #667085;
+                font-size: 11px;
+                line-height: 1.6;
+                text-align: center;
+                border-top: 1px solid #e5e7eb;
+              }
+              .actions {
+                max-width: 680px;
+                margin: 16px auto 0;
+                display: flex;
+                justify-content: center;
+                gap: 10px;
+              }
+              button {
+                border: none;
+                border-radius: 8px;
+                padding: 11px 18px;
+                font-weight: 700;
+                cursor: pointer;
+              }
+              .print { background: #c9a227; color: #0b1f3a; }
+              .close { background: #0b1f3a; color: #fff; }
+              @media print {
+                body { padding: 0; background: #fff; }
+                .receipt { border: none; box-shadow: none; }
+                .actions { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="receipt">
+              <div class="header">
+                <p class="brand">EXCLUSIVE</p>
+                <p class="cooperative">${escapeHtml(receipt.cooperativeName)}</p>
+                <span class="success">Successful Withdrawal</span>
+              </div>
+
+              <div class="amount">
+                <div class="amount-label">Amount Withdrawn</div>
+                <div class="amount-value">${escapeHtml(amountFormatted)}</div>
+              </div>
+
+              <div class="details">
+                <div class="row">
+                  <span class="label">Member</span>
+                  <span class="value">${escapeHtml(receipt.memberName)}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Email</span>
+                  <span class="value">${escapeHtml(receipt.memberEmail || "—")}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Bank</span>
+                  <span class="value">${escapeHtml(receipt.bankName)}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Account Name</span>
+                  <span class="value">${escapeHtml(receipt.accountName)}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Account Number</span>
+                  <span class="value">•••• ${escapeHtml(receipt.accountNumberLast4)}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Transaction Reference</span>
+                  <span class="value">${escapeHtml(receipt.reference)}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Paystack Transfer Code</span>
+                  <span class="value">${escapeHtml(receipt.transferCode || "—")}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Requested</span>
+                  <span class="value">${escapeHtml(dateFormatted)}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Paid</span>
+                  <span class="value">${escapeHtml(paidDateFormatted)}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Status</span>
+                  <span class="value">Successful</span>
+                </div>
+              </div>
+
+              <div class="footer">
+                This receipt confirms the successful processing of the withdrawal shown above.
+                Keep it for your records.
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="print" onclick="window.print()">Print / Save as PDF</button>
+              <button class="close" onclick="window.close()">Close</button>
+            </div>
+          </body>
+        </html>
+      `);
+
+      receiptWindow.document.close();
+      receiptWindow.focus();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setReceiptLoading("");
     }
   };
 
@@ -573,6 +806,7 @@ function Withdrawals() {
                   <th>Account</th>
                   <th>Amount</th>
                   <th>Status</th>
+                  <th>Receipt</th>
                 </tr>
               </thead>
 
@@ -600,6 +834,20 @@ function Withdrawals() {
                       <span className={`status-badge ${withdrawal.status}`}>
                         {statusLabel(withdrawal.status)}
                       </span>
+                    </td>
+                    <td>
+                      {withdrawal.status === "success" ? (
+                        <button
+                          type="button"
+                          className="withdraw-receipt-btn"
+                          onClick={() => openReceipt(withdrawal)}
+                          disabled={receiptLoading === withdrawal._id}
+                        >
+                          {receiptLoading === withdrawal._id ? "Opening..." : "Receipt"}
+                        </button>
+                      ) : (
+                        <span className="receipt-unavailable">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}

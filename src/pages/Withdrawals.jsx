@@ -19,7 +19,14 @@ function Withdrawals() {
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
   const [amount, setAmount] = useState("");
-  const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [currentPin, setCurrentPin] = useState("");
+  const [hasPin, setHasPin] = useState(false);
+  const [pinLoading, setPinLoading] = useState(true);
+  const [pinSaving, setPinSaving] = useState(false);
+  const [changePinOpen, setChangePinOpen] = useState(false);
+  const [pinMessage, setPinMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [banksLoading, setBanksLoading] = useState(true);
   const [verifyingAccount, setVerifyingAccount] = useState(false);
@@ -59,10 +66,45 @@ function Withdrawals() {
     }
   }, [user?.token]);
 
+  const loadPinStatus = useCallback(async () => {
+    if (!user?.token) return;
+    try {
+      setPinLoading(true);
+      const result = await request("/withdrawals/pin/status", { token: user.token });
+      setHasPin(Boolean(result.hasWithdrawalPin));
+    } catch (err) { setError(err.message); }
+    finally { setPinLoading(false); }
+  }, [user?.token]);
+
   useEffect(() => {
     loadWithdrawals();
     loadBanks();
-  }, [loadWithdrawals, loadBanks]);
+    loadPinStatus();
+  }, [loadWithdrawals, loadBanks, loadPinStatus]);
+
+  const createPin = async (event) => {
+    event.preventDefault(); setPinMessage("");
+    if (!/^\d{4}$/.test(pin)) return setPinMessage("PIN must be exactly 4 digits.");
+    if (pin !== confirmPin) return setPinMessage("PINs do not match.");
+    try {
+      setPinSaving(true);
+      const result = await request("/withdrawals/pin", { method: "POST", token: user.token, body: { pin, confirmPin } });
+      setHasPin(true); setPin(""); setConfirmPin(""); setPinMessage(result.message);
+    } catch (err) { setPinMessage(err.message); }
+    finally { setPinSaving(false); }
+  };
+
+  const changePin = async (event) => {
+    event.preventDefault(); setPinMessage("");
+    if (!/^\d{4}$/.test(currentPin) || !/^\d{4}$/.test(pin)) return setPinMessage("All PIN fields must contain exactly 4 digits.");
+    if (pin !== confirmPin) return setPinMessage("New PINs do not match.");
+    try {
+      setPinSaving(true);
+      const result = await request("/withdrawals/pin", { method: "PATCH", token: user.token, body: { currentPin, newPin: pin, confirmPin } });
+      setCurrentPin(""); setPin(""); setConfirmPin(""); setChangePinOpen(false); setPinMessage(result.message);
+    } catch (err) { setPinMessage(err.message); }
+    finally { setPinSaving(false); }
+  };
 
   const verifyAccount = async () => {
     setAccountError("");
@@ -111,10 +153,8 @@ function Withdrawals() {
       setError("Verify your bank account before continuing.");
       return;
     }
-    if (!password) {
-      setError("Enter your login password to confirm the withdrawal.");
-      return;
-    }
+    if (!hasPin) { setError("Create your withdrawal PIN before making a withdrawal."); return; }
+    if (!/^\d{4}$/.test(pin)) { setError("Enter your 4-digit withdrawal PIN."); return; }
 
     const confirmed = window.confirm(
       `Confirm withdrawal of ${money(value)} to ${accountName} at ${selectedBank?.name || "your bank"}, account ending ${accountNumber.slice(-4)}?`,
@@ -129,7 +169,7 @@ function Withdrawals() {
         token: user.token,
         body: {
           amount: value,
-          password,
+          pin,
           bankCode,
           bankName: selectedBank?.name || "",
           accountNumber,
@@ -139,7 +179,7 @@ function Withdrawals() {
 
       setSuccess(result.message || "Withdrawal submitted successfully.");
       setAmount("");
-      setPassword("");
+      setPin("");
       await Promise.all([loadWithdrawals(), refreshUser()]);
     } catch (err) {
       setError(err.message);
@@ -280,21 +320,41 @@ function Withdrawals() {
             </div>
           )}
 
-          <label>
-            Login Password
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your login password"
-              disabled={submitting}
-            />
-            <small>
-              Your password is verified by the cooperative server and is never
-              sent to Paystack or shown to administrators.
-            </small>
-          </label>
+          {pinLoading ? (
+            <div className="withdrawal-rule"><strong>Withdrawal security</strong><span>Checking your withdrawal PIN status...</span></div>
+          ) : !hasPin ? (
+            <div className="withdrawal-pin-box">
+              <p className="eyebrow">Security</p>
+              <h3>Create your 4-digit Withdrawal PIN</h3>
+              <p>This PIN is separate from your login password and is used only to authorize withdrawals.</p>
+              <form onSubmit={createPin} className="withdrawal-pin-form">
+                <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} placeholder="4-digit PIN" disabled={pinSaving || submitting} />
+                <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))} placeholder="Confirm PIN" disabled={pinSaving || submitting} />
+                <button type="submit" className="verify-account-btn" disabled={pinSaving}>{pinSaving ? "Creating..." : "Create PIN"}</button>
+              </form>
+              {pinMessage && <p className="form-error">{pinMessage}</p>}
+            </div>
+          ) : (
+            <>
+              <label>
+                4-Digit Withdrawal PIN
+                <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} placeholder="Enter your withdrawal PIN" disabled={submitting} />
+                <small>Your withdrawal PIN is securely verified on the server and is never shown to administrators.</small>
+              </label>
+              <button type="button" className="withdraw-refresh-btn" onClick={() => { setChangePinOpen((v) => !v); setPinMessage(""); setCurrentPin(""); setPin(""); setConfirmPin(""); }} disabled={submitting}>
+                {changePinOpen ? "Cancel PIN Change" : "Change Withdrawal PIN"}
+              </button>
+              {changePinOpen && (
+                <form className="withdrawal-pin-form" onSubmit={changePin}>
+                  <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={currentPin} onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ""))} placeholder="Current PIN" />
+                  <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} placeholder="New PIN" />
+                  <input type="password" inputMode="numeric" maxLength="4" autoComplete="off" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))} placeholder="Confirm new PIN" />
+                  <button type="submit" className="verify-account-btn" disabled={pinSaving}>{pinSaving ? "Changing..." : "Change PIN"}</button>
+                  {pinMessage && <p className="form-error">{pinMessage}</p>}
+                </form>
+              )}
+            </>
+          )}
 
           <button
             type="submit"

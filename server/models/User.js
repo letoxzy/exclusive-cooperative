@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema(
     // Application (BVN + bio-data review). Required before the
     // member can submit an actual loan request.
     isLoanEligible: { type: Boolean, default: false },
+
+    withdrawalPinHash: { type: String, default: null, select: false },
+    withdrawalPinFailedAttempts: { type: Number, default: 0, select: false },
+    withdrawalPinLockedUntil: { type: Date, default: null, select: false },
   },
   { timestamps: true }
 );

@@ -329,3 +329,10 @@
     white-space: normal;
   }
 }
+
+
+.withdrawal-pin-box { margin-top: 8px; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background: #f8fafc; }
+.withdrawal-pin-box h3 { margin: 4px 0 8px; }
+.withdrawal-pin-box p { margin: 0 0 14px; }
+.withdrawal-pin-form { display: grid; gap: 10px; }
+.withdrawal-pin-form input { width: 100%; box-sizing: border-box; }

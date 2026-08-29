@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import express from "express";
 import crypto from "crypto";
 import User from "../models/User.js";
@@ -11,6 +12,55 @@ const router = express.Router();
 const PAYSTACK_BASE = "https://api.paystack.co";
 const LOCK_PERCENTAGE = 0.20;
 const AVAILABLE_PERCENTAGE = 0.80;
+
+// Create a separate 4-digit withdrawal PIN.
+router.post("/pin", protect, requireApprovedMember, async (req, res) => {
+  try {
+    const { pin, confirmPin } = req.body;
+    if (!/^\d{4}$/.test(String(pin || ""))) return res.status(400).json({ message: "Withdrawal PIN must be exactly 4 digits." });
+    if (pin !== confirmPin) return res.status(400).json({ message: "Withdrawal PINs do not match." });
+    if (req.user.withdrawalPinHash) return res.status(409).json({ message: "You already have a withdrawal PIN." });
+    req.user.withdrawalPinHash = await bcrypt.hash(String(pin), 12);
+    req.user.withdrawalPinFailedAttempts = 0;
+    req.user.withdrawalPinLockedUntil = null;
+    await req.user.save();
+    res.status(201).json({ message: "Withdrawal PIN created successfully." });
+  } catch (err) {
+    console.error("Create withdrawal PIN:", err);
+    res.status(500).json({ message: "Failed to create withdrawal PIN." });
+  }
+});
+
+// Check whether the member has created a withdrawal PIN.
+router.get("/pin/status", protect, requireApprovedMember, async (req, res) => {
+  try {
+    const member = await User.findById(req.user._id).select("+withdrawalPinHash +withdrawalPinLockedUntil");
+    res.json({ hasWithdrawalPin: Boolean(member?.withdrawalPinHash), lockedUntil: member?.withdrawalPinLockedUntil || null });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to check withdrawal PIN status." });
+  }
+});
+
+// Change an existing withdrawal PIN.
+router.patch("/pin", protect, requireApprovedMember, async (req, res) => {
+  try {
+    const { currentPin, newPin, confirmPin } = req.body;
+    const member = await User.findById(req.user._id).select("+withdrawalPinHash +withdrawalPinFailedAttempts +withdrawalPinLockedUntil");
+    if (!member?.withdrawalPinHash) return res.status(400).json({ message: "Create a withdrawal PIN first." });
+    if (!/^\d{4}$/.test(String(currentPin || "")) || !/^\d{4}$/.test(String(newPin || ""))) return res.status(400).json({ message: "PIN must be exactly 4 digits." });
+    if (newPin !== confirmPin) return res.status(400).json({ message: "New withdrawal PINs do not match." });
+    const matches = await bcrypt.compare(String(currentPin), member.withdrawalPinHash);
+    if (!matches) return res.status(401).json({ message: "Current withdrawal PIN is incorrect." });
+    member.withdrawalPinHash = await bcrypt.hash(String(newPin), 12);
+    member.withdrawalPinFailedAttempts = 0;
+    member.withdrawalPinLockedUntil = null;
+    await member.save();
+    res.json({ message: "Withdrawal PIN changed successfully." });
+  } catch (err) {
+    console.error("Change withdrawal PIN:", err);
+    res.status(500).json({ message: "Failed to change withdrawal PIN." });
+  }
+});
 
 async function ensureLoanFundsBalance(user) {
   let loanFunds = Number(user.loanFundsBalance || 0);
@@ -142,7 +192,7 @@ router.get("/me", protect, requireApprovedMember, async (req, res) => {
 router.post("/", protect, requireApprovedMember, async (req, res) => {
   try {
     const amount = Number(req.body.amount);
-    const password = String(req.body.password || "");
+    const pin = String(req.body.pin || "");
     const bankCode = String(req.body.bankCode || "").trim();
     const bankName = String(req.body.bankName || "").trim();
     const accountNumber = String(req.body.accountNumber || "").trim();
@@ -151,8 +201,8 @@ router.post("/", protect, requireApprovedMember, async (req, res) => {
     if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ message: "Enter a valid withdrawal amount." });
     }
-    if (!password) {
-      return res.status(400).json({ message: "Enter your login password to confirm the withdrawal." });
+    if (!/^\d{4}$/.test(pin)) {
+      return res.status(400).json({ message: "Enter your 4-digit withdrawal PIN." });
     }
     if (!bankCode || !bankName) {
       return res.status(400).json({ message: "Select a valid bank." });
@@ -164,10 +214,24 @@ router.post("/", protect, requireApprovedMember, async (req, res) => {
       return res.status(400).json({ message: "Verify the bank account before withdrawing." });
     }
 
-    const passwordMatches = await req.user.matchPassword(password);
-    if (!passwordMatches) {
-      return res.status(401).json({ message: "Your login password is incorrect." });
+    const memberForPin = await User.findById(req.user._id).select("+withdrawalPinHash +withdrawalPinFailedAttempts +withdrawalPinLockedUntil");
+    if (!memberForPin?.withdrawalPinHash) return res.status(400).json({ message: "Create your withdrawal PIN before withdrawing." });
+    if (memberForPin.withdrawalPinLockedUntil && memberForPin.withdrawalPinLockedUntil > new Date()) {
+      return res.status(429).json({ message: "Withdrawal PIN is temporarily locked after too many failed attempts. Please try again later.", lockedUntil: memberForPin.withdrawalPinLockedUntil });
     }
+    const pinMatches = await bcrypt.compare(pin, memberForPin.withdrawalPinHash);
+    if (!pinMatches) {
+      memberForPin.withdrawalPinFailedAttempts = Number(memberForPin.withdrawalPinFailedAttempts || 0) + 1;
+      if (memberForPin.withdrawalPinFailedAttempts >= 3) {
+        memberForPin.withdrawalPinLockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+        memberForPin.withdrawalPinFailedAttempts = 0;
+      }
+      await memberForPin.save();
+      return res.status(401).json({ message: "Incorrect withdrawal PIN." });
+    }
+    memberForPin.withdrawalPinFailedAttempts = 0;
+    memberForPin.withdrawalPinLockedUntil = null;
+    await memberForPin.save();
 
     // Resolve the account again on the server. Never trust the account name
     // or bank details supplied by the browser for a money-moving operation.

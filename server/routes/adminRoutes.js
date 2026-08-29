@@ -98,6 +98,7 @@ router.patch("/savings-requests/:id", async (req, res) => {
       }
 
       user.savingsBalance += txn.amount;
+      user.savingsWithdrawalLocked = false;
 
       await user.save();
 

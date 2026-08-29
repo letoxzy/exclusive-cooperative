@@ -22,6 +22,7 @@ function Withdrawals() {
     availableAmount: 0,
     reservedAmount: 0,
     loanFundsBalance: 0,
+    savingsWithdrawalLocked: false,
     withdrawals: [],
   });
 
@@ -74,7 +75,6 @@ function Withdrawals() {
       });
       setData(result);
     } catch (err) {
-      receiptWindow.close();
       setError(err.message);
     } finally {
       setLoading(false);
@@ -199,6 +199,12 @@ function Withdrawals() {
     }
   };
 
+  const savingsWithdrawalLocked = Boolean(data.savingsWithdrawalLocked);
+  const loanFundsAvailable = Number(data.loanFundsBalance || 0);
+  const withdrawalInputMax = savingsWithdrawalLocked
+    ? Math.min(Number(data.availableAmount || 0), loanFundsAvailable)
+    : Number(data.availableAmount || 0);
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
@@ -208,6 +214,13 @@ function Withdrawals() {
 
     if (!Number.isFinite(value) || value <= 0) {
       setError("Enter a valid withdrawal amount.");
+      return;
+    }
+
+    if (savingsWithdrawalLocked && value > loanFundsAvailable) {
+      setError(
+        "Your personal-savings withdrawal is locked. Make a new savings contribution to unlock it. You can still withdraw available loan funds."
+      );
       return;
     }
 
@@ -552,10 +565,24 @@ function Withdrawals() {
           <strong>50% savings reserve</strong>
           <span>
             You can withdraw 100% of your loan funds plus up to 50% of your
-            personal savings. An outstanding loan does not create an additional
-            savings lock.
+            personal savings. A withdrawal that uses personal savings requires
+            a new contribution before another personal-savings withdrawal.
           </span>
         </div>
+
+        {savingsWithdrawalLocked && (
+          <div className="withdrawal-lock-notice">
+            <div>
+              <strong>Personal savings withdrawal locked</strong>
+              <p>
+                Make a new savings contribution of any amount to unlock
+                personal-savings withdrawals. Your available loan funds can
+                still be withdrawn during this period.
+              </p>
+            </div>
+            <span>Loan funds available: {money(loanFundsAvailable)}</span>
+          </div>
+        )}
 
         <form className="withdrawal-form" onSubmit={handleSubmit}>
           <label>
@@ -564,7 +591,7 @@ function Withdrawals() {
               type="number"
               min="1"
               step="0.01"
-              max={data.availableAmount}
+              max={withdrawalInputMax}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="e.g. 250000"

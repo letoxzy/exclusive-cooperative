@@ -2,6 +2,7 @@ import express from "express";
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { validatePassword } from "../utils/passwordPolicy.js";
 
 const router = express.Router();
 
@@ -12,6 +13,11 @@ router.post("/register", async (req, res) => {
 
     if (!fullName || !email || !password) {
       return res.status(400).json({ message: "All fields are required" });
+    }
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ message: passwordError });
     }
 
     const existing = await User.findOne({ email });

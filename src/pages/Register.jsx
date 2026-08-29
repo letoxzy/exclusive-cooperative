@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import "../styles/register.css";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { getPasswordChecks, isStrongPassword } from "../utils/passwordPolicy";
 
 function Register() {
   const [form, setForm] = useState({
@@ -16,6 +17,19 @@ function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [error, setError] = useState("");
+
+  const passwordChecks = getPasswordChecks(form.password);
+  const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
+  const passwordStrength =
+    passwordScore === 0
+      ? ""
+      : passwordScore <= 1
+        ? "Weak"
+        : passwordScore === 2
+          ? "Fair"
+          : passwordScore === 3
+            ? "Good"
+            : "Strong";
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -25,6 +39,11 @@ function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!isStrongPassword(form.password)) {
+      setError("Please choose a strong password that meets all the requirements.");
+      return;
+    }
 
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match.");
@@ -79,13 +98,15 @@ function Register() {
           <div className="form-group">
             <label htmlFor="password">Password *</label>
 
-            <div className="password-wrapper">
+            <div className={`password-wrapper ${passwordStrength === "Strong" ? "password-strong" : ""}`}>
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
                 required
                 value={form.password}
                 onChange={update("password")}
+                autoComplete="new-password"
+                aria-describedby="password-requirements"
               />
 
               <button
@@ -97,6 +118,41 @@ function Register() {
                 {showPassword ? <FaEyeSlash /> : <FaEye />}
               </button>
             </div>
+
+            {form.password && (
+              <div className="password-strength" aria-live="polite">
+                <div className="strength-header">
+                  <span>Password strength</span>
+                  <strong className={`strength-${passwordStrength.toLowerCase()}`}>
+                    {passwordStrength}
+                  </strong>
+                </div>
+
+                <div className="strength-bars" aria-hidden="true">
+                  {[1, 2, 3, 4].map((bar) => (
+                    <span
+                      key={bar}
+                      className={`strength-bar ${bar <= passwordScore ? `active strength-${passwordStrength.toLowerCase()}` : ""}`}
+                    />
+                  ))}
+                </div>
+
+                <ul id="password-requirements" className="password-requirements">
+                  <li className={passwordChecks.length ? "met" : ""}>
+                    At least 8 characters
+                  </li>
+                  <li className={passwordChecks.upperLower ? "met" : ""}>
+                    Uppercase and lowercase letters
+                  </li>
+                  <li className={passwordChecks.number ? "met" : ""}>
+                    At least one number
+                  </li>
+                  <li className={passwordChecks.special ? "met" : ""}>
+                    At least one special character
+                  </li>
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="form-group">
@@ -109,7 +165,19 @@ function Register() {
                 required
                 value={form.confirmPassword}
                 onChange={update("confirmPassword")}
+                autoComplete="new-password"
               />
+
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                aria-label={
+                  showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"
+                }
+              >
+                {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+              </button>
             </div>
           </div>
 

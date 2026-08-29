@@ -23,6 +23,11 @@ const userSchema = new mongoose.Schema(
     // disbursement. Loan funds are not subject to the 50% personal-savings reserve.
     loanFundsBalance: { type: Number, default: 0 },
 
+    // A successful withdrawal that uses personal savings locks further
+    // personal-savings withdrawals until the member makes a new contribution.
+    // Loan-funds withdrawals do not activate this lock.
+    savingsWithdrawalLocked: { type: Boolean, default: false },
+
     role: {
       type: String,
       enum: ["member", "admin"],

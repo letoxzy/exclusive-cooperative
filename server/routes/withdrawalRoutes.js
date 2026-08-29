@@ -213,7 +213,8 @@ async function ensureLoanFundsBalance(user) {
 function getWithdrawalBreakdown(
   savingsBalance,
   loanFundsBalance,
-  reserved
+  reserved,
+  savingsWithdrawalLocked = false
 ) {
   const savings = Math.max(0, Number(savingsBalance || 0));
   const loanFunds = Math.max(
@@ -228,8 +229,9 @@ function getWithdrawalBreakdown(
 
   // Loan funds remain fully available.
   // Only 50% of personal savings is available.
-  const availableBeforeReservations =
-    loanFunds + personalSavings * AVAILABLE_PERCENTAGE;
+  const availableBeforeReservations = savingsWithdrawalLocked
+    ? loanFunds
+    : loanFunds + personalSavings * AVAILABLE_PERCENTAGE;
 
   const availableAmount = Math.max(
     0,
@@ -361,7 +363,8 @@ router.get(
       const breakdown = getWithdrawalBreakdown(
         savings,
         loanFunds,
-        reserved
+        reserved,
+        Boolean(req.user.savingsWithdrawalLocked)
       );
 
       res.json({
@@ -371,6 +374,7 @@ router.get(
         lockedAmount: breakdown.lockedAmount,
         availableAmount: breakdown.availableAmount,
         reservedAmount: reserved,
+        savingsWithdrawalLocked: Boolean(req.user.savingsWithdrawalLocked),
         withdrawals,
       });
     } catch (err) {
@@ -582,10 +586,21 @@ router.post(
       const breakdown = getWithdrawalBreakdown(
         savings,
         loanFunds,
-        reserved
+        reserved,
+        Boolean(freshMember.savingsWithdrawalLocked)
       );
 
       const available = breakdown.availableAmount;
+
+      // If a previous successful withdrawal used personal savings, another
+      // personal-savings withdrawal is blocked until the member makes a new
+      // contribution. Loan funds remain withdrawable during this lock.
+      if (freshMember.savingsWithdrawalLocked && amount > breakdown.loanFunds) {
+        return res.status(400).json({
+          message:
+            "Your personal-savings withdrawal is locked. Make a new savings contribution to unlock it. You can still withdraw available loan funds.",
+        });
+      }
 
       if (amount > available) {
         return res.status(400).json({
@@ -609,22 +624,28 @@ router.post(
               {
                 $subtract: [
                   {
-                    $add: [
+                    $cond: [
+                      "$savingsWithdrawalLocked",
                       "$loanFundsBalance",
                       {
-                        $multiply: [
+                        $add: [
+                          "$loanFundsBalance",
                           {
-                            $max: [
+                            $multiply: [
                               {
-                                $subtract: [
-                                  "$savingsBalance",
-                                  "$loanFundsBalance",
+                                $max: [
+                                  {
+                                    $subtract: [
+                                      "$savingsBalance",
+                                      "$loanFundsBalance",
+                                    ],
+                                  },
+                                  0,
                                 ],
                               },
-                              0,
+                              AVAILABLE_PERCENTAGE,
                             ],
                           },
-                          AVAILABLE_PERCENTAGE,
                         ],
                       },
                     ],
@@ -721,14 +742,15 @@ router.post(
         const finalUser = await User.findById(
           freshMember._id
         ).select(
-          "savingsBalance withdrawalReserved loanFundsBalance"
+          "savingsBalance withdrawalReserved loanFundsBalance savingsWithdrawalLocked"
         );
 
         const finalBreakdown =
           getWithdrawalBreakdown(
             Number(finalUser?.savingsBalance || 0),
             Number(finalUser?.loanFundsBalance || 0),
-            Number(finalUser?.withdrawalReserved || 0)
+            Number(finalUser?.withdrawalReserved || 0),
+            Boolean(finalUser?.savingsWithdrawalLocked)
           );
 
         return res.status(201).json({
@@ -750,6 +772,10 @@ router.post(
           lockedAmount: finalBreakdown.lockedAmount,
           availableAmount:
             finalBreakdown.availableAmount,
+
+          savingsWithdrawalLocked: Boolean(
+            finalUser?.savingsWithdrawalLocked
+          ),
 
           withdrawalReserved: Number(
             finalUser?.withdrawalReserved || 0

@@ -27,45 +27,41 @@ export async function settleWithdrawal(
   }
 
   if (finalStatus === "success") {
+    // Work out which portion of this successful withdrawal actually came
+    // from the member's loan funds. Anything beyond the available loan
+    // funds necessarily comes from personal savings.
+    const currentUser = await User.findById(withdrawal.user).select(
+      "savingsBalance loanFundsBalance withdrawalReserved savingsWithdrawalLocked"
+    );
+
+    if (!currentUser) {
+      throw new Error("Member account not found while settling withdrawal.");
+    }
+
+    const currentLoanFunds = Math.max(
+      0,
+      Number(currentUser.loanFundsBalance || 0)
+    );
+    const loanFundsUsed = Math.min(currentLoanFunds, amount);
+    const personalSavingsUsed = Math.max(0, amount - loanFundsUsed);
+
     const user = await User.findOneAndUpdate(
       {
         _id: withdrawal.user,
-
-        // The withdrawal was reserved before the Paystack transfer.
         withdrawalReserved: { $gte: amount },
-
-        // Never allow the database balance to go negative.
         savingsBalance: { $gte: amount },
+        loanFundsBalance: { $gte: loanFundsUsed },
       },
-      [
-        {
-          $set: {
-            savingsBalance: {
-              $subtract: ["$savingsBalance", amount],
-            },
-
-            withdrawalReserved: {
-              $subtract: ["$withdrawalReserved", amount],
-            },
-
-            // Only loan funds that are actually part of the withdrawal
-            // should reduce loanFundsBalance.
-            loanFundsBalance: {
-              $max: [
-                0,
-                {
-                  $subtract: [
-                    "$loanFundsBalance",
-                    {
-                      $min: ["$loanFundsBalance", amount],
-                    },
-                  ],
-                },
-              ],
-            },
-          },
+      {
+        $inc: {
+          savingsBalance: -amount,
+          withdrawalReserved: -amount,
+          loanFundsBalance: -loanFundsUsed,
         },
-      ],
+        ...(personalSavingsUsed > 0
+          ? { $set: { savingsWithdrawalLocked: true } }
+          : {}),
+      },
       { new: true }
     );
 
@@ -75,6 +71,8 @@ export async function settleWithdrawal(
       );
     }
 
+    withdrawal.loanFundsUsed = loanFundsUsed;
+    withdrawal.personalSavingsUsed = personalSavingsUsed;
     withdrawal.status = "success";
     withdrawal.paidAt = new Date();
     withdrawal.failureReason = "";

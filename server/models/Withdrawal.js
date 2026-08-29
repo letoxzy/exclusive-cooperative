@@ -14,6 +14,11 @@ const withdrawalSchema = new mongoose.Schema(
       min: 1,
     },
 
+    // Recorded when the withdrawal settles so the system can distinguish
+    // loan-fund withdrawals from withdrawals that used personal savings.
+    loanFundsUsed: { type: Number, default: 0, min: 0 },
+    personalSavingsUsed: { type: Number, default: 0, min: 0 },
+
     bankCode: {
       type: String,
       required: true,

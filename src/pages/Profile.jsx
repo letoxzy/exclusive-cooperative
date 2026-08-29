@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
+import { isStrongPassword } from "../utils/passwordPolicy";
 import "../styles/profile.css";
 
 const EMPTY_MEMBERSHIP = {
@@ -257,8 +258,10 @@ function Profile() {
     setPwMsg("");
     setPwError("");
 
-    if (pwForm.newPassword.length < 6) {
-      setPwError("New password must be at least 6 characters.");
+    if (!isStrongPassword(pwForm.newPassword)) {
+      setPwError(
+        "New password must be at least 8 characters and include uppercase and lowercase letters, a number, and a special character."
+      );
       return;
     }
 

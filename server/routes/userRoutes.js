@@ -7,6 +7,7 @@ import Withdrawal from "../models/Withdrawal.js";
 import { DividendEntry } from "../models/Dividend.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
+import { validatePassword } from "../utils/passwordPolicy.js";
 
 const router = express.Router();
 
@@ -30,8 +31,9 @@ router.patch("/me/password", protect, async (req, res) => {
   if (!currentPassword || !newPassword) {
     return res.status(400).json({ message: "Both current and new password are required" });
   }
-  if (newPassword.length < 6) {
-    return res.status(400).json({ message: "New password must be at least 6 characters" });
+  const passwordError = validatePassword(newPassword);
+  if (passwordError) {
+    return res.status(400).json({ message: passwordError });
   }
 
   const matches = await req.user.matchPassword(currentPassword);

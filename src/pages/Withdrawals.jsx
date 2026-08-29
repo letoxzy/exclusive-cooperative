@@ -272,7 +272,7 @@ function Withdrawals() {
           <p className="eyebrow">Savings</p>
           <h1>Withdrawals</h1>
           <p>
-            Withdraw from your savings while keeping the cooperative's 20%
+            Withdraw from your savings while keeping the cooperative's 50%
             savings reserve in place.
           </p>
         </div>
@@ -318,8 +318,9 @@ function Withdrawals() {
         <div className="withdrawal-rule">
           <strong>50% savings reserve</strong>
           <span>
-            You can withdraw up to 50% of your current savings. An outstanding
-            loan does not create an additional 20% lock.
+            You can withdraw 100% of your loan funds plus up to 50% of your
+            personal savings. An outstanding loan does not create an additional
+            savings lock.
           </span>
         </div>
 

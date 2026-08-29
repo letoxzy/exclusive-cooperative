@@ -33,7 +33,6 @@ app.use(
   })
 );
 
-app.options("*", cors());
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
@@ -44,7 +43,12 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/loans", loanRoutes);
 app.use("/api/withdrawals", withdrawalRoutes);
 
-app.get("/", (req, res) => res.send("Exclusive Cooperative API is running"));
+app.get("/", (req, res) =>
+  res.send("Exclusive Cooperative API is running")
+);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+app.listen(PORT, () =>
+  console.log(`Server running on port ${PORT}`)
+);

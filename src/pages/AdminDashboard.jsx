@@ -9,6 +9,7 @@ import { FaUsers, FaHandHoldingDollar, FaClock } from "react-icons/fa6";
 
 import AdminSidebar from "../components/admin/AdminSidebar";
 import MembershipModal from "../components/admin/MembershipModal";
+import AdminNotifications from "../components/admin/AdminNotifications";
 
 function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -1004,9 +1005,14 @@ function AdminDashboard() {
   };
 
   const renderWithdrawals = () => {
-    const processing = withdrawals.filter((item) => item.status === "processing");
+    const processing = withdrawals.filter(
+      (item) => item.status === "processing",
+    );
     const successful = withdrawals.filter((item) => item.status === "success");
-    const totalPaid = successful.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const totalPaid = successful.reduce(
+      (sum, item) => sum + Number(item.amount || 0),
+      0,
+    );
 
     return (
       <>
@@ -1016,26 +1022,43 @@ function AdminDashboard() {
             <h1>Withdrawals</h1>
             <p className="admin-subtitle">
               Monitor member withdrawal requests and Paystack transfer status.
-              Withdrawals are paid automatically after the member confirms with their password.
+              Withdrawals are paid automatically after the member confirms with
+              their password.
             </p>
           </div>
-          <button type="button" className="btn-secondary" onClick={loadWithdrawals}>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={loadWithdrawals}
+          >
             Refresh
           </button>
         </div>
 
         <div className="admin-stat-grid">
           <div className="admin-stat-card">
-            <div><span>Processing</span><strong>{processing.length}</strong></div>
+            <div>
+              <span>Processing</span>
+              <strong>{processing.length}</strong>
+            </div>
           </div>
           <div className="admin-stat-card">
-            <div><span>Paid Withdrawals</span><strong>{successful.length}</strong></div>
+            <div>
+              <span>Paid Withdrawals</span>
+              <strong>{successful.length}</strong>
+            </div>
           </div>
           <div className="admin-stat-card">
-            <div><span>Total Paid</span><strong>₦{totalPaid.toLocaleString()}</strong></div>
+            <div>
+              <span>Total Paid</span>
+              <strong>₦{totalPaid.toLocaleString()}</strong>
+            </div>
           </div>
           <div className="admin-stat-card">
-            <div><span>Total Records</span><strong>{withdrawals.length}</strong></div>
+            <div>
+              <span>Total Records</span>
+              <strong>{withdrawals.length}</strong>
+            </div>
           </div>
         </div>
 
@@ -1060,17 +1083,35 @@ function AdminDashboard() {
                   {withdrawals.map((item) => (
                     <tr key={item._id}>
                       <td>
-                        <strong>{item.user?.fullName || "—"}</strong><br />
+                        <strong>{item.user?.fullName || "—"}</strong>
+                        <br />
                         <span className="muted">{item.user?.email || "—"}</span>
                       </td>
                       <td>₦{Number(item.amount || 0).toLocaleString()}</td>
                       <td>{item.bankName}</td>
-                      <td>{item.accountName}<br /><span className="muted">····{item.accountNumberLast4}</span></td>
-                      <td><span className={`status-badge ${item.status}`}>{item.status}</span></td>
-                      <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "—"}</td>
+                      <td>
+                        {item.accountName}
+                        <br />
+                        <span className="muted">
+                          ····{item.accountNumberLast4}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`status-badge ${item.status}`}>
+                          {item.status}
+                        </span>
+                      </td>
+                      <td>
+                        {item.createdAt
+                          ? new Date(item.createdAt).toLocaleDateString()
+                          : "—"}
+                      </td>
                       <td className="actions-cell">
                         {item.status === "processing" ? (
-                          <button className="view-btn" onClick={() => handleWithdrawalSync(item._id)}>
+                          <button
+                            className="view-btn"
+                            onClick={() => handleWithdrawalSync(item._id)}
+                          >
                             Sync Status
                           </button>
                         ) : (
@@ -2320,14 +2361,26 @@ function AdminDashboard() {
             <h2>Administration</h2>
           </div>
 
-          <div className="admin-user">
-            <div className="admin-user-avatar">
-              {user?.fullName?.charAt(0)?.toUpperCase() || "A"}
-            </div>
+          <div className="admin-topbar-actions">
+            <AdminNotifications
+              applications={applications}
+              requests={requests}
+              loans={loans}
+              loanEligibilityApplications={loanEligibilityApplications}
+              loanRepayments={loanRepayments}
+              withdrawals={withdrawals}
+              onNavigate={setActiveSection}
+            />
 
-            <div className="admin-user-info">
-              <strong>{user?.fullName}</strong>
-              <span>Administrator</span>
+            <div className="admin-user">
+              <div className="admin-user-avatar">
+                {user?.fullName?.charAt(0)?.toUpperCase() || "A"}
+              </div>
+
+              <div className="admin-user-info">
+                <strong>{user?.fullName}</strong>
+                <span>Administrator</span>
+              </div>
             </div>
           </div>
         </header>

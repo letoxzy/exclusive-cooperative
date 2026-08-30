@@ -307,3 +307,225 @@ button.loan-type-badge.full-application-badge {
 .dividend-create-form button {
   height: 38px;
 }
+
+/* =================================
+   ADMIN NOTIFICATIONS
+================================= */
+
+.admin-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.admin-notification-wrapper {
+  position: relative;
+}
+
+.admin-notification-button {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.admin-notification-button:hover {
+  background: #f8fafc;
+  border-color: #d1d5db;
+}
+
+.admin-notification-button svg {
+  font-size: 17px;
+}
+
+.admin-notification-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+}
+
+.admin-notification-dropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 380px;
+  max-width: calc(100vw - 30px);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.admin-notification-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid #eef0f2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.admin-notification-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #111827;
+}
+
+.admin-notification-header span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.admin-mark-read-btn {
+  border: none;
+  background: transparent;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-mark-read-btn:hover {
+  text-decoration: underline;
+}
+
+.admin-notification-list {
+  max-height: 430px;
+  overflow-y: auto;
+}
+
+.admin-notification-item {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid #f1f3f5;
+  background: #ffffff;
+  padding: 15px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.admin-notification-item:hover {
+  background: #f8fafc;
+}
+
+.admin-notification-item.unread {
+  background: #f8fafc;
+}
+
+.admin-notification-dot {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.admin-notification-item.unread .admin-notification-dot {
+  background: #dc2626;
+}
+
+.admin-notification-content {
+  min-width: 0;
+}
+
+.admin-notification-content strong {
+  display: block;
+  font-size: 13px;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.admin-notification-content p {
+  margin: 0 0 5px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.admin-notification-content small {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.admin-notification-empty {
+  padding: 45px 20px;
+  text-align: center;
+}
+
+.admin-notification-empty svg {
+  font-size: 25px;
+  color: #9ca3af;
+  margin-bottom: 10px;
+}
+
+.admin-notification-empty p {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.admin-notification-empty span {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.admin-notification-footer {
+  padding: 11px 18px;
+  border-top: 1px solid #eef0f2;
+  text-align: center;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* =================================
+   MOBILE
+================================= */
+
+@media (max-width: 700px) {
+  .admin-topbar-actions {
+    gap: 12px;
+  }
+
+  .admin-user-info {
+    display: none;
+  }
+
+  .admin-notification-dropdown {
+    position: fixed;
+    top: 72px;
+    right: 15px;
+    left: 15px;
+    width: auto;
+    max-width: none;
+  }
+}

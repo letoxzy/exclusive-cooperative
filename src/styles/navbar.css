@@ -478,3 +478,472 @@
     font-size: 22px;
   }
 }
+
+/* =================================
+   MEMBER NOTIFICATIONS
+================================= */
+
+.navbar-notification-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.navbar-notification-btn,
+.mobile-notification-btn {
+  position: relative;
+
+  width: 38px;
+  height: 38px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+
+  background: #ffffff;
+  color: #0b1f3a;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.navbar-notification-btn:hover,
+.mobile-notification-btn:hover {
+  background: #0b1f3a;
+  color: #ffffff;
+  border-color: #0b1f3a;
+}
+
+.navbar-notification-btn svg,
+.mobile-notification-btn svg {
+  font-size: 16px;
+}
+
+.navbar-notification-count {
+  position: absolute;
+
+  top: -5px;
+  right: -5px;
+
+  min-width: 19px;
+  height: 19px;
+
+  padding: 0 4px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+
+  background: #dc2626;
+  color: #ffffff;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  border: 2px solid #ffffff;
+}
+
+/* =================================
+   NOTIFICATION DROPDOWN
+================================= */
+
+.navbar-notification-dropdown {
+  position: absolute;
+
+  top: calc(100% + 12px);
+  right: 0;
+
+  width: 380px;
+  max-width: calc(100vw - 30px);
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+
+  overflow: hidden;
+
+  z-index: 2000;
+}
+
+.navbar-notification-header {
+  padding: 16px 18px;
+
+  border-bottom: 1px solid #eef0f2;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 15px;
+}
+
+.navbar-notification-header h3 {
+  margin: 0;
+
+  font-size: 16px;
+  color: #111827;
+}
+
+.navbar-notification-header span {
+  display: block;
+
+  margin-top: 3px;
+
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.navbar-mark-read-btn {
+  border: none;
+
+  background: transparent;
+
+  color: #374151;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.navbar-mark-read-btn:hover {
+  text-decoration: underline;
+}
+
+/* =================================
+   NOTIFICATION LIST
+================================= */
+
+.navbar-notification-list {
+  max-height: 430px;
+  overflow-y: auto;
+}
+
+.navbar-notification-item {
+  width: 100%;
+
+  border: none;
+  border-bottom: 1px solid #f1f3f5;
+
+  background: #ffffff;
+
+  padding: 15px 18px;
+
+  display: flex;
+  align-items: flex-start;
+
+  gap: 12px;
+
+  text-align: left;
+
+  cursor: pointer;
+
+  transition: background 0.2s ease;
+}
+
+.navbar-notification-item:hover {
+  background: #f8fafc;
+}
+
+.navbar-notification-item.unread {
+  background: #f8fafc;
+}
+
+.navbar-notification-dot {
+  width: 8px;
+  min-width: 8px;
+  height: 8px;
+
+  margin-top: 6px;
+
+  border-radius: 50%;
+
+  background: transparent;
+}
+
+.navbar-notification-item.unread
+  .navbar-notification-dot {
+  background: #dc2626;
+}
+
+.navbar-notification-content {
+  min-width: 0;
+}
+
+.navbar-notification-content strong {
+  display: block;
+
+  margin-bottom: 4px;
+
+  font-size: 13px;
+
+  color: #111827;
+}
+
+.navbar-notification-content p {
+  margin: 0 0 5px;
+
+  font-size: 12px;
+  line-height: 1.5;
+
+  color: #6b7280;
+}
+
+.navbar-notification-content small {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* =================================
+   EMPTY STATE
+================================= */
+
+.navbar-notification-empty {
+  padding: 45px 20px;
+
+  text-align: center;
+}
+
+.navbar-notification-empty svg {
+  font-size: 25px;
+
+  color: #9ca3af;
+
+  margin-bottom: 10px;
+}
+
+.navbar-notification-empty p {
+  margin: 0 0 4px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  color: #374151;
+}
+
+.navbar-notification-empty span {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* =================================
+   FOOTER
+================================= */
+
+.navbar-notification-footer {
+  padding: 11px 18px;
+
+  border-top: 1px solid #eef0f2;
+
+  text-align: center;
+
+  font-size: 11px;
+
+  color: #9ca3af;
+}
+
+/* =================================
+   MOBILE NOTIFICATION POSITION
+================================= */
+
+.mobile-navbar-notification {
+  display: none;
+}
+
+/* =================================
+   MOBILE
+================================= */
+
+@media (max-width: 900px) {
+
+  .navbar-container {
+    position: relative;
+
+    display: grid;
+
+    grid-template-columns: 1fr auto 1fr;
+
+    align-items: center;
+
+    min-height: 70px;
+  }
+
+  /*
+   * Bell LEFT
+   */
+
+  .mobile-navbar-notification {
+    display: flex;
+
+    grid-column: 1;
+
+    justify-self: start;
+  }
+
+  /*
+   * Logo CENTER
+   */
+
+  .navbar-logo {
+    grid-column: 2;
+
+    justify-self: center;
+
+    font-size: 19px;
+
+    white-space: nowrap;
+  }
+
+  /*
+   * Dashboard + menu RIGHT
+   */
+
+  .mobile-nav-actions {
+    grid-column: 3;
+
+    justify-self: end;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 6px;
+  }
+
+  /*
+   * Hide desktop notification
+   */
+
+  .desktop-navbar-notification {
+    display: none;
+  }
+
+  /*
+   * Notification dropdown on mobile
+   */
+
+  .mobile-notification-wrapper
+    .navbar-notification-dropdown {
+    position: fixed;
+
+    top: 72px;
+
+    left: 15px;
+    right: 15px;
+
+    width: auto;
+    max-width: none;
+  }
+
+  /*
+   * Hide desktop dashboard
+   */
+
+  .desktop-dashboard-btn {
+    display: none;
+  }
+
+  /*
+   * Keep menu layout
+   */
+
+  .navbar-content {
+    display: none;
+
+    width: 100%;
+
+    padding: 20px 0;
+
+    border-top: 1px solid #e5e7eb;
+
+    grid-column: 1 / -1;
+  }
+
+  .navbar-content.open {
+    display: block;
+  }
+
+  .navbar-links {
+    flex-direction: column;
+
+    align-items: flex-start;
+
+    gap: 18px;
+
+    margin-bottom: 20px;
+  }
+
+  .navbar-links a.active::after {
+    bottom: -6px;
+  }
+
+  .navbar-actions {
+    flex-direction: column;
+
+    align-items: stretch;
+
+    gap: 10px;
+  }
+
+  .navbar-icon-group {
+    justify-content: flex-start;
+  }
+
+  .login-btn {
+    text-align: center;
+
+    padding: 10px;
+  }
+
+  .member-btn {
+    text-align: center;
+  }
+}
+
+/* =================================
+   SMALL PHONES
+================================= */
+
+@media (max-width: 480px) {
+
+  .navbar-container {
+    min-height: 70px;
+  }
+
+  .mobile-notification-btn {
+    width: 38px;
+    height: 38px;
+
+    font-size: 16px;
+  }
+
+  .navbar-logo {
+    font-size: 18px;
+  }
+
+  .mobile-nav-actions {
+    gap: 5px;
+  }
+
+  .mobile-dashboard-btn,
+  .menu-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .menu-btn {
+    font-size: 22px;
+  }
+}

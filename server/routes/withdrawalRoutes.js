@@ -5,9 +5,11 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import Loan from "../models/Loan.js";
 import Withdrawal from "../models/Withdrawal.js";
+import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
+
 
 const router = express.Router();
 
@@ -707,6 +709,13 @@ router.post(
           status: "processing",
         });
 
+        await Notification.create({
+          user: freshMember._id,
+          type: "withdrawal",
+          title: "Withdrawal Submitted",
+          message: "Your withdrawal request has been submitted and is being processed.",
+        });
+
         const transfer = await paystack(
           "/transfer",
           {
@@ -788,7 +797,7 @@ router.post(
               withdrawal,
               "failed",
               err.message ||
-                "Paystack transfer could not be initiated."
+                "Transfer could not be initiated."
             );
           } catch (settleError) {
             console.error(
@@ -901,37 +910,67 @@ router.post("/paystack/webhook", async (req, res) => {
     }
 
     if (event === "transfer.success") {
-      withdrawal.transferCode =
-        data.transfer_code ||
-        withdrawal.transferCode;
+  withdrawal.transferCode =
+    data.transfer_code ||
+    withdrawal.transferCode;
 
-      await settleWithdrawal(
-        withdrawal,
-        "success"
-      );
+  await settleWithdrawal(
+    withdrawal,
+    "success"
+  );
 
-      return;
-    }
+  await Notification.create({
+    user: withdrawal.user,
+    type: "withdrawal",
+    title: "Withdrawal Successful",
+    message: `Your withdrawal of ₦${Number(
+      withdrawal.amount || 0
+    ).toLocaleString()} has been successfully processed.`,
+  });
+
+  return;
+}
 
     const finalStatus =
-      event === "transfer.reversed"
-        ? "reversed"
-        : "failed";
+  event === "transfer.reversed"
+    ? "reversed"
+    : "failed";
 
-    withdrawal.transferCode =
-      data.transfer_code ||
-      withdrawal.transferCode;
+withdrawal.transferCode =
+  data.transfer_code ||
+  withdrawal.transferCode;
 
-    await settleWithdrawal(
-      withdrawal,
-      finalStatus,
-      data.failures ||
-        data.message ||
-        `Paystack transfer ${finalStatus}.`
-    );
+await settleWithdrawal(
+  withdrawal,
+  finalStatus,
+  data.failures ||
+    data.message ||
+    `Paystack transfer ${finalStatus}.`
+);
+
+const notificationTitle =
+  finalStatus === "reversed"
+    ? "Withdrawal Reversed"
+    : "Withdrawal Failed";
+
+const notificationMessage =
+  finalStatus === "reversed"
+    ? `Your withdrawal of ₦${Number(
+        withdrawal.amount || 0
+      ).toLocaleString()} has been reversed.`
+    : `Your withdrawal of ₦${Number(
+        withdrawal.amount || 0
+      ).toLocaleString()} could not be completed.`;
+
+await Notification.create({
+  user: withdrawal.user,
+  type: "withdrawal",
+  title: notificationTitle,
+  message: notificationMessage,
+});
   } catch (err) {
     console.error(
-      "Paystack withdrawal webhook error:",
+      "Withdrawal webhook processing error:",
       err
     );
   }

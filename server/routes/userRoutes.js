@@ -211,10 +211,7 @@ router.get("/me/transactions", protect, async (req, res) => {
       ...savingsTransactions.map((transaction) => ({
         id: `savings-${transaction._id}`,
         type: "Savings Deposit",
-        description:
-          transaction.method === "paystack"
-            ? "Paystack savings top-up"
-            : "Savings deposit",
+        description: "Savings top-up",
         amount: Number(transaction.amount || 0),
         status: transaction.status,
         direction: "credit",

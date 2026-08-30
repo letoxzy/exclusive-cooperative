@@ -18,6 +18,9 @@ function Dashboard() {
   const [transactions, setTransactions] = useState([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState("");
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const [showAllRequests, setShowAllRequests] = useState(false);
   const [repaymentLoading, setRepaymentLoading] = useState(false);
   const [repaymentError, setRepaymentError] = useState("");
   const [repaymentSuccess, setRepaymentSuccess] = useState("");
@@ -54,6 +57,27 @@ function Dashboard() {
   // When hidden, shows dots instead of the real figure — same idea as a
   // bank app hiding your balance until you tap to reveal it.
   const displayMoney = (value) => (showBalances ? money(value) : "••••••");
+
+  const formatDate = (value) => {
+    if (!value) return "—";
+
+    return new Date(value).toLocaleDateString("en-NG", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone: "Africa/Lagos",
+    });
+  };
+
+  const formatTime = (value) => {
+    if (!value) return "—";
+
+    return new Date(value).toLocaleTimeString("en-NG", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "Africa/Lagos",
+    });
+  };
 
   /*
    * ================================
@@ -774,19 +798,30 @@ function Dashboard() {
           <div>
             <h2>Transactions</h2>
             <p className="dash-note">
-              A record of your savings deposits, loan repayments, loan disbursements,
-              and paid dividends.
+              Your recent savings, loans, repayments, withdrawals, and dividends.
             </p>
           </div>
 
-          <button
-            type="button"
-            className="transaction-refresh-btn"
-            onClick={loadTransactions}
-            disabled={transactionsLoading}
-          >
-            {transactionsLoading ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="transactions-header-actions">
+            <button
+              type="button"
+              className="transaction-refresh-btn"
+              onClick={loadTransactions}
+              disabled={transactionsLoading}
+            >
+              {transactionsLoading ? "Refreshing..." : "Refresh"}
+            </button>
+
+            {transactions.length > 5 && (
+              <button
+                type="button"
+                className="transaction-view-all-btn"
+                onClick={() => setShowAllTransactions(true)}
+              >
+                View All
+              </button>
+            )}
+          </div>
         </div>
 
         {transactionsError && <p className="form-error">{transactionsError}</p>}
@@ -800,19 +835,31 @@ function Dashboard() {
             <table className="transactions-table">
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th>Date &amp; Time</th>
                   <th>Description</th>
                   <th>Status</th>
                   <th>Amount</th>
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((transaction) => (
-                  <tr key={transaction.id}>
+                {transactions.slice(0, 5).map((transaction) => (
+                  <tr
+                    key={transaction.id}
+                    className="transaction-clickable-row"
+                    onClick={() => setSelectedTransaction(transaction)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedTransaction(transaction);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View ${transaction.type} transaction details`}
+                  >
                     <td>
-                      {transaction.date
-                        ? new Date(transaction.date).toLocaleDateString()
-                        : "—"}
+                      <strong>{formatDate(transaction.date)}</strong>
+                      <span>{formatTime(transaction.date)}</span>
                     </td>
                     <td>
                       <strong>{transaction.type}</strong>
@@ -833,6 +880,16 @@ function Dashboard() {
             </table>
           </div>
         )}
+
+        {transactions.length > 5 && (
+          <button
+            type="button"
+            className="dashboard-list-link"
+            onClick={() => setShowAllTransactions(true)}
+          >
+            View all transactions →
+          </button>
+        )}
       </section>
 
       {/* =====================================
@@ -840,34 +897,279 @@ function Dashboard() {
       ====================================== */}
 
       <section className="dash-form-card requests-list">
-        <h2>Your Deposit Requests</h2>
+        <div className="requests-header">
+          <div>
+            <h2>Your Deposit Requests</h2>
+            <p className="dash-note">Recent savings deposit activity.</p>
+          </div>
+
+          {requests.length > 5 && (
+            <button
+              type="button"
+              className="transaction-view-all-btn"
+              onClick={() => setShowAllRequests(true)}
+            >
+              View All
+            </button>
+          )}
+        </div>
 
         {requests.length === 0 ? (
           <p className="dash-note">No requests yet.</p>
         ) : (
           <ul className="requests-ul">
-            {requests.map((r) => (
+            {requests.slice(0, 5).map((r) => (
               <li key={r._id}>
-                <span>
-                  {money(r.amount)}
-
-                  <span className="method-tag">
-                    {r.method === "paystack" ? "Paystack" : "Manual"}
-                  </span>
-                </span>
+                <div className="request-main-info">
+                  <strong>{money(r.amount)}</strong>
+                  <span className="request-type">Savings Deposit</span>
+                </div>
 
                 <span className={`status-badge ${r.status}`}>{r.status}</span>
 
                 <span className="req-date">
-                  {r.createdAt
-                    ? new Date(r.createdAt).toLocaleDateString()
-                    : "-"}
+                  <strong>{formatDate(r.createdAt)}</strong>
+                  <span>{formatTime(r.createdAt)}</span>
                 </span>
               </li>
             ))}
           </ul>
         )}
+
+        {requests.length > 5 && (
+          <button
+            type="button"
+            className="dashboard-list-link"
+            onClick={() => setShowAllRequests(true)}
+          >
+            View all deposit requests →
+          </button>
+        )}
       </section>
+
+      {/* =====================================
+          TRANSACTION DETAILS
+      ====================================== */}
+
+      {selectedTransaction && (
+        <div
+          className="dashboard-modal-backdrop"
+          onClick={() => setSelectedTransaction(null)}
+        >
+          <div
+            className="dashboard-modal transaction-details-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transaction-details-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="dashboard-modal-header">
+              <div>
+                <p className="modal-eyebrow">Transaction</p>
+                <h2 id="transaction-details-title">
+                  {selectedTransaction.type}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                className="dashboard-modal-close"
+                onClick={() => setSelectedTransaction(null)}
+                aria-label="Close transaction details"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="transaction-detail-amount">
+              <span>Amount</span>
+              <strong className={selectedTransaction.direction}>
+                {selectedTransaction.direction === "debit" ? "−" : "+"}
+                {money(selectedTransaction.amount)}
+              </strong>
+            </div>
+
+            <div className="transaction-detail-grid">
+              <div>
+                <span>Status</span>
+                <strong>
+                  <span
+                    className={`status-badge ${selectedTransaction.status}`}
+                  >
+                    {selectedTransaction.status}
+                  </span>
+                </strong>
+              </div>
+
+              <div>
+                <span>Date</span>
+                <strong>{formatDate(selectedTransaction.date)}</strong>
+              </div>
+
+              <div>
+                <span>Time</span>
+                <strong>{formatTime(selectedTransaction.date)}</strong>
+              </div>
+
+              <div>
+                <span>Payment Method</span>
+                <strong>Online Payment</strong>
+              </div>
+
+              <div className="transaction-detail-full">
+                <span>Description</span>
+                <strong>{selectedTransaction.description || "—"}</strong>
+              </div>
+
+              <div className="transaction-detail-full">
+                <span>Reference</span>
+                <strong>{selectedTransaction.reference || "—"}</strong>
+              </div>
+            </div>
+
+            <div className="transaction-support">
+              <strong>Need help with this transaction?</strong>
+              <p>Our customer service team can help you with transaction questions.</p>
+              <Link
+                to="/contact"
+                className="transaction-support-btn"
+                onClick={() => setSelectedTransaction(null)}
+              >
+                Contact Customer Service →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================
+          ALL TRANSACTIONS
+      ====================================== */}
+
+      {showAllTransactions && (
+        <div
+          className="dashboard-modal-backdrop"
+          onClick={() => setShowAllTransactions(false)}
+        >
+          <div
+            className="dashboard-modal dashboard-wide-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="all-transactions-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="dashboard-modal-header">
+              <div>
+                <p className="modal-eyebrow">History</p>
+                <h2 id="all-transactions-title">All Transactions</h2>
+              </div>
+              <button
+                type="button"
+                className="dashboard-modal-close"
+                onClick={() => setShowAllTransactions(false)}
+                aria-label="Close all transactions"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-table-wrap">
+              <table className="transactions-table">
+                <thead>
+                  <tr>
+                    <th>Date &amp; Time</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((transaction) => (
+                    <tr
+                      key={transaction.id}
+                      className="transaction-clickable-row"
+                      onClick={() => {
+                        setShowAllTransactions(false);
+                        setSelectedTransaction(transaction);
+                      }}
+                    >
+                      <td>
+                        <strong>{formatDate(transaction.date)}</strong>
+                        <span>{formatTime(transaction.date)}</span>
+                      </td>
+                      <td>
+                        <strong>{transaction.type}</strong>
+                        <span>{transaction.description}</span>
+                      </td>
+                      <td>
+                        <span className={`status-badge ${transaction.status}`}>
+                          {transaction.status}
+                        </span>
+                      </td>
+                      <td className={`transaction-amount ${transaction.direction}`}>
+                        {transaction.direction === "debit" ? "−" : "+"}
+                        {money(transaction.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================
+          ALL DEPOSIT REQUESTS
+      ====================================== */}
+
+      {showAllRequests && (
+        <div
+          className="dashboard-modal-backdrop"
+          onClick={() => setShowAllRequests(false)}
+        >
+          <div
+            className="dashboard-modal dashboard-wide-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="all-requests-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="dashboard-modal-header">
+              <div>
+                <p className="modal-eyebrow">History</p>
+                <h2 id="all-requests-title">All Deposit Requests</h2>
+              </div>
+              <button
+                type="button"
+                className="dashboard-modal-close"
+                onClick={() => setShowAllRequests(false)}
+                aria-label="Close all deposit requests"
+              >
+                ×
+              </button>
+            </div>
+
+            <ul className="requests-ul modal-requests-list">
+              {requests.map((r) => (
+                <li key={r._id}>
+                  <div className="request-main-info">
+                    <strong>{money(r.amount)}</strong>
+                    <span className="request-type">Savings Deposit</span>
+                  </div>
+
+                  <span className={`status-badge ${r.status}`}>{r.status}</span>
+
+                  <span className="req-date">
+                    <strong>{formatDate(r.createdAt)}</strong>
+                    <span>{formatTime(r.createdAt)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

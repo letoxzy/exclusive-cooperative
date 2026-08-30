@@ -934,3 +934,348 @@
     width: 100%;
   }
 }
+
+/* =================================
+   DASHBOARD LIST CONTROLS
+================================= */
+
+.transactions-header-actions,
+.requests-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.transactions-header-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.transaction-view-all-btn,
+.dashboard-list-link {
+  border: none;
+  background: transparent;
+  color: var(--navy);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transaction-view-all-btn:hover,
+.dashboard-list-link:hover {
+  color: var(--gold);
+}
+
+.dashboard-list-link {
+  display: block;
+  margin: 14px 0 0 auto;
+  padding: 4px 0;
+}
+
+/* Clickable transaction rows */
+
+.transaction-clickable-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.transaction-clickable-row:hover,
+.transaction-clickable-row:focus-visible {
+  background: var(--light);
+  outline: none;
+}
+
+.transactions-table td strong,
+.transactions-table td span {
+  display: block;
+}
+
+.transactions-table td span:not(.status-badge) {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Deposit requests */
+
+.request-main-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 130px;
+}
+
+.request-main-info strong {
+  color: var(--navy);
+  font-size: 14px;
+}
+
+.request-type {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: none;
+}
+
+.req-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.req-date strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.req-date span {
+  font-size: 11px;
+}
+
+.requests-header {
+  margin-bottom: 12px;
+}
+
+.requests-header h2 {
+  margin-bottom: 5px;
+}
+
+.requests-header .dash-note {
+  margin-bottom: 0;
+}
+
+/* =================================
+   DASHBOARD MODALS
+================================= */
+
+.dashboard-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(11, 31, 58, 0.42);
+}
+
+.dashboard-modal {
+  width: min(560px, 100%);
+  max-height: min(760px, calc(100vh - 40px));
+  overflow-y: auto;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(11, 31, 58, 0.2);
+}
+
+.dashboard-wide-modal {
+  width: min(900px, 100%);
+}
+
+.dashboard-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-modal-header h2 {
+  color: var(--navy);
+  font-size: 20px;
+}
+
+.modal-eyebrow {
+  margin: 0 0 4px;
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+}
+
+.dashboard-modal-close {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--navy);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dashboard-modal-close:hover {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: var(--white);
+}
+
+.transaction-detail-amount {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  background: var(--light);
+  border-bottom: 1px solid var(--border);
+}
+
+.transaction-detail-amount span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.transaction-detail-amount strong {
+  font-size: 25px;
+}
+
+.transaction-detail-amount strong.credit {
+  color: #065f46;
+}
+
+.transaction-detail-amount strong.debit {
+  color: #b42318;
+}
+
+.transaction-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  padding: 24px;
+}
+
+.transaction-detail-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.transaction-detail-grid > div > span:first-child {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.transaction-detail-grid strong {
+  color: var(--navy);
+  font-size: 13.5px;
+  word-break: break-word;
+}
+
+.transaction-detail-full {
+  grid-column: 1 / -1;
+}
+
+.transaction-support {
+  margin: 0 24px 24px;
+  padding: 18px;
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.transaction-support strong {
+  color: var(--navy);
+  font-size: 14px;
+}
+
+.transaction-support p {
+  margin: 5px 0 13px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.transaction-support-btn {
+  display: inline-flex;
+  align-items: center;
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.transaction-support-btn:hover {
+  color: var(--gold);
+}
+
+.modal-table-wrap {
+  padding: 0 24px 24px;
+  overflow-x: auto;
+}
+
+.modal-table-wrap .transactions-table {
+  min-width: 620px;
+}
+
+.modal-requests-list {
+  padding: 24px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+@media (max-width: 600px) {
+  .transactions-header-actions,
+  .requests-header {
+    align-items: flex-start;
+  }
+
+  .transactions-header-actions {
+    justify-content: flex-start;
+  }
+
+  .requests-header {
+    flex-direction: column;
+  }
+
+  .transaction-view-all-btn {
+    padding-left: 0;
+  }
+
+  .transaction-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-detail-full {
+    grid-column: auto;
+  }
+
+  .dashboard-modal-backdrop {
+    align-items: flex-end;
+    padding: 10px;
+  }
+
+  .dashboard-modal {
+    max-height: calc(100vh - 20px);
+    border-radius: 16px 16px 12px 12px;
+  }
+
+  .dashboard-modal-header,
+  .transaction-detail-grid {
+    padding: 18px;
+  }
+
+  .transaction-support {
+    margin: 0 18px 18px;
+  }
+
+  .modal-table-wrap {
+    padding: 0 18px 18px;
+  }
+
+  .modal-requests-list {
+    padding: 18px;
+  }
+}

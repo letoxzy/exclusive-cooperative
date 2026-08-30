@@ -757,7 +757,7 @@ router.post(
           message:
             withdrawal.status === "success"
               ? "Withdrawal completed successfully."
-              : "Withdrawal submitted and is being processed by Paystack.",
+              : "Withdrawal submitted and is being processed.",
 
           withdrawal,
 

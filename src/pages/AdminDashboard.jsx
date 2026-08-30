@@ -1043,13 +1043,30 @@ function AdminDashboard() {
   const handleWithdrawalSync = async (id) => {
     try {
       setError("");
-      await request(`/admin/withdrawals/${id}/sync`, {
+
+      const result = await request(`/admin/withdrawals/${id}/sync`, {
         method: "POST",
         token: user.token,
       });
+
+      console.log("WITHDRAWAL SYNC RESULT:", result);
+
       await loadWithdrawals();
+
+      alert(
+        `Withdrawal status: ${
+          result.status ||
+          result.data?.status ||
+          result.withdrawal?.status ||
+          "unknown"
+        }`,
+      );
     } catch (err) {
+      console.error("WITHDRAWAL SYNC ERROR:", err);
+
       setError(err.message);
+
+      alert(`Sync failed: ${err.message}`);
     }
   };
 

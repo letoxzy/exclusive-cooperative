@@ -778,8 +778,8 @@ function Dashboard() {
             <p className="eyebrow">Savings</p>
             <h2>Withdraw your savings</h2>
             <p className="dash-note">
-              Keep 20% of your current savings as the cooperative reserve and
-              withdraw up to the remaining 80%. Your bank account is verified
+              Keep 50% of your current savings as the cooperative reserve and
+              withdraw up to the remaining 50%. Your bank account is verified
               before payment.
             </p>
           </div>
@@ -798,7 +798,8 @@ function Dashboard() {
           <div>
             <h2>Transactions</h2>
             <p className="dash-note">
-              Your recent savings, loans, repayments, withdrawals, and dividends.
+              Your recent savings, loans, repayments, withdrawals, and
+              dividends.
             </p>
           </div>
 
@@ -870,7 +871,9 @@ function Dashboard() {
                         {transaction.status}
                       </span>
                     </td>
-                    <td className={`transaction-amount ${transaction.direction}`}>
+                    <td
+                      className={`transaction-amount ${transaction.direction}`}
+                    >
                       {transaction.direction === "debit" ? "−" : "+"}
                       {money(transaction.amount)}
                     </td>
@@ -1029,7 +1032,10 @@ function Dashboard() {
 
             <div className="transaction-support">
               <strong>Need help with this transaction?</strong>
-              <p>Our customer service team can help you with transaction questions.</p>
+              <p>
+                Our customer service team can help you with transaction
+                questions.
+              </p>
               <Link
                 to="/contact"
                 className="transaction-support-btn"
@@ -1106,7 +1112,9 @@ function Dashboard() {
                           {transaction.status}
                         </span>
                       </td>
-                      <td className={`transaction-amount ${transaction.direction}`}>
+                      <td
+                        className={`transaction-amount ${transaction.direction}`}
+                      >
                         {transaction.direction === "debit" ? "−" : "+"}
                         {money(transaction.amount)}
                       </td>

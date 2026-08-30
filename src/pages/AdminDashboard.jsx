@@ -5,7 +5,7 @@ import request from "../utils/api";
 import "../styles/admin.css";
 import "../styles/admin-components.css";
 
-import { FaUsers, FaHandHoldingDollar, FaClock } from "react-icons/fa6";
+import { FaUsers, FaHandHoldingDollar, FaClock, FaBell } from "react-icons/fa6";
 
 import AdminSidebar from "../components/admin/AdminSidebar";
 import MembershipModal from "../components/admin/MembershipModal";
@@ -41,6 +41,16 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [readNotificationIds, setReadNotificationIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("adminReadNotifications") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
   const [viewingApplication, setViewingApplication] = useState(null);
   const [openInEditMode, setOpenInEditMode] = useState(false);
   const [expandedEligibilityId, setExpandedEligibilityId] = useState(null);
@@ -65,13 +75,52 @@ function AdminDashboard() {
     setMembers(data);
   }, [user.token]);
 
+  const updateNotifications = useCallback((applications) => {
+    const newNotifications = applications
+      .filter((application) => application.status === "pending")
+      .map((application) => ({
+        id: application._id,
+        type: "membership",
+        title: "New Membership Application",
+        body: `${application.user?.fullName || "A member"} submitted a membership application.`,
+        createdAt:
+          application.createdAt ||
+          application.submittedDate ||
+          new Date().toISOString(),
+        application,
+      }));
+
+    setNotifications(newNotifications);
+  }, []);
+
   const loadApplications = useCallback(async () => {
     const data = await request("/admin/membership", {
       token: user.token,
     });
 
     setApplications(data);
-  }, [user.token]);
+    updateNotifications(data);
+  }, [user.token, updateNotifications]);
+
+  // Automatically check for new membership applications
+  useEffect(() => {
+    if (!user?.token) return;
+
+    const checkForNewApplications = async () => {
+      try {
+        await loadApplications();
+      } catch (err) {
+        console.error("Notification polling error:", err);
+      }
+    };
+
+    // Check immediately, then every 10 seconds.
+    checkForNewApplications();
+
+    const interval = setInterval(checkForNewApplications, 10000);
+
+    return () => clearInterval(interval);
+  }, [user?.token, loadApplications]);
 
   const loadLoans = useCallback(async () => {
     const data = await request("/admin/loans", {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, NavLink } from "react-router-dom";
+import { FaBell } from "react-icons/fa6";
 import { useAuth } from "../context/AuthContext";
 import { UserIcon, GridIcon, LogOutIcon } from "./Icons";
 import "../styles/navbar.css";
@@ -10,7 +11,9 @@ function Navbar() {
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth > 900) setMenuOpen(false);
+      if (window.innerWidth > 900) {
+        setMenuOpen(false);
+      }
     };
 
     window.addEventListener("resize", handleResize);
@@ -28,6 +31,20 @@ function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-container">
+        {/* =========================
+            MOBILE NOTIFICATION
+        ========================= */}
+        {user && (
+          <button
+            type="button"
+            className="mobile-notification-btn"
+            aria-label="Notifications"
+            title="Notifications"
+          >
+            <FaBell />
+          </button>
+        )}
+
         {/* Logo */}
         <Link to="/" className="navbar-logo" onClick={closeMenu}>
           EXCLUSIVE

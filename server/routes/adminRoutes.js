@@ -1,5 +1,6 @@
 import express from "express";
 import crypto from "crypto";
+import multer from "multer";
 
 import User from "../models/User.js";
 import Membership from "../models/Membership.js";
@@ -17,8 +18,23 @@ import {
 import { protect } from "../middleware/authMiddleware.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
+import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 
 const router = express.Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed for passport photo and signature."));
+    }
+  },
+});
 
 // Every route below requires a logged-in admin
 router.use(protect, adminOnly);
@@ -52,7 +68,13 @@ router.get("/users", async (req, res) => {
 
 // POST /api/admin/members/existing
 // Creates a login account and imports the member's existing membership data.
-router.post("/members/existing", async (req, res) => {
+router.post(
+  "/members/existing",
+  upload.fields([
+    { name: "passportPhoto", maxCount: 1 },
+    { name: "signature", maxCount: 1 },
+  ]),
+  async (req, res) => {
   try {
     const {
       fullName,
@@ -68,7 +90,6 @@ router.post("/members/existing", async (req, res) => {
       occupation,
       stateOfOrigin,
       address,
-      passportPhotoUrl,
       frequency,
       voluntarySavings,
       referralSource,
@@ -88,7 +109,6 @@ router.post("/members/existing", async (req, res) => {
       beneficiaryRelationship,
       declarationName,
       declarationDate,
-      signatureUrl,
       declarationPhone,
     } = req.body;
 
@@ -131,6 +151,25 @@ router.post("/members/existing", async (req, res) => {
       .toString("base64url")
       .slice(0, 16) + "!A9";
 
+    const passportFile = req.files?.passportPhoto?.[0];
+    const signatureFile = req.files?.signature?.[0];
+
+    const [passportResult, signatureResult] = await Promise.all([
+      passportFile
+        ? uploadBufferToCloudinary(passportFile.buffer, {
+            folder: "exclusive-cooperative/membership",
+          })
+        : Promise.resolve(null),
+      signatureFile
+        ? uploadBufferToCloudinary(signatureFile.buffer, {
+            folder: "exclusive-cooperative/membership",
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const passportPhotoUrl = passportResult?.secure_url || null;
+    const signatureUrl = signatureResult?.secure_url || null;
+
     const user = await User.create({
       fullName: cleanName,
       email: cleanEmail,
@@ -160,8 +199,7 @@ router.post("/members/existing", async (req, res) => {
         occupation,
         stateOfOrigin,
         address,
-        passportPhotoUrl,
-        frequency,
+          frequency,
         voluntarySavings,
         referralSource,
         proposedAmount:
@@ -186,8 +224,7 @@ router.post("/members/existing", async (req, res) => {
         beneficiaryRelationship,
         declarationName: declarationName || cleanName,
         declarationDate,
-        signatureUrl,
-        declarationPhone,
+          declarationPhone,
         status: "approved",
       });
 

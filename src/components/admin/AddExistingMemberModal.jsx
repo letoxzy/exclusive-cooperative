@@ -34,8 +34,8 @@ const INITIAL_FORM = {
   declarationName: "",
   declarationDate: "",
   declarationPhone: "",
-  passportPhotoUrl: "",
-  signatureUrl: "",
+  passportPhoto: null,
+  signature: null,
 };
 
 const GROUPS = [
@@ -95,8 +95,8 @@ const GROUPS = [
       ["declarationName", "Applicant's Name", "text"],
       ["declarationDate", "Declaration Date", "date"],
       ["declarationPhone", "Declaration Phone", "text"],
-      ["passportPhotoUrl", "Passport Photo URL", "url"],
-      ["signatureUrl", "Signature URL", "url"],
+      ["passportPhoto", "Passport Photo", "file"],
+      ["signature", "Signature", "file"],
     ],
   },
 ];
@@ -119,7 +119,8 @@ function AddExistingMemberModal({ open, onClose, onCreate }) {
   if (!open) return null;
 
   const update = (field) => (e) => {
-    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+    const value = e.target.files?.[0] ?? e.target.value;
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -257,6 +258,21 @@ function AddExistingMemberModal({ open, onClose, onCreate }) {
                           <option value="interest-bearing">Interest-Bearing</option>
                           <option value="interest-free">Interest-Free</option>
                         </select>
+                      ) : type === "file" ? (
+                        <>
+                          <input
+                            id={`existing-${field}`}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={update(field)}
+                            required={required}
+                          />
+                          {form[field]?.name && (
+                            <small className="modal-file-name">
+                              Selected: {form[field].name}
+                            </small>
+                          )}
+                        </>
                       ) : (
                         <input
                           id={`existing-${field}`}

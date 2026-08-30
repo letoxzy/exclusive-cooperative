@@ -255,10 +255,23 @@ function AdminDashboard() {
     try {
       setError("");
 
+      const formData = new FormData();
+
+      Object.entries(memberData).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === "") return;
+
+        if (value instanceof File) {
+          formData.append(key, value);
+        } else {
+          formData.append(key, value);
+        }
+      });
+
       const result = await request("/admin/members/existing", {
         method: "POST",
         token: user.token,
-        body: memberData,
+        body: formData,
+        isFormData: true,
       });
 
       await loadMembers();

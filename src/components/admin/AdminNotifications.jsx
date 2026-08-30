@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FaBell } from "react-icons/fa6";
 
 function AdminNotifications({
@@ -11,93 +11,183 @@ function AdminNotifications({
   onNavigate,
 }) {
   const [isOpen, setIsOpen] = useState(false);
+
   const [readIds, setReadIds] = useState(() => {
     try {
-      return JSON.parse(
-        localStorage.getItem("adminNotificationReadIds") || "[]",
-      );
+      const saved = localStorage.getItem("adminNotificationReadIds");
+
+      const parsed = saved ? JSON.parse(saved) : [];
+
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
   });
 
+  // Used to keep "5m ago", "2h ago", etc. up to date
+  const [now, setNow] = useState(() => Date.now());
+
   const containerRef = useRef(null);
+
+  /* ================================
+     UPDATE RELATIVE TIME
+  ================================= */
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   /* ================================
      BUILD NOTIFICATIONS
   ================================= */
 
-  const notifications = [
-    ...applications
-      .filter((item) => item.status === "pending")
-      .map((item) => ({
-        id: `membership-${item._id}`,
-        type: "membership",
-        title: "New Membership Application",
-        message: `${item.user?.fullName || "A member"} submitted a membership application.`,
-        date: item.createdAt || item.submittedDate,
-        section: "membership",
-      })),
+  const notifications = useMemo(() => {
+    const items = [
+      /* ================================
+         MEMBERSHIP
+      ================================= */
 
-    ...requests
-      .filter((item) => item.status === "pending")
-      .map((item) => ({
-        id: `savings-${item._id}`,
-        type: "savings",
-        title: "New Savings Request",
-        message: `${item.user?.fullName || "A member"} submitted a savings request.`,
-        date: item.createdAt,
-        section: "savings",
-      })),
+      ...applications
+        .filter((item) => item.status === "pending")
+        .map((item) => ({
+          id: `membership-${item._id}`,
+          type: "membership",
+          title: "New Membership Application",
+          message: `${
+            item.user?.fullName || item.fullName || "A member"
+          } submitted a membership application.`,
+          date: item.createdAt || item.submittedDate,
+          section: "membership",
+        })),
 
-    ...loanEligibilityApplications
-      .filter((item) => item.status === "pending")
-      .map((item) => ({
-        id: `loan-eligibility-${item._id}`,
-        type: "loan-eligibility",
-        title: "Full Loan Application",
-        message: `${item.user?.fullName || "A member"} submitted a full loan application.`,
-        date: item.submittedDate || item.createdAt,
-        section: "loan-eligibility",
-      })),
+      /* ================================
+         SAVINGS
+      ================================= */
 
-    ...loans
-      .filter((item) => item.status === "pending")
-      .map((item) => ({
-        id: `loan-${item._id}`,
-        type: "loan",
-        title: "New Loan Request",
-        message: `${item.user?.fullName || "A member"} submitted a loan request.`,
-        date: item.applicationDate || item.createdAt,
-        section: "loan-requests",
-      })),
+      ...requests
+        .filter((item) => item.status === "pending")
+        .map((item) => ({
+          id: `savings-${item._id}`,
+          type: "savings",
+          title: "New Savings Request",
+          message: `${
+            item.user?.fullName || "A member"
+          } submitted a savings request.`,
+          date: item.createdAt,
+          section: "savings",
+        })),
 
-    ...loanRepayments
-      .filter((item) => item.status === "pending")
-      .map((item) => ({
-        id: `repayment-${item._id}`,
-        type: "repayment",
-        title: "Loan Repayment Pending",
-        message: `${item.user?.fullName || "A member"} submitted a repayment.`,
-        date: item.createdAt,
-        section: "repayments",
-      })),
+      /* ================================
+         LOAN ELIGIBILITY
+      ================================= */
 
-    ...withdrawals
-      .filter((item) => item.status === "processing")
-      .map((item) => ({
-        id: `withdrawal-${item._id}`,
-        type: "withdrawal",
-        title: "Withdrawal Processing",
-        message: `${item.user?.fullName || "A member"} has a withdrawal being processed.`,
-        date: item.createdAt,
-        section: "withdrawals",
-      })),
-  ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+      ...loanEligibilityApplications
+        .filter((item) => item.status === "pending")
+        .map((item) => ({
+          id: `loan-eligibility-${item._id}`,
+          type: "loan-eligibility",
+          title: "Full Loan Application",
+          message: `${
+            item.user?.fullName || "A member"
+          } submitted a full loan application.`,
+          date: item.submittedDate || item.createdAt,
+          section: "loan-eligibility",
+        })),
 
-  const unreadNotifications = notifications.filter(
-    (notification) => !readIds.includes(notification.id),
-  );
+      /* ================================
+         LOAN REQUESTS
+      ================================= */
+
+      ...loans
+        .filter((item) => item.status === "pending")
+        .map((item) => ({
+          id: `loan-${item._id}`,
+          type: "loan",
+          title: "New Loan Request",
+          message: `${
+            item.user?.fullName || "A member"
+          } submitted a loan request.`,
+          date: item.applicationDate || item.createdAt,
+          section: "loan-requests",
+        })),
+
+      /* ================================
+         LOAN REPAYMENTS
+      ================================= */
+
+      ...loanRepayments
+        .filter((item) => item.status === "pending")
+        .map((item) => ({
+          id: `repayment-${item._id}`,
+          type: "repayment",
+          title: "Loan Repayment Pending",
+          message: `${
+            item.user?.fullName || "A member"
+          } submitted a repayment.`,
+          date: item.createdAt,
+          section: "repayments",
+        })),
+
+      /* ================================
+         WITHDRAWALS
+      ================================= */
+
+      ...withdrawals
+        .filter((item) => item.status === "processing")
+        .map((item) => ({
+          id: `withdrawal-${item._id}`,
+          type: "withdrawal",
+          title: "Withdrawal Processing",
+          message: `${
+            item.user?.fullName || "A member"
+          } has a withdrawal being processed.`,
+          date: item.createdAt,
+          section: "withdrawals",
+        })),
+    ];
+
+    /*
+      Remove duplicate notifications.
+      This protects against the same record appearing
+      more than once in the source arrays.
+    */
+
+    const uniqueItems = Array.from(
+      new Map(items.map((item) => [item.id, item])).values(),
+    );
+
+    /*
+      Sort newest first.
+    */
+
+    return uniqueItems.sort((a, b) => {
+      const dateA = new Date(a.date || 0).getTime();
+      const dateB = new Date(b.date || 0).getTime();
+
+      return dateB - dateA;
+    });
+  }, [
+    applications,
+    requests,
+    loans,
+    loanEligibilityApplications,
+    loanRepayments,
+    withdrawals,
+  ]);
+
+  /* ================================
+     UNREAD NOTIFICATIONS
+  ================================= */
+
+  const unreadNotifications = useMemo(() => {
+    return notifications.filter(
+      (notification) => !readIds.includes(notification.id),
+    );
+  }, [notifications, readIds, now]);
 
   /* ================================
      CLOSE WHEN CLICKING OUTSIDE
@@ -121,12 +211,16 @@ function AdminNotifications({
   }, []);
 
   /* ================================
-     MARK AS READ
+     MARK ONE AS READ
   ================================= */
 
   const markAsRead = (id) => {
     setReadIds((previous) => {
-      const updated = [...new Set([...previous, id])];
+      if (previous.includes(id)) {
+        return previous;
+      }
+
+      const updated = [...previous, id];
 
       localStorage.setItem("adminNotificationReadIds", JSON.stringify(updated));
 
@@ -134,14 +228,23 @@ function AdminNotifications({
     });
   };
 
+  /* ================================
+     HANDLE NOTIFICATION CLICK
+  ================================= */
+
   const handleNotificationClick = (notification) => {
     markAsRead(notification.id);
+
     setIsOpen(false);
 
-    if (notification.section) {
+    if (notification.section && onNavigate) {
       onNavigate(notification.section);
     }
   };
+
+  /* ================================
+     MARK ALL AS READ
+  ================================= */
 
   const markAllAsRead = () => {
     const allIds = notifications.map((notification) => notification.id);
@@ -151,13 +254,31 @@ function AdminNotifications({
     localStorage.setItem("adminNotificationReadIds", JSON.stringify(allIds));
   };
 
+  /* ================================
+     FORMAT TIME
+  ================================= */
+
   const formatTime = (date) => {
-    if (!date) return "Recently";
+    if (!date) {
+      return "Recently";
+    }
 
     const notificationDate = new Date(date);
-    const now = new Date();
 
-    const difference = Math.floor((now - notificationDate) / 1000);
+    if (Number.isNaN(notificationDate.getTime())) {
+      return "Recently";
+    }
+
+    const difference = Math.floor((now - notificationDate.getTime()) / 1000);
+
+    /*
+      Future timestamps can happen because of
+      small server/client clock differences.
+    */
+
+    if (difference < 0) {
+      return "Just now";
+    }
 
     if (difference < 60) {
       return "Just now";
@@ -178,13 +299,24 @@ function AdminNotifications({
     return notificationDate.toLocaleDateString();
   };
 
+  /* ================================
+     RENDER
+  ================================= */
+
   return (
     <div className="admin-notification-wrapper" ref={containerRef}>
+      {/* Notification Bell */}
+
       <button
         type="button"
         className="admin-notification-button"
         onClick={() => setIsOpen((previous) => !previous)}
-        aria-label="Notifications"
+        aria-label={`Notifications${
+          unreadNotifications.length > 0
+            ? `, ${unreadNotifications.length} unread`
+            : ""
+        }`}
+        aria-expanded={isOpen}
       >
         <FaBell />
 
@@ -197,12 +329,21 @@ function AdminNotifications({
         )}
       </button>
 
+      {/* Notification Dropdown */}
+
       {isOpen && (
         <div className="admin-notification-dropdown">
+          {/* Header */}
+
           <div className="admin-notification-header">
             <div>
               <h3>Notifications</h3>
-              <span>{unreadNotifications.length} unread</span>
+
+              <span>
+                {unreadNotifications.length === 0
+                  ? "All caught up"
+                  : `${unreadNotifications.length} unread`}
+              </span>
             </div>
 
             {unreadNotifications.length > 0 && (
@@ -216,12 +357,18 @@ function AdminNotifications({
             )}
           </div>
 
+          {/* Notification List */}
+
           <div className="admin-notification-list">
             {notifications.length === 0 ? (
               <div className="admin-notification-empty">
                 <FaBell />
+
                 <p>No notifications</p>
-                <span>You're all caught up.</span>
+
+                <span>
+                  New membership, savings and loan activity will appear here.
+                </span>
               </div>
             ) : (
               notifications.slice(0, 10).map((notification) => {
@@ -236,7 +383,10 @@ function AdminNotifications({
                     }`}
                     onClick={() => handleNotificationClick(notification)}
                   >
-                    <span className="admin-notification-dot" />
+                    <span
+                      className="admin-notification-dot"
+                      aria-hidden="true"
+                    />
 
                     <div className="admin-notification-content">
                       <strong>{notification.title}</strong>
@@ -250,6 +400,8 @@ function AdminNotifications({
               })
             )}
           </div>
+
+          {/* Footer */}
 
           {notifications.length > 10 && (
             <div className="admin-notification-footer">

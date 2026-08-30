@@ -2,6 +2,7 @@ import express from "express";
 import multer from "multer";
 import Membership from "../models/Membership.js";
 import User from "../models/User.js";
+import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 
@@ -138,6 +139,14 @@ router.post(
         user: req.user._id,
         passportPhotoUrl: passportResult?.secure_url,
         signatureUrl: signatureResult?.secure_url,
+      });
+
+      await Notification.create({
+        user: req.user._id,
+        type: "membership",
+        title: "Membership Application Submitted",
+        message:
+          "Your membership application has been submitted and is awaiting review.",
       });
 
       res.status(201).json(application);

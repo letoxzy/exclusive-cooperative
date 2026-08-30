@@ -744,6 +744,13 @@ router.post(
             withdrawal,
             "success"
           );
+
+          await Notification.create({
+            user: withdrawal.user,
+            type: "withdrawal",
+            title: "Withdrawal Successful",
+            message: `Your withdrawal of ₦${Number(withdrawal.amount || 0).toLocaleString()} has been successfully processed.`,
+          });
         } else {
           await withdrawal.save();
         }
@@ -799,6 +806,13 @@ router.post(
               err.message ||
                 "Transfer could not be initiated."
             );
+
+            await Notification.create({
+              user: withdrawal.user,
+              type: "withdrawal",
+              title: "Withdrawal Failed",
+              message: `Your withdrawal of ₦${Number(withdrawal.amount || 0).toLocaleString()} could not be completed.`,
+            });
           } catch (settleError) {
             console.error(
               "Withdrawal settlement error:",

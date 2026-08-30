@@ -3,6 +3,7 @@ import Loan from "../models/Loan.js";
 import LoanRepayment from "../models/LoanRepayment.js";
 import LoanEligibility from "../models/LoanEligibility.js";
 import Membership from "../models/Membership.js";
+import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 
@@ -171,6 +172,14 @@ router.post(
       const safeApplication = await LoanEligibility.findById(application._id).select(
         "-bvn"
       );
+
+      await Notification.create({
+        user: req.user._id,
+        type: "loan-eligibility",
+        title: "Full Loan Application Submitted",
+        message:
+          "Your Full Loan Application has been submitted and is awaiting review.",
+      });
 
       res.status(201).json(safeApplication);
     } catch (err) {
@@ -438,6 +447,13 @@ router.post("/", protect, requireApprovedMember, async (req, res) => {
       "fullName email savingsBalance isApprovedMember"
     );
 
+    await Notification.create({
+      user: req.user._id,
+      type: "loan",
+      title: "Loan Application Submitted",
+      message: `Your ${loanType} loan application for ₦${requestedAmount.toLocaleString()} has been submitted and is awaiting review.`,
+    });
+
     res.status(201).json(populatedLoan);
   } catch (err) {
     res.status(500).json({
@@ -529,6 +545,13 @@ router.post("/:id/repayments", protect, async (req, res) => {
       loan: loan._id,
       user: req.user._id,
       amount: requestedAmount,
+    });
+
+    await Notification.create({
+      user: req.user._id,
+      type: "repayment",
+      title: "Loan Repayment Submitted",
+      message: `Your loan repayment of ₦${requestedAmount.toLocaleString()} has been submitted and is awaiting confirmation.`,
     });
 
     res.status(201).json(repayment);

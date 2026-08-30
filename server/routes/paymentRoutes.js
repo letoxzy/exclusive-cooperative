@@ -1,5 +1,6 @@
 import express from "express";
 import SavingsTransaction from "../models/SavingsTransaction.js";
+import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 
@@ -79,6 +80,13 @@ router.get("/paystack/verify/:reference", protect, async (req, res) => {
     req.user.savingsBalance += amount;
     req.user.savingsWithdrawalLocked = false;
     await req.user.save();
+
+    await Notification.create({
+      user: req.user._id,
+      type: "savings",
+      title: "Savings Payment Successful",
+      message: `Your savings payment of ₦${amount.toLocaleString()} was successful.`,
+    });
 
     res.json({ status: "success", amount, savingsBalance: req.user.savingsBalance });
   } catch (err) {

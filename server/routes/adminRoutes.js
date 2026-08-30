@@ -114,6 +114,23 @@ router.patch("/savings-requests/:id", async (req, res) => {
 
     await txn.save();
 
+    const savingsNotification =
+      action === "approve"
+        ? {
+            title: "Savings Payment Approved",
+            message: `Your savings payment of ₦${Number(txn.amount || 0).toLocaleString()} has been approved and added to your savings balance.`,
+          }
+        : {
+            title: "Savings Payment Rejected",
+            message: `Your savings payment of ₦${Number(txn.amount || 0).toLocaleString()} was rejected.`,
+          };
+
+    await Notification.create({
+      user: txn.user,
+      type: "savings",
+      ...savingsNotification,
+    });
+
     res.json(txn);
   } catch (err) {
     res.status(500).json({
@@ -326,6 +343,15 @@ router.patch(
 
         await application.save();
 
+        await Notification.create({
+          user: application.user,
+          type: "loan-eligibility",
+          title: "Full Loan Application Update",
+          message: application.rejectionReason
+            ? `Your Full Loan Application was not approved. Reason: ${application.rejectionReason}`
+            : "Your Full Loan Application was not approved.",
+        });
+
         const populated = await LoanEligibility.findById(
           application._id
         ).populate(
@@ -344,6 +370,14 @@ router.patch(
 
         await User.findByIdAndUpdate(application.user, {
           isLoanEligible: true,
+        });
+
+        await Notification.create({
+          user: application.user,
+          type: "loan-eligibility",
+          title: "Loan Eligibility Approved",
+          message:
+            "Your Full Loan Application has been approved. You are now eligible to apply for a loan.",
         });
 
         const populated = await LoanEligibility.findById(
@@ -441,6 +475,15 @@ router.patch("/loans/:id", async (req, res) => {
       loan.rejectedDate = new Date();
 
       await loan.save();
+
+      await Notification.create({
+        user: loan.user,
+        type: "loan",
+        title: "Loan Application Rejected",
+        message: loan.rejectionReason
+          ? `Your loan application was rejected. Reason: ${loan.rejectionReason}`
+          : "Your loan application was rejected.",
+      });
 
       const populatedLoan = await Loan.findById(
         loan._id
@@ -556,6 +599,13 @@ router.patch("/loans/:id", async (req, res) => {
 
       await loan.save();
 
+      await Notification.create({
+        user: loan.user,
+        type: "loan",
+        title: "Loan Application Approved",
+        message: `Your loan application for ₦${Number(loan.amount || 0).toLocaleString()} has been approved.`,
+      });
+
       const populatedLoan = await Loan.findById(
         loan._id
       ).populate(
@@ -606,6 +656,13 @@ router.patch("/loans/:id/disburse", async (req, res) => {
         savingsBalance: loan.amount,
         loanFundsBalance: loan.amount,
       },
+    });
+
+    await Notification.create({
+      user: loan.user,
+      type: "loan",
+      title: "Loan Disbursed",
+      message: `Your loan of ₦${Number(loan.amount || 0).toLocaleString()} has been disbursed to your cooperative account.`,
     });
 
     const populatedLoan = await Loan.findById(
@@ -680,6 +737,13 @@ router.patch(
         repayment.status = "rejected";
 
         await repayment.save();
+
+        await Notification.create({
+          user: repayment.user,
+          type: "repayment",
+          title: "Loan Repayment Rejected",
+          message: `Your loan repayment of ₦${Number(repayment.amount || 0).toLocaleString()} was rejected.`,
+        });
 
         return res.json(repayment);
       }
@@ -757,6 +821,22 @@ router.patch(
       repayment.status = "approved";
 
       await repayment.save();
+
+      await Notification.create({
+        user: repayment.user,
+        type: "repayment",
+        title: "Loan Repayment Confirmed",
+        message: `Your loan repayment of ₦${Number(repayment.amount || 0).toLocaleString()} has been confirmed.`,
+      });
+
+      if (loan.status === "completed") {
+        await Notification.create({
+          user: loan.user,
+          type: "loan",
+          title: "Loan Completed",
+          message: "Your loan has been fully repaid and marked as completed.",
+        });
+      }
 
       const totalRepayment = Number(
         loan.totalRepayment ||
@@ -898,6 +978,13 @@ router.post(
           withdrawal,
           "success"
         );
+
+        await Notification.create({
+          user: withdrawal.user,
+          type: "withdrawal",
+          title: "Withdrawal Successful",
+          message: `Your withdrawal of ₦${Number(withdrawal.amount || 0).toLocaleString()} has been successfully processed.`,
+        });
       } else if (
         transfer.status === "failed"
       ) {
@@ -907,6 +994,13 @@ router.post(
           transfer.failures ||
             "Paystack marked the transfer as failed."
         );
+
+        await Notification.create({
+          user: withdrawal.user,
+          type: "withdrawal",
+          title: "Withdrawal Failed",
+          message: `Your withdrawal of ₦${Number(withdrawal.amount || 0).toLocaleString()} could not be completed.`,
+        });
       } else if (
         transfer.status === "reversed"
       ) {
@@ -915,6 +1009,13 @@ router.post(
           "reversed",
           "Paystack reversed the transfer."
         );
+
+        await Notification.create({
+          user: withdrawal.user,
+          type: "withdrawal",
+          title: "Withdrawal Reversed",
+          message: `Your withdrawal of ₦${Number(withdrawal.amount || 0).toLocaleString()} has been reversed.`,
+        });
       } else {
         await withdrawal.save();
       }
@@ -1318,6 +1419,13 @@ router.patch(
 
       await entry.save();
 
+      await Notification.create({
+        user: entry.user,
+        type: "dividend",
+        title: "Dividend Paid",
+        message: `Your dividend of ₦${Number(entry.dividendAmount || 0).toLocaleString()} has been paid.`,
+      });
+
       const remainingPending =
         await DividendEntry.countDocuments({
           distribution:
@@ -1369,16 +1477,33 @@ router.patch(
         });
       }
 
+      const pendingEntries = await DividendEntry.find({
+        distribution: distribution._id,
+        status: "pending",
+      });
+
+      const paidDate = new Date();
+
       await DividendEntry.updateMany(
         {
-          distribution:
-            distribution._id,
+          distribution: distribution._id,
           status: "pending",
         },
         {
           status: "paid",
-          paidDate: new Date(),
+          paidDate,
         }
+      );
+
+      await Promise.all(
+        pendingEntries.map((entry) =>
+          Notification.create({
+            user: entry.user,
+            type: "dividend",
+            title: "Dividend Paid",
+            message: `Your dividend of ₦${Number(entry.dividendAmount || 0).toLocaleString()} has been paid.`,
+          })
+        )
       );
 
       distribution.status =

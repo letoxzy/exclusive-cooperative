@@ -9,6 +9,7 @@ import { FaUsers, FaHandHoldingDollar, FaClock, FaBell } from "react-icons/fa6";
 
 import AdminSidebar from "../components/admin/AdminSidebar";
 import MembershipModal from "../components/admin/MembershipModal";
+import AddExistingMemberModal from "../components/admin/AddExistingMemberModal";
 import AdminNotifications from "../components/admin/AdminNotifications";
 
 function AdminDashboard() {
@@ -54,6 +55,7 @@ function AdminDashboard() {
   const [viewingApplication, setViewingApplication] = useState(null);
   const [openInEditMode, setOpenInEditMode] = useState(false);
   const [expandedEligibilityId, setExpandedEligibilityId] = useState(null);
+  const [showAddExistingMember, setShowAddExistingMember] = useState(false);
 
   /* ================================
      LOAD DATA
@@ -242,6 +244,28 @@ function AdminDashboard() {
       await loadRequests();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  /* ================================
+     EXISTING MEMBER ACCOUNT
+  ================================= */
+
+  const handleCreateExistingMember = async (memberData) => {
+    try {
+      setError("");
+
+      const result = await request("/admin/members/existing", {
+        method: "POST",
+        token: user.token,
+        body: memberData,
+      });
+
+      await loadMembers();
+      return result;
+    } catch (err) {
+      setError(err.message);
+      throw err;
     }
   };
 
@@ -1551,6 +1575,14 @@ function AdminDashboard() {
               View cooperative members and their savings.
             </p>
           </div>
+
+          <button
+            type="button"
+            className="admin-primary-btn"
+            onClick={() => setShowAddExistingMember(true)}
+          >
+            + Add Existing Member
+          </button>
         </div>
 
         <section className="admin-card">
@@ -1564,6 +1596,7 @@ function AdminDashboard() {
                   <th>Membership Type</th>
                   <th>Savings Balance</th>
                   <th>Loan Eligibility</th>
+                  <th>Account Setup</th>
                   <th>Joined</th>
                 </tr>
               </thead>
@@ -1600,6 +1633,14 @@ function AdminDashboard() {
 
                     <td>
                       ₦{(Number(m.savingsBalance || 0) * 2).toLocaleString()}
+                    </td>
+
+                    <td>
+                      <span
+                        className={`status-badge ${m.mustChangePassword ? "pending" : "approved"}`}
+                      >
+                        {m.mustChangePassword ? "Password Pending" : "Ready"}
+                      </span>
                     </td>
 
                     <td>{new Date(m.createdAt).toLocaleDateString()}</td>
@@ -2459,6 +2500,12 @@ function AdminDashboard() {
           {!loading && renderContent()}
         </div>
       </main>
+
+      <AddExistingMemberModal
+        open={showAddExistingMember}
+        onClose={() => setShowAddExistingMember(false)}
+        onCreate={handleCreateExistingMember}
+      />
 
       {viewingApplication && (
         <MembershipModal

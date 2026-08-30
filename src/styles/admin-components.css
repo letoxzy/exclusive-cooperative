@@ -529,3 +529,221 @@ button.loan-type-badge.full-application-badge {
     max-width: none;
   }
 }
+/* =================================
+   ADD EXISTING MEMBER
+================================= */
+
+.admin-page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.admin-primary-btn {
+  border: none;
+  border-radius: 8px;
+  background: var(--navy);
+  color: var(--white);
+  padding: 11px 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+  white-space: nowrap;
+}
+
+.admin-primary-btn:hover {
+  background: #17375f;
+  transform: translateY(-1px);
+}
+
+.add-member-modal {
+  width: min(980px, calc(100vw - 30px));
+  max-height: calc(100vh - 40px);
+}
+
+.add-member-subtitle {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.add-member-form {
+  overflow-y: auto;
+}
+
+.add-member-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 22px;
+  padding: 13px 15px;
+  border: 1px solid #e8dfc5;
+  border-radius: 9px;
+  background: #fffaf0;
+}
+
+.add-member-notice strong {
+  color: var(--navy);
+  font-size: 13px;
+}
+
+.add-member-notice span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.add-member-form .modal-section {
+  margin-bottom: 22px;
+}
+
+.add-member-form .modal-section h3 {
+  margin-bottom: 12px;
+}
+
+.add-member-form .modal-field label {
+  display: block;
+}
+
+.add-member-form .modal-field input,
+.add-member-form .modal-field textarea,
+.add-member-form .modal-field select {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 11px;
+  background: var(--white);
+  color: var(--navy);
+  font: inherit;
+  font-size: 13px;
+}
+
+.add-member-form .modal-field input:focus,
+.add-member-form .modal-field textarea:focus,
+.add-member-form .modal-field select:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.add-member-form .modal-field-full {
+  grid-column: 1 / -1;
+}
+
+.add-member-footer {
+  position: sticky;
+  bottom: -1px;
+  margin: 20px -2px -2px;
+  padding-top: 15px;
+  background: var(--white);
+}
+
+.existing-member-success {
+  text-align: center;
+  padding: 8px 0 22px;
+}
+
+.existing-member-success-icon {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 12px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #ecfdf3;
+  color: #16804b;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.existing-member-success h3 {
+  margin: 0 0 7px;
+  color: var(--navy);
+  font-size: 18px;
+}
+
+.existing-member-success p {
+  max-width: 600px;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.temporary-credentials-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--light);
+}
+
+.temporary-credentials-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.temporary-credentials-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.temporary-credentials-card strong {
+  color: var(--navy);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.temporary-password {
+  letter-spacing: 0.5px;
+}
+
+.temporary-password-warning {
+  margin-top: 14px;
+  padding: 13px 15px;
+  border: 1px solid #f1dfad;
+  border-radius: 9px;
+  background: #fffaf0;
+}
+
+.temporary-password-warning strong {
+  color: var(--navy);
+  font-size: 12px;
+}
+
+.temporary-password-warning p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.add-member-result-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 700px) {
+  .admin-page-heading {
+    flex-direction: column;
+  }
+
+  .admin-primary-btn {
+    width: 100%;
+  }
+
+  .add-member-modal {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+}

@@ -13,6 +13,10 @@ const userSchema = new mongoose.Schema(
     },
     password: { type: String, required: true },
 
+    // Legacy members added by an administrator receive a temporary password
+    // and must choose their own password on first login.
+    mustChangePassword: { type: Boolean, default: false },
+
     savingsBalance: { type: Number, default: 0 },
 
     // Amount reserved by withdrawal requests that are still processing.

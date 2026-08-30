@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 
 import User from "../models/User.js";
 import Membership from "../models/Membership.js";
@@ -39,6 +40,188 @@ router.get("/users", async (req, res) => {
   } catch (err) {
     res.status(500).json({
       message: err.message,
+    });
+  }
+});
+
+/*
+  ============================
+  ADD EXISTING MEMBER
+  ============================
+*/
+
+// POST /api/admin/members/existing
+// Creates a login account and imports the member's existing membership data.
+router.post("/members/existing", async (req, res) => {
+  try {
+    const {
+      fullName,
+      gender,
+      phone,
+      email,
+      employmentStatus,
+      employmentOther,
+      lga,
+      dob,
+      maritalStatus,
+      whatsapp,
+      occupation,
+      stateOfOrigin,
+      address,
+      passportPhotoUrl,
+      frequency,
+      voluntarySavings,
+      referralSource,
+      proposedAmount,
+      startDate,
+      membershipCategory,
+      membershipType,
+      kinName,
+      kinPhone,
+      kinAddress,
+      kinRelationship,
+      kinAltPhone,
+      kinEmail,
+      beneficiaryName,
+      beneficiaryPhone,
+      beneficiaryAddress,
+      beneficiaryRelationship,
+      declarationName,
+      declarationDate,
+      signatureUrl,
+      declarationPhone,
+    } = req.body;
+
+    const cleanName = String(fullName || "").trim();
+    const cleanEmail = String(email || "").trim().toLowerCase();
+
+    if (!cleanName || !cleanEmail) {
+      return res.status(400).json({
+        message: "Full name and email are required.",
+      });
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+      return res.status(400).json({
+        message: "Please provide a valid email address.",
+      });
+    }
+
+    const existingUser = await User.findOne({ email: cleanEmail });
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: "An account with this email already exists.",
+      });
+    }
+
+    const existingMembership = await Membership.findOne({
+      email: cleanEmail,
+    });
+
+    if (existingMembership) {
+      return res.status(409).json({
+        message: "A membership record with this email already exists.",
+      });
+    }
+
+    // Random temporary credential. Only the bcrypt hash is stored in MongoDB.
+    const temporaryPassword = crypto
+      .randomBytes(12)
+      .toString("base64url")
+      .slice(0, 16) + "!A9";
+
+    const user = await User.create({
+      fullName: cleanName,
+      email: cleanEmail,
+      password: temporaryPassword,
+      role: "member",
+      isApprovedMember: true,
+      membershipType:
+        membershipType === "interest-free"
+          ? "interest-free"
+          : "interest-bearing",
+      mustChangePassword: true,
+    });
+
+    try {
+      const membership = await Membership.create({
+        user: user._id,
+        fullName: cleanName,
+        gender,
+        phone,
+        email: cleanEmail,
+        employmentStatus,
+        employmentOther,
+        lga,
+        dob,
+        maritalStatus,
+        whatsapp,
+        occupation,
+        stateOfOrigin,
+        address,
+        passportPhotoUrl,
+        frequency,
+        voluntarySavings,
+        referralSource,
+        proposedAmount:
+          proposedAmount === "" || proposedAmount == null
+            ? undefined
+            : Number(proposedAmount),
+        startDate,
+        membershipCategory,
+        membershipType:
+          membershipType === "interest-free"
+            ? "interest-free"
+            : "interest-bearing",
+        kinName,
+        kinPhone,
+        kinAddress,
+        kinRelationship,
+        kinAltPhone,
+        kinEmail,
+        beneficiaryName,
+        beneficiaryPhone,
+        beneficiaryAddress,
+        beneficiaryRelationship,
+        declarationName: declarationName || cleanName,
+        declarationDate,
+        signatureUrl,
+        declarationPhone,
+        status: "approved",
+      });
+
+      await Notification.create({
+        user: user._id,
+        type: "membership",
+        title: "Member Account Created",
+        message:
+          "Your cooperative account has been created from your existing membership record. Please change your temporary password after your first login.",
+      });
+
+      return res.status(201).json({
+        message: "Existing member account created successfully.",
+        temporaryPassword,
+        user: {
+          _id: user._id,
+          fullName: user.fullName,
+          email: user.email,
+          role: user.role,
+          isApprovedMember: user.isApprovedMember,
+          membershipType: user.membershipType,
+          mustChangePassword: user.mustChangePassword,
+          createdAt: user.createdAt,
+        },
+        membership,
+      });
+    } catch (membershipError) {
+      await User.findByIdAndDelete(user._id);
+      throw membershipError;
+    }
+  } catch (err) {
+    console.error("Add existing member error:", err);
+    res.status(500).json({
+      message: err.message || "Failed to create existing member account.",
     });
   }
 });

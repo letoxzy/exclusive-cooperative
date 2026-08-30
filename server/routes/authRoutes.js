@@ -35,6 +35,7 @@ router.post("/register", async (req, res) => {
       savingsBalance: user.savingsBalance,
       avatarUrl: user.avatarUrl,
       isApprovedMember: user.isApprovedMember,
+      mustChangePassword: user.mustChangePassword,
       createdAt: user.createdAt,
       token: generateToken(user._id),
     });
@@ -61,6 +62,7 @@ router.post("/login", async (req, res) => {
       savingsBalance: user.savingsBalance,
       avatarUrl: user.avatarUrl,
       isApprovedMember: user.isApprovedMember,
+      mustChangePassword: user.mustChangePassword,
       createdAt: user.createdAt,
       token: generateToken(user._id),
     });

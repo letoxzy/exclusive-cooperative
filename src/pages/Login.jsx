@@ -22,6 +22,12 @@ function Login() {
 
     try {
       const data = await login(form.email, form.password);
+
+      if (data.mustChangePassword) {
+        navigate("/change-password", { replace: true });
+        return;
+      }
+
       navigate(data.role === "admin" ? "/admin" : "/dashboard");
     } catch (err) {
       setError(err.message);

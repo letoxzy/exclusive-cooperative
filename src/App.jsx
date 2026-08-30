@@ -15,6 +15,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
+import ChangePassword from "./pages/ChangePassword";
 import Withdrawals from "./pages/Withdrawals";
 import PaymentCallback from "./pages/PaymentCallback";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -89,6 +90,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/change-password"
+            element={
+              <ProtectedRoute allowPasswordChange>
+                <ChangePassword />
               </ProtectedRoute>
             }
           />

@@ -88,6 +88,7 @@ router.patch("/me/password", protect, async (req, res) => {
     // Set the new password.
     // User.js pre-save middleware will automatically hash it.
     user.password = newPassword;
+    user.mustChangePassword = false;
 
     await user.save();
 

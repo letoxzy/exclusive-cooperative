@@ -1,11 +1,14 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-function ProtectedRoute({ children }) {
+function ProtectedRoute({ children, allowPasswordChange = false }) {
   const { user, loading } = useAuth();
 
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.mustChangePassword && !allowPasswordChange) {
+    return <Navigate to="/change-password" replace />;
+  }
 
   return children;
 }

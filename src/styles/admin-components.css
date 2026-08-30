@@ -747,3 +747,546 @@ button.loan-type-badge.full-application-badge {
     max-height: calc(100vh - 20px);
   }
 }
+
+/* =========================================
+   ADD EXISTING MEMBER MODAL
+========================================= */
+
+.add-member-modal {
+  width: min(96vw, 1000px);
+  max-height: 92vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* =========================================
+   HEADER
+========================================= */
+
+.add-member-modal .modal-header {
+  flex-shrink: 0;
+}
+
+.add-member-subtitle {
+  display: block;
+  margin-top: 5px;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* =========================================
+   FORM BODY
+========================================= */
+
+.add-member-form {
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.add-member-form::-webkit-scrollbar {
+  width: 7px;
+}
+
+.add-member-form::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.add-member-form::-webkit-scrollbar-thumb {
+  background: #d0d5dd;
+  border-radius: 10px;
+}
+
+/* =========================================
+   NOTICE
+========================================= */
+
+.add-member-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  padding: 14px 16px;
+  margin-bottom: 22px;
+
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #c9a227;
+  border-radius: 8px;
+}
+
+.add-member-notice strong {
+  color: #0b1f3a;
+  font-size: 14px;
+}
+
+.add-member-notice span {
+  color: #667085;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* =========================================
+   SECTIONS
+========================================= */
+
+.modal-section {
+  margin-bottom: 24px;
+  padding: 22px;
+
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.modal-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.modal-section h3 {
+  margin: 0 0 20px;
+
+  color: #0b1f3a;
+  font-size: 17px;
+  font-weight: 700;
+
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eef0f3;
+}
+
+/* =========================================
+   GRID
+========================================= */
+
+.modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.modal-field-full {
+  grid-column: 1 / -1;
+}
+
+/* =========================================
+   LABELS
+========================================= */
+
+.modal-field-label {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* =========================================
+   INPUTS
+========================================= */
+
+.modal-field input,
+.modal-field select,
+.modal-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+
+  padding: 10px 12px;
+
+  background: #ffffff;
+  color: #172033;
+
+  font-family: inherit;
+  font-size: 14px;
+
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.modal-field input,
+.modal-field select {
+  min-height: 42px;
+}
+
+.modal-field textarea {
+  resize: vertical;
+  min-height: 70px;
+}
+
+.modal-field input:focus,
+.modal-field select:focus,
+.modal-field textarea:focus {
+  outline: none;
+  border-color: #c9a227;
+  box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.12);
+}
+
+/* =========================================
+   FILE INPUTS
+========================================= */
+
+.modal-field input[type="file"] {
+  padding: 8px;
+  cursor: pointer;
+  background: #ffffff;
+}
+
+.modal-field input[type="file"]::file-selector-button {
+  margin-right: 10px;
+
+  padding: 8px 12px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+
+  background: #f8fafc;
+  color: #0b1f3a;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.modal-file-name {
+  color: #667085;
+  font-size: 12px;
+}
+
+/* =========================================
+   RADIO / PILL GROUP
+========================================= */
+
+.modal-field .pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modal-field .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 8px 13px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+
+  background: #ffffff;
+  color: #172033;
+
+  font-size: 13px;
+
+  cursor: pointer;
+
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.modal-field .pill:hover {
+  border-color: #0b1f3a;
+}
+
+.modal-field .pill input {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+  accent-color: #0b1f3a;
+}
+
+.modal-field .pill:has(input:checked) {
+  border-color: #0b1f3a;
+  background: #f1f5f9;
+  color: #0b1f3a;
+  font-weight: 600;
+}
+
+/* =========================================
+   DECLARATION
+========================================= */
+
+.modal-declaration-text {
+  margin: -5px 0 20px;
+
+  padding: 14px 16px;
+
+  background: #f8fafc;
+  border-left: 3px solid #c9a227;
+  border-radius: 6px;
+
+  color: #475467;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+/* =========================================
+   ERROR
+========================================= */
+
+.add-member-form .form-error {
+  margin: 14px 0 0;
+  color: #b42318;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* =========================================
+   FOOTER
+========================================= */
+
+.add-member-footer {
+  position: sticky;
+  bottom: 0;
+
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+
+  margin-top: 20px;
+  padding-top: 18px;
+
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* =========================================
+   SUCCESS SCREEN
+========================================= */
+
+.add-member-success-body {
+  overflow-y: auto;
+  padding: 30px;
+}
+
+.existing-member-success {
+  text-align: center;
+  padding: 15px 10px 24px;
+}
+
+.existing-member-success-icon {
+  width: 52px;
+  height: 52px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin: 0 auto 14px;
+
+  border-radius: 50%;
+
+  background: #0b1f3a;
+  color: #ffffff;
+
+  font-size: 23px;
+  font-weight: 700;
+}
+
+.existing-member-success h3 {
+  margin: 0 0 8px;
+
+  color: #0b1f3a;
+  font-size: 21px;
+}
+
+.existing-member-success p {
+  max-width: 540px;
+  margin: 0 auto;
+
+  color: #667085;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+/* =========================================
+   TEMPORARY CREDENTIALS
+========================================= */
+
+.temporary-credentials-card {
+  display: grid;
+  gap: 14px;
+
+  padding: 20px;
+
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.temporary-credentials-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.temporary-credentials-card span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.temporary-credentials-card strong {
+  color: #0b1f3a;
+  font-size: 14px;
+}
+
+.temporary-password {
+  padding: 10px 12px;
+
+  background: #ffffff;
+  border: 1px dashed #c9a227;
+  border-radius: 7px;
+
+  font-family: monospace;
+  font-size: 15px !important;
+  word-break: break-all;
+}
+
+/* =========================================
+   PASSWORD WARNING
+========================================= */
+
+.temporary-password-warning {
+  margin-top: 14px;
+
+  padding: 13px 15px;
+
+  background: #fffbeb;
+  border: 1px solid #f3e6a8;
+  border-radius: 8px;
+}
+
+.temporary-password-warning strong {
+  display: block;
+  margin-bottom: 4px;
+
+  color: #8a6d00;
+  font-size: 13px;
+}
+
+.temporary-password-warning p {
+  margin: 0;
+
+  color: #6b5b19;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* =========================================
+   RESULT ACTIONS
+========================================= */
+
+.add-member-result-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+
+  margin-top: 20px;
+  padding-top: 18px;
+
+  border-top: 1px solid #e5e7eb;
+}
+
+.admin-link-btn {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #0b1f3a;
+
+  border-radius: 7px;
+  padding: 10px 15px;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.admin-link-btn:hover {
+  border-color: #0b1f3a;
+}
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 700px) {
+  .add-member-modal {
+    width: 94vw;
+    max-height: 94vh;
+  }
+
+  .add-member-form {
+    padding: 16px;
+  }
+
+  .modal-section {
+    padding: 17px;
+    margin-bottom: 16px;
+  }
+
+  .modal-section h3 {
+    font-size: 15px;
+    margin-bottom: 16px;
+  }
+
+  .modal-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .modal-field-full {
+    grid-column: auto;
+  }
+
+  .add-member-footer,
+  .add-member-result-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .add-member-footer button,
+  .add-member-result-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .add-member-modal {
+    width: 96vw;
+    border-radius: 10px;
+  }
+
+  .add-member-form {
+    padding: 12px;
+  }
+
+  .modal-section {
+    padding: 14px;
+  }
+
+  .modal-field .pill {
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+
+  .add-member-notice {
+    padding: 12px;
+  }
+}

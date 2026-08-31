@@ -18,6 +18,8 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:5173",
   "https://exclusive-cooperative.vercel.app",
+  "https://exclusivecooperative.com",
+  "https://www.exclusivecooperative.com"
 ];
 
 app.use(

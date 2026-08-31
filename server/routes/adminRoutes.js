@@ -199,6 +199,10 @@ router.post(
         occupation,
         stateOfOrigin,
         address,
+
+        passportPhotoUrl,
+        signatureUrl,
+        
           frequency,
         voluntarySavings,
         referralSource,

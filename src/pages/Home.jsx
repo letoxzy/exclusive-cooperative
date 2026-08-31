@@ -6,6 +6,10 @@ function Home() {
   return (
     <div className="home-page">
       {/* HERO */}
+
+      {/* GALLERY SLIDER */}
+      <GallerySlider />
+
       <section className="hero">
         <div className="hero-content">
           <p className="eyebrow">Oshodi/Isolo Cooperative</p>
@@ -93,9 +97,6 @@ function Home() {
           </div>
         </div>
       </section>
-
-      {/* GALLERY SLIDER */}
-      <GallerySlider />
 
       {/* CTA */}
       <section className="cta-banner">

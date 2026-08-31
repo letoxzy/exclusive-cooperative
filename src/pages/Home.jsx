@@ -1,7 +1,26 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { FaPlay } from "react-icons/fa";
+import request from "../utils/api";
 import "../styles/home.css";
+import "../styles/gallery.css";
 
 function Home() {
+  const [galleryItems, setGalleryItems] = useState([]);
+
+  useEffect(() => {
+    const loadGallery = async () => {
+      try {
+        const data = await request("/gallery");
+        setGalleryItems(data.slice(0, 6));
+      } catch (err) {
+        console.error("Gallery loading error:", err);
+      }
+    };
+
+    loadGallery();
+  }, []);
+
   return (
     <div className="home-page">
       <section className="hero">
@@ -71,6 +90,39 @@ function Home() {
           </div>
         </div>
       </section>
+
+      {galleryItems.length > 0 && (
+        <section className="home-gallery">
+          <div className="home-gallery-heading">
+            <div>
+              <p className="eyebrow">Gallery</p>
+              <h2>Moments from Exclusive Cooperative</h2>
+            </div>
+            <Link to="/gallery" className="gallery-view-all">View Gallery →</Link>
+          </div>
+
+          <div className="home-gallery-grid">
+            {galleryItems.map((item) => (
+              <Link to="/gallery" className="home-gallery-card" key={item._id}>
+                <div className="home-gallery-media">
+                  {item.mediaType === "video" ? (
+                    <>
+                      <video src={item.mediaUrl} muted playsInline preload="metadata" />
+                      <span className="home-gallery-play"><FaPlay /></span>
+                    </>
+                  ) : (
+                    <img src={item.mediaUrl} alt={item.title} loading="lazy" />
+                  )}
+                </div>
+                <div>
+                  <span>{item.category}</span>
+                  <h3>{item.title}</h3>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="cta-banner">
         <h2>Ready to start saving with a community that has your back?</h2>

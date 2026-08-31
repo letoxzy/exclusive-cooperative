@@ -191,3 +191,120 @@
     grid-template-columns: 1fr;
   }
 }
+/* Home gallery */
+.home-gallery {
+  max-width: 1100px;
+  margin: 90px auto;
+  padding: 0 20px;
+}
+
+.home-gallery-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.home-gallery-heading .eyebrow {
+  margin-bottom: 7px;
+}
+
+.home-gallery-heading h2 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 28px;
+}
+
+.gallery-view-all {
+  color: var(--gold);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.home-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.home-gallery-card {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: inherit;
+  box-shadow: 0 8px 24px rgba(11, 31, 58, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.home-gallery-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(11, 31, 58, 0.1);
+}
+
+.home-gallery-media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: #e9edf3;
+}
+
+.home-gallery-media img,
+.home-gallery-media video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.home-gallery-card > div:last-child {
+  padding: 15px 17px 17px;
+}
+
+.home-gallery-card span {
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.home-gallery-card h3 {
+  margin: 5px 0 0;
+  color: var(--navy);
+  font-size: 16px;
+}
+
+.home-gallery-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(11, 31, 58, 0.88);
+  color: var(--white);
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .home-gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .home-gallery-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .home-gallery-grid {
+    grid-template-columns: 1fr;
+  }
+}

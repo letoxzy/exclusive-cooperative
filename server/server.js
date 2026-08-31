@@ -10,6 +10,7 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import loanRoutes from "./routes/loanRoutes.js";
 import withdrawalRoutes from "./routes/withdrawalRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import galleryRoutes from "./routes/galleryRoutes.js";
 
 connectDB();
 
@@ -46,6 +47,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/loans", loanRoutes);
 app.use("/api/withdrawals", withdrawalRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/gallery", galleryRoutes);
 
 app.get("/", (req, res) =>
   res.send("Exclusive Cooperative API is running")

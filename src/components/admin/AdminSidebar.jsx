@@ -11,6 +11,7 @@ import {
   FaMoneyCheckAlt,
   FaChartBar,
   FaCog,
+  FaImages,
   FaSignOutAlt,
 } from "react-icons/fa";
 
@@ -76,6 +77,11 @@ const menuItems = [
     id: "reports",
     label: "Reports",
     icon: FaChartBar,
+  },
+  {
+    id: "gallery",
+    label: "Gallery",
+    icon: FaImages,
   },
   {
     id: "settings",

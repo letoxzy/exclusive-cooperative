@@ -365,6 +365,10 @@ function Navbar() {
               Membership
             </NavLink>
 
+            <NavLink to="/gallery" end onClick={closeMenu}>
+              Gallery
+            </NavLink>
+
             <NavLink to="/savings" end onClick={closeMenu}>
               Savings
             </NavLink>

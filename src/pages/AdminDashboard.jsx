@@ -11,6 +11,7 @@ import AdminSidebar from "../components/admin/AdminSidebar";
 import MembershipModal from "../components/admin/MembershipModal";
 import AddExistingMemberModal from "../components/admin/AddExistingMemberModal";
 import AdminNotifications from "../components/admin/AdminNotifications";
+import GalleryManagement from "../components/admin/GalleryManagement";
 
 function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -2460,6 +2461,9 @@ function AdminDashboard() {
 
       case "settings":
         return renderSettings();
+
+      case "gallery":
+        return <GalleryManagement token={user.token} />;
 
       default:
         return renderOverview();

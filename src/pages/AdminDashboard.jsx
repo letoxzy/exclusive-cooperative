@@ -5,7 +5,13 @@ import request from "../utils/api";
 import "../styles/admin.css";
 import "../styles/admin-components.css";
 
-import { FaUsers, FaHandHoldingDollar, FaClock, FaBell } from "react-icons/fa6";
+import {
+  FaUsers,
+  FaHandHoldingDollar,
+  FaClock,
+  FaBell,
+  FaTrash,
+} from "react-icons/fa6";
 
 import AdminSidebar from "../components/admin/AdminSidebar";
 import MembershipModal from "../components/admin/MembershipModal";
@@ -57,6 +63,7 @@ function AdminDashboard() {
   const [openInEditMode, setOpenInEditMode] = useState(false);
   const [expandedEligibilityId, setExpandedEligibilityId] = useState(null);
   const [showAddExistingMember, setShowAddExistingMember] = useState(false);
+  const [deletingMemberId, setDeletingMemberId] = useState(null);
 
   /* ================================
      LOAD DATA
@@ -280,6 +287,36 @@ function AdminDashboard() {
     } catch (err) {
       setError(err.message);
       throw err;
+    }
+  };
+
+  /* ================================
+     DELETE MEMBER ACCOUNT
+  ================================= */
+
+  const handleDeleteMember = async (member) => {
+    if (!member?._id) return;
+
+    const confirmed = window.confirm(
+      `Delete the account for ${member.fullName || member.email}?\n\nThis will remove the member login account and membership record. This action cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setError("");
+      setDeletingMemberId(member._id);
+
+      await request(`/admin/users/${member._id}`, {
+        method: "DELETE",
+        token: user.token,
+      });
+
+      await loadMembers();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeletingMemberId(null);
     }
   };
 
@@ -1612,6 +1649,7 @@ function AdminDashboard() {
                   <th>Loan Eligibility</th>
                   <th>Account Setup</th>
                   <th>Joined</th>
+                  <th>Action</th>
                 </tr>
               </thead>
 
@@ -1658,6 +1696,25 @@ function AdminDashboard() {
                     </td>
 
                     <td>{new Date(m.createdAt).toLocaleDateString()}</td>
+
+                    <td className="actions-cell">
+                      {m.role === "admin" ? (
+                        <span className="muted">Protected</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="reject-btn"
+                          onClick={() => handleDeleteMember(m)}
+                          disabled={deletingMemberId === m._id}
+                          title={`Delete ${m.fullName || "member"}`}
+                        >
+                          <FaTrash />
+                          {deletingMemberId === m._id
+                            ? "Deleting..."
+                            : "Delete Account"}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

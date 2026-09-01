@@ -6,6 +6,8 @@ import { UserIcon, GridIcon, LogOutIcon } from "./Icons";
 import request from "../utils/api";
 import "../styles/navbar.css";
 
+import logo from "../assets/logo.png";
+
 function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -314,8 +316,8 @@ function Navbar() {
             LOGO
         ========================= */}
 
-        <Link to="/" className="navbar-logo" onClick={closeMenu}>
-          EXCLUSIVE
+        <Link to="/" className="navbar-logo">
+          <img src={logo} alt="Exclusive Cooperative" />
         </Link>
 
         {/* =========================

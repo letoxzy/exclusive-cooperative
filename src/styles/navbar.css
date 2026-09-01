@@ -947,3 +947,17 @@
     font-size: 22px;
   }
 }
+
+.navbar-logo {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.navbar-logo img {
+  width: 62px;
+  height: 62px;
+  object-fit: contain;
+  display: block;
+}

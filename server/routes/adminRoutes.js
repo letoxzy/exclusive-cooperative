@@ -66,6 +66,54 @@ router.get("/users", async (req, res) => {
 
 /*
   ============================
+  DELETE MEMBER ACCOUNT
+  ============================
+*/
+
+// DELETE /api/admin/users/:id
+// Removes a member login account and its linked membership record.
+// Admin accounts are protected. Financial transaction history is preserved.
+router.delete("/users/:id", async (req, res) => {
+  try {
+    const member = await User.findById(req.params.id);
+
+    if (!member) {
+      return res.status(404).json({
+        message: "Member account not found.",
+      });
+    }
+
+    if (member.role === "admin") {
+      return res.status(403).json({
+        message: "Administrator accounts cannot be deleted here.",
+      });
+    }
+
+    await Membership.deleteMany({
+      user: member._id,
+    });
+
+    await Notification.deleteMany({
+      user: member._id,
+    });
+
+    await User.findByIdAndDelete(member._id);
+
+    return res.json({
+      message: "Member account and membership record deleted successfully.",
+      deletedUserId: member._id,
+    });
+  } catch (err) {
+    console.error("Delete member account error:", err);
+
+    return res.status(500).json({
+      message: err.message || "Failed to delete member account.",
+    });
+  }
+});
+
+/*
+  ============================
   ADD EXISTING MEMBER
   ============================
 */

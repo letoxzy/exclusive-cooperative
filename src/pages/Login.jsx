@@ -80,6 +80,10 @@ function Login() {
             </div>
           </div>
 
+          <div className="forgot-password-link">
+            <Link to="/forgot-password">Forgot password?</Link>
+          </div>
+
           {error && <p className="form-error">{error}</p>}
 
           <button type="submit" className="btn-primary" disabled={loading}>

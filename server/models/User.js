@@ -13,6 +13,19 @@ const userSchema = new mongoose.Schema(
     },
     password: { type: String, required: true },
 
+    // Password-reset token fields. The raw token is never stored; only a
+    // SHA-256 hash is saved, and the token expires after one hour.
+    passwordResetToken: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    passwordResetExpires: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+
     // Legacy members added by an administrator receive a temporary password
     // and must choose their own password on first login.
     mustChangePassword: { type: Boolean, default: false },

@@ -1,13 +1,28 @@
 import { Link } from "react-router-dom";
 import "../styles/home.css";
 import GallerySlider from "../components/home/GallerySlider";
+import { Helmet } from "react-helmet-async";
 
 function Home() {
   return (
     <div className="home-page">
+      <Helmet>
+        <title>
+          Exclusive Cooperative Multipurpose Society Limited | Oshodi-Isolo,
+          Lagos
+        </title>
+
+        <meta
+          name="description"
+          content="Exclusive Cooperative Multipurpose Society Limited is an Oshodi-Isolo cooperative focused on disciplined savings, cooperative loans, member services, and shared financial growth."
+        />
+
+        <link rel="canonical" href="https://exclusivecooperative.com/" />
+      </Helmet>
       {/* =========================
           HERO
       ========================= */}
+
       <section className="hero">
         <div className="hero-content">
           <p className="eyebrow">Oshodi / Isolo Cooperative</p>

@@ -17,10 +17,7 @@ function ResetPassword() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const passwordChecks = useMemo(
-    () => getPasswordChecks(password),
-    [password]
-  );
+  const passwordChecks = useMemo(() => getPasswordChecks(password), [password]);
   const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
   const passwordStrength =
     passwordScore === 0
@@ -40,7 +37,7 @@ function ResetPassword() {
 
     if (!isStrongPassword(password)) {
       setError(
-        "Please choose a strong password that meets all the requirements."
+        "Please choose a strong password that meets all the requirements.",
       );
       return;
     }

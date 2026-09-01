@@ -544,75 +544,140 @@
 
 
 /* =========================================
-   VALUES
+   OUR VALUES
 ========================================= */
 
 .values-section {
-  background: var(--navy);
-
+  background: var(--white);
   padding: 90px 20px;
 }
 
-.values-section .section-eyebrow {
-  color: var(--gold);
+.values-inner {
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
-.values-section .section-heading h2 {
-  color: var(--white);
+.values-intro {
+  max-width: 650px;
+  margin-bottom: 42px;
 }
+
+.values-intro h2 {
+  color: var(--navy);
+  font-size: clamp(28px, 4vw, 38px);
+  line-height: 1.2;
+  margin: 0 0 14px;
+}
+
+.values-intro p:last-child {
+  color: var(--muted);
+  font-size: 14.5px;
+  line-height: 1.75;
+  margin: 0;
+}
+
+
+/* Value cards */
 
 .values-grid {
-  max-width: 1100px;
-
-  margin: 0 auto;
-
   display: grid;
-
   grid-template-columns: repeat(4, 1fr);
-
   gap: 18px;
 }
 
 .value-card {
-  padding: 28px;
-
-  border: 1px solid rgba(255, 255, 255, 0.13);
-
+  background: var(--light);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
+  padding: 27px;
 
-  background: rgba(255, 255, 255, 0.035);
+  min-height: 215px;
+
+  display: flex;
+  flex-direction: column;
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 
-.value-card > span {
-  display: block;
+.value-card:hover {
+  transform: translateY(-4px);
+  border-color: #d3d9e2;
+  box-shadow: 0 14px 30px rgba(11, 31, 58, 0.07);
+}
 
+
+/* Number */
+
+.value-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 35px;
+}
+
+.value-number {
   color: var(--gold);
-
-  font-size: 11px;
-
+  font-size: 12px;
   font-weight: 800;
-
   letter-spacing: 1px;
-
-  margin-bottom: 25px;
 }
+
+.value-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+
+/* Title */
 
 .value-card h3 {
-  color: var(--white);
-
-  margin: 0 0 9px;
-
-  font-size: 18px;
+  color: var(--navy);
+  font-size: 20px;
+  margin: 0 0 10px;
 }
 
+
+/* Description */
+
 .value-card p {
-  color: #bfc9d8;
-
-  margin: 0;
-
+  color: var(--muted);
   font-size: 13px;
-
   line-height: 1.7;
+  margin: 0;
+}
+
+
+/* =========================================
+   VALUES RESPONSIVE
+========================================= */
+
+@media (max-width: 1000px) {
+
+  .values-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+}
+
+
+@media (max-width: 600px) {
+
+  .values-section {
+    padding: 70px 18px;
+  }
+
+  .values-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .value-card {
+    min-height: auto;
+  }
+
 }
 
 

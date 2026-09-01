@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import "../styles/loans.css";
@@ -66,6 +67,17 @@ function Loans() {
 
   return (
     <div className="loans-page">
+      <Helmet>
+        <title>Cooperative Loans | Exclusive Cooperative Lagos</title>
+
+        <meta
+          name="description"
+          content="Explore emergency, business, and personal cooperative loans from Exclusive Cooperative Multipurpose Society Limited in Oshodi-Isolo, Lagos. Check your eligibility and apply."
+        />
+
+        <link rel="canonical" href="https://exclusivecooperative.com/loans" />
+      </Helmet>
+
       <header className="page-hero">
         <p className="eyebrow">Loans</p>
 
@@ -116,6 +128,7 @@ function Loans() {
               <div className="eligibility-summary">
                 <div className="eligibility-item">
                   <span>Your Savings</span>
+
                   <strong>
                     ₦{Number(eligibility.savingsBalance || 0).toLocaleString()}
                   </strong>
@@ -123,6 +136,7 @@ function Loans() {
 
                 <div className="eligibility-item">
                   <span>Maximum Loan</span>
+
                   <strong>
                     ₦{Number(eligibility.eligibleAmount || 0).toLocaleString()}
                   </strong>
@@ -143,8 +157,8 @@ function Loans() {
                   <strong>Loan application under review.</strong>
 
                   <p>
-                    You already have a pending loan application. Please
-                    wait for the cooperative administrator to review it.
+                    You already have a pending loan application. Please wait for
+                    the cooperative administrator to review it.
                   </p>
                 </div>
               ) : !eligibility.isLoanEligible ? (
@@ -154,8 +168,8 @@ function Loans() {
 
                     <p>
                       Your full loan application is awaiting review by the
-                      cooperative administrator. You'll be able to apply
-                      for a loan once it's approved.
+                      cooperative administrator. You'll be able to apply for a
+                      loan once it's approved.
                     </p>
                   </div>
                 ) : eligibility.eligibilityApplication?.status ===
@@ -182,8 +196,8 @@ function Loans() {
 
                     <p>
                       Before you can apply for a loan, submit a full loan
-                      application (your BVN and details from your
-                      membership record) for admin review.
+                      application (your BVN and details from your membership
+                      record) for admin review.
                     </p>
 
                     <button
@@ -217,9 +231,9 @@ function Loans() {
                   <strong>You are not currently eligible.</strong>
 
                   <p>
-                    Your full loan application has been approved, but you
-                    need savings with the cooperative to determine your
-                    loan amount (up to 2x your savings balance).
+                    Your full loan application has been approved, but you need
+                    savings with the cooperative to determine your loan amount
+                    (up to 2x your savings balance).
                   </p>
                 </div>
               )}

@@ -7,17 +7,40 @@ function Home() {
   return (
     <div className="home-page">
       <Helmet>
-        <title>
-          Exclusive Cooperative Multipurpose Society Limited | Oshodi-Isolo,
-          Lagos
-        </title>
+        <title>Exclusive Cooperative | Savings & Loans in Oshodi-Isolo</title>
 
         <meta
           name="description"
-          content="Exclusive Cooperative Multipurpose Society Limited is an Oshodi-Isolo cooperative focused on disciplined savings, cooperative loans, member services, and shared financial growth."
+          content="Exclusive Cooperative Multipurpose Society Limited is a member-focused cooperative in Oshodi-Isolo, Lagos, offering disciplined savings, cooperative loans, membership services, and shared financial growth."
+        />
+
+        <meta
+          name="keywords"
+          content="Exclusive Cooperative, Oshodi Isolo Cooperative, cooperative society Lagos, cooperative loans Lagos, cooperative savings Lagos, savings and loans Oshodi, multipurpose cooperative Lagos"
         />
 
         <link rel="canonical" href="https://exclusivecooperative.com/" />
+
+        <meta
+          property="og:title"
+          content="Exclusive Cooperative | Savings & Loans in Oshodi-Isolo"
+        />
+
+        <meta
+          property="og:description"
+          content="Member-focused cooperative savings, loans, membership services, and shared financial growth in Oshodi-Isolo, Lagos."
+        />
+
+        <meta property="og:url" content="https://exclusivecooperative.com/" />
+
+        <meta property="og:type" content="website" />
+
+        <meta
+          property="og:image"
+          content="https://exclusivecooperative.com/logo.png"
+        />
+
+        <meta property="og:site_name" content="Exclusive Cooperative" />
       </Helmet>
       {/* =========================
           HERO

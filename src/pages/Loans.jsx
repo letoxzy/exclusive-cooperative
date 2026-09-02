@@ -75,7 +75,10 @@ function Loans() {
           content="Explore emergency, business, and personal cooperative loans from Exclusive Cooperative Multipurpose Society Limited in Oshodi-Isolo, Lagos. Check your eligibility and apply."
         />
 
-        <link rel="canonical" href="https://exclusivecooperative.com/loans" />
+        <link
+          rel="canonical"
+          href="https://www.exclusivecooperative.com/loans"
+        />
       </Helmet>
 
       <header className="page-hero">

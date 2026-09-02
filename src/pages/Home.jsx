@@ -19,7 +19,7 @@ function Home() {
           content="Exclusive Cooperative, Oshodi Isolo Cooperative, cooperative society Lagos, cooperative loans Lagos, cooperative savings Lagos, savings and loans Oshodi, multipurpose cooperative Lagos"
         />
 
-        <link rel="canonical" href="https://exclusivecooperative.com/" />
+        <link rel="canonical" href="https://www.exclusivecooperative.com/" />
 
         <meta
           property="og:title"
@@ -31,13 +31,16 @@ function Home() {
           content="Member-focused cooperative savings, loans, membership services, and shared financial growth in Oshodi-Isolo, Lagos."
         />
 
-        <meta property="og:url" content="https://exclusivecooperative.com/" />
+        <meta
+          property="og:url"
+          content="https://www.exclusivecooperative.com/"
+        />
 
         <meta property="og:type" content="website" />
 
         <meta
           property="og:image"
-          content="https://exclusivecooperative.com/logo.png"
+          content="https://www.exclusivecooperative.com/logo.png"
         />
 
         <meta property="og:site_name" content="Exclusive Cooperative" />

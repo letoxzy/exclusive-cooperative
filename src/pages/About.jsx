@@ -15,7 +15,10 @@ function About() {
           content="Learn about Exclusive (Oshodi/Isolo) Cooperative Multipurpose Society Limited, our mission, values, and commitment to helping members build financial security through disciplined savings and fair access to loans."
         />
 
-        <link rel="canonical" href="https://exclusivecooperative.com/about" />
+        <link
+          rel="canonical"
+          href="https://www.exclusivecooperative.com/about"
+        />
       </Helmet>
 
       <header className="page-hero">

@@ -9,6 +9,7 @@ import {
   MapPinIcon,
 } from "../components/Icons";
 import "../styles/contact.css";
+import { Helmet } from "react-helmet-async";
 
 function Contact() {
   const [form, setForm] = useState({
@@ -57,6 +58,19 @@ function Contact() {
 
   return (
     <div className="contact-page">
+      <Helmet>
+        <title>Contact Us | Exclusive Cooperative Oshodi-Isolo</title>
+
+        <meta
+          name="description"
+          content="Contact Exclusive Cooperative Multipurpose Society Limited in Oshodi-Isolo, Lagos. Get in touch with us about membership, savings, cooperative loans, and other services."
+        />
+
+        <link
+          rel="canonical"
+          href="https://www.exclusivecooperative.com/contact"
+        />
+      </Helmet>
       <header className="page-hero">
         <p className="eyebrow">Contact</p>
 

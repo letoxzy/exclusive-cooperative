@@ -13,7 +13,10 @@ function Savings() {
           content="Learn about savings with Exclusive Cooperative Multipurpose Society Limited. Members can make daily, weekly, or monthly contributions starting from ₦10,000 monthly."
         />
 
-        <link rel="canonical" href="https://exclusivecooperative.com/savings" />
+        <link
+          rel="canonical"
+          href="https://www.exclusivecooperative.com/savings"
+        />
       </Helmet>
 
       <header className="page-hero">

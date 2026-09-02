@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FaPlay, FaTimes } from "react-icons/fa";
 import request from "../utils/api";
 import "../styles/gallery.css";
+import { Helmet } from "react-helmet-async";
 
 function Gallery() {
   const [items, setItems] = useState([]);
@@ -28,8 +29,11 @@ function Gallery() {
   }, []);
 
   const categories = useMemo(
-    () => ["All", ...new Set(items.map((item) => item.category).filter(Boolean))],
-    [items]
+    () => [
+      "All",
+      ...new Set(items.map((item) => item.category).filter(Boolean)),
+    ],
+    [items],
   );
 
   const filteredItems = useMemo(
@@ -37,11 +41,25 @@ function Gallery() {
       category === "All"
         ? items
         : items.filter((item) => item.category === category),
-    [items, category]
+    [items, category],
   );
 
   return (
     <main className="gallery-page">
+      <Helmet>
+        <title>Gallery | Exclusive Cooperative Oshodi-Isolo</title>
+
+        <meta
+          name="description"
+          content="Explore photos and videos from Exclusive Cooperative Multipurpose Society Limited, including meetings, training sessions, events, and community activities in Oshodi-Isolo, Lagos."
+        />
+
+        <link
+          rel="canonical"
+          href="https://www.exclusivecooperative.com/gallery"
+        />
+      </Helmet>
+
       <section className="gallery-hero">
         <p className="eyebrow">Our Gallery</p>
         <h1>Moments from Exclusive Cooperative</h1>
@@ -68,9 +86,13 @@ function Gallery() {
         )}
 
         {loading && <p className="gallery-state">Loading gallery...</p>}
-        {!loading && error && <p className="gallery-state gallery-error">{error}</p>}
+        {!loading && error && (
+          <p className="gallery-state gallery-error">{error}</p>
+        )}
         {!loading && !error && filteredItems.length === 0 && (
-          <p className="gallery-state">No gallery items have been published yet.</p>
+          <p className="gallery-state">
+            No gallery items have been published yet.
+          </p>
         )}
 
         {!loading && !error && filteredItems.length > 0 && (
@@ -85,8 +107,15 @@ function Gallery() {
                 <div className="gallery-media-wrap">
                   {item.mediaType === "video" ? (
                     <>
-                      <video src={item.mediaUrl} muted playsInline preload="metadata" />
-                      <span className="gallery-play"><FaPlay /></span>
+                      <video
+                        src={item.mediaUrl}
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                      <span className="gallery-play">
+                        <FaPlay />
+                      </span>
                     </>
                   ) : (
                     <img src={item.mediaUrl} alt={item.title} loading="lazy" />
@@ -114,7 +143,10 @@ function Gallery() {
             <FaTimes />
           </button>
 
-          <div className="gallery-lightbox-content" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="gallery-lightbox-content"
+            onClick={(event) => event.stopPropagation()}
+          >
             {selected.mediaType === "video" ? (
               <video src={selected.mediaUrl} controls autoPlay playsInline />
             ) : (

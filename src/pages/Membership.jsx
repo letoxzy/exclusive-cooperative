@@ -223,7 +223,7 @@ function Membership() {
 
         <link
           rel="canonical"
-          href="https://exclusivecooperative.com/membership"
+          href="https://www.exclusivecooperative.com/membership"
         />
       </Helmet>
 

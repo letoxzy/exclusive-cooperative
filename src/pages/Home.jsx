@@ -44,6 +44,25 @@ function Home() {
         />
 
         <meta property="og:site_name" content="Exclusive Cooperative" />
+
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "Exclusive Cooperative Multipurpose Society Limited",
+            alternateName: "Exclusive Cooperative",
+            url: "https://www.exclusivecooperative.com/",
+            logo: "https://www.exclusivecooperative.com/logo.png",
+            description:
+              "A member-focused cooperative for disciplined savings, cooperative loans, membership services, and shared financial growth in Oshodi-Isolo, Lagos.",
+            address: {
+              "@type": "PostalAddress",
+              addressLocality: "Oshodi-Isolo",
+              addressRegion: "Lagos",
+              addressCountry: "NG",
+            },
+          })}
+        </script>
       </Helmet>
       {/* =========================
           HERO

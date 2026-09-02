@@ -10,6 +10,10 @@
     </url>
 
     <url>
+        <loc>https://exclusivecooperative.com/membership</loc>
+    </url>
+
+    <url>
         <loc>https://exclusivecooperative.com/gallery</loc>
     </url>
 
@@ -23,14 +27,6 @@
 
     <url>
         <loc>https://exclusivecooperative.com/contact</loc>
-    </url>
-
-    <url>
-        <loc>https://exclusivecooperative.com/login</loc>
-    </url>
-
-    <url>
-        <loc>https://exclusivecooperative.com/register</loc>
     </url>
 
 </urlset>

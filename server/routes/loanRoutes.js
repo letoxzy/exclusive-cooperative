@@ -435,7 +435,10 @@ router.post("/", protect, requireApprovedMember, async (req, res) => {
 
       amountPaid: 0,
 
-      outstandingBalance: totalRepayment,
+      // The member does not owe the loan until it is actually disbursed.
+      outstandingBalance: 0,
+      loanFundsWithdrawn: 0,
+      loanFundsReserved: 0,
 
       status: "pending",
 

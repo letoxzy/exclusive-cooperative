@@ -339,6 +339,26 @@
   color: #991b1b;
 }
 
+ .withdrawal-source-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.withdrawal-source-badge.savings {
+  background: #ecfdf3;
+  color: #176b3a;
+}
+
+.withdrawal-source-badge.loan {
+  background: #f3e8ff;
+  color: #6b32b8;
+}
+
 /* Withdrawal PIN */
 
 .withdrawal-pin-box {
@@ -526,6 +546,167 @@
   border-radius: 999px;
 }
 
+
+.withdrawal-balance-card small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.withdrawal-balance-card.savings-card strong {
+  color: #176b3a;
+}
+
+.withdrawal-balance-card.loan-card-balance strong {
+  color: #6b32b8;
+}
+
+.withdrawal-balance-card.owing-card strong {
+  color: #b42318;
+}
+
+.withdrawal-source-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.withdrawal-source-option {
+  min-height: 78px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.withdrawal-source-option:hover {
+  border-color: #cbd5e1;
+}
+
+.withdrawal-source-option.active.savings {
+  border-color: #5a9f70;
+  background: #f7fcf8;
+  box-shadow: 0 0 0 2px rgba(90, 159, 112, 0.08);
+}
+
+.withdrawal-source-option.active.loan {
+  border-color: #9b62cf;
+  background: #fbf8ff;
+  box-shadow: 0 0 0 2px rgba(155, 98, 207, 0.08);
+}
+
+.withdrawal-source-option .source-option-title {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.withdrawal-source-option.active.savings .source-option-title {
+  color: #176b3a;
+}
+
+.withdrawal-source-option.active.loan .source-option-title {
+  color: #6b32b8;
+}
+
+.withdrawal-source-option span:last-child {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.withdrawal-source-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 20px;
+}
+
+.withdrawal-source-panel.savings-panel {
+  background: #fbfefb;
+}
+
+.withdrawal-source-panel.loan-panel {
+  background: #fcf9ff;
+}
+
+.source-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.source-panel-header h3 {
+  margin: 4px 0 0;
+  color: var(--navy);
+  font-size: 19px;
+}
+
+.source-panel-header > strong {
+  color: var(--navy);
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+.loan-panel .source-panel-header > strong {
+  color: #6b32b8;
+}
+
+.source-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.source-panel-grid > div {
+  padding: 11px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--border);
+}
+
+.source-panel-grid span,
+.source-panel-grid strong {
+  display: block;
+}
+
+.source-panel-grid span {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+
+.source-panel-grid strong {
+  color: var(--navy);
+  font-size: 13px;
+}
+
+.loan-funds-note {
+  margin-top: 14px;
+  padding: 12px 13px;
+  border: 1px solid #d9c4ed;
+  border-radius: 8px;
+  background: #f7f0ff;
+  color: #5b3a72;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.loan-funds-note strong {
+  color: #4c2865;
+}
+
 @media (max-width: 750px) {
   .withdrawals-page {
     padding: 42px 0 70px;
@@ -536,8 +717,14 @@
   }
 
   .withdrawal-balance-grid,
-  .withdrawal-form {
+  .withdrawal-form,
+  .withdrawal-source-picker,
+  .source-panel-grid {
     grid-template-columns: 1fr;
+  }
+
+  .source-panel-header {
+    align-items: flex-start;
   }
 
   .withdrawal-card {

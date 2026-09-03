@@ -1116,11 +1116,18 @@ router.patch(
       loan.outstandingBalance =
         loan.totalRepayment;
 
+      // The approved loan becomes available as a separate loan-funds balance.
+      // This is NOT added to savingsBalance and is reduced only when the
+      // member withdraws/disburses part of the loan funds.
+      loan.loanFundsWithdrawn = 0;
+      loan.loanFundsReserved = 0;
+
       await loan.save();
 
       // Loan proceeds are NOT savings. Keep the member's savings balance
-      // untouched; the loan itself is tracked by Loan.amount and
-      // Loan.outstandingBalance.
+      // untouched; Loan.amount/outstandingBalance track the debt, while
+      // loanFundsWithdrawn/loanFundsReserved track how much of the loan
+      // has actually been taken out by the member.
 
       await Notification.create({
         user: loan.user,

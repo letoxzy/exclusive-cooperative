@@ -107,6 +107,22 @@ const loanSchema = new mongoose.Schema(
       default: 0,
     },
 
+    // Portion of the approved/disbursed loan principal that the member has
+    // actually withdrawn to their bank account. This is separate from
+    // amountPaid: withdrawing loan funds is a drawdown, not a repayment.
+    loanFundsWithdrawn: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    // Loan funds reserved by bank-transfer requests that are still processing.
+    loanFundsReserved: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     // Remaining loan debt. This becomes the totalRepayment only when the
     // approved loan is actually disbursed; it remains 0 before disbursement.
     outstandingBalance: {

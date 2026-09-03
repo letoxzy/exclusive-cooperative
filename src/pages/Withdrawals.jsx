@@ -25,6 +25,19 @@ function Withdrawals() {
     reservedAmount: 0,
     annualWithdrawalUsed: false,
     hasOutstandingLoan: false,
+    outstandingLoan: 0,
+    loanFunds: {
+      hasActiveLoan: false,
+      loanId: null,
+      approvedAmount: 0,
+      totalRepayment: 0,
+      amountPaid: 0,
+      outstandingBalance: 0,
+      amountWithdrawn: 0,
+      reservedAmount: 0,
+      availableAmount: 0,
+      status: null,
+    },
     withdrawals: [],
   });
 
@@ -34,6 +47,7 @@ function Withdrawals() {
   const [bankOpen, setBankOpen] = useState(false);
   const bankSelectorRef = useRef(null);
 
+  const [source, setSource] = useState("savings");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
   const [amount, setAmount] = useState("");
@@ -201,7 +215,15 @@ function Withdrawals() {
     }
   };
 
-  const withdrawalInputMax = Number(data.availableAmount || 0);
+  const savingsAvailable = Number(data.availableAmount || 0);
+  const loanAvailable = Number(data.loanFunds?.availableAmount || 0);
+  const withdrawalInputMax = source === "loan" ? loanAvailable : savingsAvailable;
+
+  useEffect(() => {
+    setAmount("");
+    setError("");
+    setSuccess("");
+  }, [source]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -215,18 +237,31 @@ function Withdrawals() {
       return;
     }
 
-    if (data.hasOutstandingLoan) {
-      setError("You cannot withdraw while you have an outstanding loan. Please fully repay your loan first.");
+    if (value > withdrawalInputMax) {
+      setError(
+        `You can withdraw up to ${money(withdrawalInputMax)} from ${
+          source === "loan" ? "your available loan funds" : "your savings"
+        }.`
+      );
       return;
     }
 
-    if (data.annualWithdrawalUsed) {
-      setError("You have already made a withdrawal this year. You can make another withdrawal next year.");
-      return;
-    }
+    if (source === "savings") {
+      if (data.hasOutstandingLoan) {
+        setError(
+          "You cannot withdraw from savings while you have an outstanding loan. Please fully repay your loan first."
+        );
+        return;
+      }
 
-    if (value > Number(data.availableAmount || 0)) {
-      setError(`You can withdraw up to ${money(data.availableAmount)}.`);
+      if (data.annualWithdrawalUsed) {
+        setError(
+          "You have already made a savings withdrawal this year. You can make another one next year."
+        );
+        return;
+      }
+    } else if (!data.loanFunds?.hasActiveLoan || loanAvailable <= 0) {
+      setError("You do not currently have any loan funds available to withdraw.");
       return;
     }
 
@@ -245,10 +280,19 @@ function Withdrawals() {
       return;
     }
 
+    const sourceLabel = source === "loan" ? "loan funds" : "savings";
     const confirmed = window.confirm(
-      `Confirm withdrawal of ${money(value)} to ${accountName} at ${
+      `Confirm withdrawal of ${money(value)} from your ${sourceLabel} to ${accountName} at ${
         selectedBank?.name || "your bank"
-      }, account ending ${accountNumber.slice(-4)}?\n\nTotal deducted from savings: ${money(value)}`,
+      }, account ending ${accountNumber.slice(-4)}?\n\n${
+        source === "loan"
+          ? `Remaining available loan funds after this withdrawal: ${money(
+              Math.max(0, loanAvailable - value)
+            )}`
+          : `Remaining savings after this withdrawal: ${money(
+              Math.max(0, Number(data.savingsBalance || 0) - value)
+            )}`
+      }`,
     );
 
     if (!confirmed) return;
@@ -260,6 +304,7 @@ function Withdrawals() {
         method: "POST",
         token: user.token,
         body: {
+          source,
           amount: value,
           pin,
           bankCode,
@@ -300,6 +345,7 @@ function Withdrawals() {
 
       const amountFormatted = money(receipt.amount);
       const totalDeductionFormatted = money(receipt.totalDeduction);
+      const sourceLabel = receipt.source === "loan" ? "Loan Funds" : "Savings";
       const dateFormatted = receipt.createdAt
         ? new Date(receipt.createdAt).toLocaleString()
         : "—";
@@ -441,7 +487,15 @@ function Withdrawals() {
 
               <div class="details">
                 <div class="row">
-                  <span class="label">Total Deducted from Savings</span>
+                  <span class="label">Withdrawal Source</span>
+                  <span class="value">${escapeHtml(sourceLabel)}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Amount Transferred</span>
+                  <span class="value">${escapeHtml(amountFormatted)}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Amount Deducted from Source</span>
                   <span class="value">${escapeHtml(totalDeductionFormatted)}</span>
                 </div>
                 <div class="row">
@@ -521,11 +575,11 @@ function Withdrawals() {
     <main className="withdrawals-page">
       <div className="withdrawals-heading">
         <div>
-          <p className="eyebrow">Savings</p>
+          <p className="eyebrow">Savings & Loans</p>
           <h1>Withdrawals</h1>
           <p>
-            Withdraw up to 60% of your total savings once each year, subject
-            to the cooperative's withdrawal rules.
+            Manage your savings withdrawals and access any unused funds from
+            an active loan. Each balance is kept separate.
           </p>
         </div>
       </div>
@@ -534,21 +588,30 @@ function Withdrawals() {
       {success && <div className="withdrawal-alert success">{success}</div>}
 
       <section className="withdrawal-balance-grid">
-        <div className="withdrawal-balance-card">
+        <div className="withdrawal-balance-card savings-card">
           <span>Current Savings</span>
           <strong>{loading ? "Loading..." : money(data.savingsBalance)}</strong>
+          <small>Member savings balance</small>
         </div>
 
         <div className="withdrawal-balance-card locked">
-          <span>60% Annual Withdrawal Limit</span>
+          <span>60% Annual Savings Limit</span>
           <strong>{loading ? "Loading..." : money(data.maxGrossDeduction)}</strong>
+          <small>Once per calendar year</small>
         </div>
 
-        <div className="withdrawal-balance-card available">
-          <span>Available to Withdraw</span>
+        <div className="withdrawal-balance-card loan-card-balance">
+          <span>Available Loan Funds</span>
+          <strong>{loading ? "Loading..." : money(loanAvailable)}</strong>
+          <small>Unused amount from your active loan</small>
+        </div>
+
+        <div className="withdrawal-balance-card owing-card">
+          <span>Outstanding Loan</span>
           <strong>
-            {loading ? "Loading..." : money(data.availableAmount)}
+            {loading ? "Loading..." : money(data.outstandingLoan || data.loanFunds?.outstandingBalance)}
           </strong>
+          <small>Total amount still to repay</small>
         </div>
       </section>
 
@@ -561,34 +624,92 @@ function Withdrawals() {
         </div>
 
         <div className="withdrawal-rule">
-          <strong>60% annual withdrawal limit</strong>
+          <strong>Choose your withdrawal source</strong>
           <span>
-            You may withdraw once per calendar year, up to 60% of your total
-            savings. Withdrawals are not available while you have an
-            outstanding loan.
+            Savings withdrawals follow the 60% annual rule. Loan withdrawals
+            use only the unused balance of your active loan and do not reduce
+            your savings or outstanding loan repayment amount.
           </span>
         </div>
 
-        {data.annualWithdrawalUsed && (
-          <div className="withdrawal-lock-notice">
-            <div>
-              <strong>Annual withdrawal already used</strong>
-              <p>
-                You have already made a withdrawal this year. Your next
-                withdrawal becomes available next year.
-              </p>
-            </div>
-          </div>
-        )}
+        <div className="withdrawal-source-picker">
+          <button
+            type="button"
+            className={`withdrawal-source-option ${source === "savings" ? "active savings" : ""}`}
+            onClick={() => setSource("savings")}
+            disabled={submitting}
+          >
+            <span className="source-option-title">Withdraw from Savings</span>
+            <span>Up to {money(savingsAvailable)} available under the annual savings rule.</span>
+          </button>
 
-        {data.hasOutstandingLoan && (
-          <div className="withdrawal-lock-notice">
-            <div>
-              <strong>Withdrawal unavailable</strong>
-              <p>
-                You have an outstanding loan. Please fully repay it before
-                requesting a savings withdrawal.
-              </p>
+          <button
+            type="button"
+            className={`withdrawal-source-option ${source === "loan" ? "active loan" : ""}`}
+            onClick={() => setSource("loan")}
+            disabled={submitting}
+          >
+            <span className="source-option-title">Withdraw from Loan Funds</span>
+            <span>{money(loanAvailable)} of your approved loan funds is currently available.</span>
+          </button>
+        </div>
+
+        {source === "savings" ? (
+          <div className="withdrawal-source-panel savings-panel">
+            <div className="source-panel-header">
+              <div>
+                <p className="eyebrow">Savings Withdrawal</p>
+                <h3>Withdraw from Savings</h3>
+              </div>
+              <strong>{money(savingsAvailable)}</strong>
+            </div>
+
+            <div className="source-panel-grid">
+              <div><span>Current Savings</span><strong>{money(data.savingsBalance)}</strong></div>
+              <div><span>60% Annual Limit</span><strong>{money(data.maxGrossDeduction)}</strong></div>
+              <div><span>Already Withdrawn This Year</span><strong>{data.annualWithdrawalUsed ? "Yes" : "No"}</strong></div>
+              <div><span>Available to Withdraw</span><strong>{money(savingsAvailable)}</strong></div>
+            </div>
+
+            {data.hasOutstandingLoan && (
+              <div className="withdrawal-lock-notice">
+                <div>
+                  <strong>Savings withdrawal unavailable</strong>
+                  <p>
+                    You have an outstanding loan. Fully repay it before making a savings withdrawal.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {data.annualWithdrawalUsed && (
+              <div className="withdrawal-lock-notice">
+                <div>
+                  <strong>Annual savings withdrawal already used</strong>
+                  <p>Your next savings withdrawal becomes available next calendar year.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="withdrawal-source-panel loan-panel">
+            <div className="source-panel-header">
+              <div>
+                <p className="eyebrow">Loan Funds</p>
+                <h3>Withdraw from Loan Funds</h3>
+              </div>
+              <strong>{money(loanAvailable)}</strong>
+            </div>
+
+            <div className="source-panel-grid">
+              <div><span>Approved Loan</span><strong>{money(data.loanFunds?.approvedAmount)}</strong></div>
+              <div><span>Already Withdrawn</span><strong>{money(data.loanFunds?.amountWithdrawn)}</strong></div>
+              <div><span>Total Repayable</span><strong>{money(data.loanFunds?.totalRepayment)}</strong></div>
+              <div><span>Outstanding Loan</span><strong>{money(data.loanFunds?.outstandingBalance)}</strong></div>
+            </div>
+
+            <div className="loan-funds-note">
+              <strong>Important:</strong> Withdrawing loan funds does not count as loan repayment. Your outstanding loan amount remains the same until repayments are confirmed.
             </div>
           </div>
         )}
@@ -603,11 +724,13 @@ function Withdrawals() {
               max={withdrawalInputMax}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. 40000"
-              disabled={submitting}
+              placeholder={source === "loan" ? "e.g. 5000" : "e.g. 40000"}
+              disabled={submitting || withdrawalInputMax <= 0}
             />
+            <small>
+              Maximum available: {money(withdrawalInputMax)}
+            </small>
           </label>
-
 
           <label className="bank-selector-label">
             Bank
@@ -619,22 +742,13 @@ function Withdrawals() {
                 type="button"
                 className="bank-selector-trigger"
                 onClick={() => {
-                  if (!banksLoading && !submitting) {
-                    setBankOpen((prev) => !prev);
-                  }
+                  if (!banksLoading && !submitting) setBankOpen((prev) => !prev);
                 }}
                 disabled={banksLoading || submitting}
               >
-                <span
-                  className={
-                    selectedBank ? "selected-bank-name" : "placeholder"
-                  }
-                >
-                  {banksLoading
-                    ? "Loading banks..."
-                    : selectedBank?.name || "Select your bank"}
+                <span className={selectedBank ? "selected-bank-name" : "placeholder"}>
+                  {banksLoading ? "Loading banks..." : selectedBank?.name || "Select your bank"}
                 </span>
-
                 <span className="bank-chevron">{bankOpen ? "⌃" : "⌄"}</span>
               </button>
 
@@ -651,7 +765,6 @@ function Withdrawals() {
                       autoFocus
                     />
                   </div>
-
                   <div className="bank-options">
                     {filteredBanks.length === 0 ? (
                       <div className="bank-no-results">No bank found</div>
@@ -660,9 +773,7 @@ function Withdrawals() {
                         <button
                           type="button"
                           key={bank.code}
-                          className={`bank-option ${
-                            bank.code === bankCode ? "selected" : ""
-                          }`}
+                          className={`bank-option ${bank.code === bankCode ? "selected" : ""}`}
                           onClick={() => {
                             setBankCode(bank.code);
                             setAccountName("");
@@ -672,9 +783,7 @@ function Withdrawals() {
                           }}
                         >
                           <span>{bank.name}</span>
-                          {bank.code === bankCode && (
-                            <span className="bank-check">✓</span>
-                          )}
+                          {bank.code === bankCode && <span className="bank-check">✓</span>}
                         </button>
                       ))
                     )}
@@ -700,7 +809,6 @@ function Withdrawals() {
                 placeholder="10-digit account number"
                 disabled={submitting}
               />
-
               <button
                 type="button"
                 className="verify-account-btn"
@@ -731,10 +839,8 @@ function Withdrawals() {
               <p className="eyebrow">Security</p>
               <h3>Create your 4-digit Withdrawal PIN</h3>
               <p>
-                This PIN is separate from your login password and is used only
-                to authorize withdrawals.
+                This PIN is separate from your login password and is used only to authorize withdrawals.
               </p>
-
               <div className="withdrawal-pin-form">
                 <input
                   type="password"
@@ -746,20 +852,16 @@ function Withdrawals() {
                   placeholder="4-digit PIN"
                   disabled={pinSaving || submitting}
                 />
-
                 <input
                   type="password"
                   inputMode="numeric"
                   maxLength="4"
                   autoComplete="off"
                   value={confirmPin}
-                  onChange={(e) =>
-                    setConfirmPin(e.target.value.replace(/\D/g, ""))
-                  }
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
                   placeholder="Confirm PIN"
                   disabled={pinSaving || submitting}
                 />
-
                 <button
                   type="button"
                   className="verify-account-btn"
@@ -769,39 +871,27 @@ function Withdrawals() {
                   {pinSaving ? "Creating..." : "Create PIN"}
                 </button>
               </div>
-
               {pinMessage && (
-                <p
-                  className={
-                    pinMessage.toLowerCase().includes("success")
-                      ? "form-success"
-                      : "form-error"
-                  }
-                >
+                <p className={pinMessage.toLowerCase().includes("success") ? "form-success" : "form-error"}>
                   {pinMessage}
                 </p>
               )}
             </div>
           ) : (
-            <>
-              <label>
-                4-Digit Withdrawal PIN
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength="4"
-                  autoComplete="off"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Enter your withdrawal PIN"
-                  disabled={submitting}
-                />
-                <small>
-                  Your withdrawal PIN is securely verified on the server and is
-                  never shown to administrators.
-                </small>
-              </label>
-            </>
+            <label>
+              4-Digit Withdrawal PIN
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength="4"
+                autoComplete="off"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                placeholder="Enter your withdrawal PIN"
+                disabled={submitting}
+              />
+              <small>Your withdrawal PIN is securely verified on the server and is never shown to administrators.</small>
+            </label>
           )}
 
           <button
@@ -810,12 +900,16 @@ function Withdrawals() {
             disabled={
               submitting ||
               loading ||
-              data.availableAmount <= 0 ||
-              data.annualWithdrawalUsed ||
-              data.hasOutstandingLoan
+              withdrawalInputMax <= 0 ||
+              (source === "savings" && (data.annualWithdrawalUsed || data.hasOutstandingLoan)) ||
+              (source === "loan" && !data.loanFunds?.hasActiveLoan)
             }
           >
-            {submitting ? "Processing Withdrawal..." : "Confirm Withdrawal"}
+            {submitting
+              ? "Processing Withdrawal..."
+              : source === "loan"
+                ? "Withdraw Loan Funds"
+                : "Withdraw from Savings"}
           </button>
         </form>
       </section>
@@ -845,6 +939,7 @@ function Withdrawals() {
               <thead>
                 <tr>
                   <th>Date</th>
+                  <th>Source</th>
                   <th>Bank</th>
                   <th>Account</th>
                   <th>Amount</th>
@@ -860,6 +955,12 @@ function Withdrawals() {
                       {withdrawal.createdAt
                         ? new Date(withdrawal.createdAt).toLocaleDateString()
                         : "—"}
+                    </td>
+
+                    <td>
+                      <span className={`withdrawal-source-badge ${withdrawal.source || "savings"}`}>
+                        {withdrawal.source === "loan" ? "Loan Funds" : "Savings"}
+                      </span>
                     </td>
 
                     <td>{withdrawal.bankName}</td>

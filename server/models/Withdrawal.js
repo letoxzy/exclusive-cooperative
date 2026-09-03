@@ -8,6 +8,22 @@ const withdrawalSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Where the money comes from. Savings withdrawals are subject to the
+    // annual 60% rule; loan-fund withdrawals use the member's available
+    // balance from a specific active loan.
+    source: {
+      type: String,
+      enum: ["savings", "loan"],
+      default: "savings",
+      required: true,
+    },
+
+    loan: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Loan",
+      default: null,
+    },
+
     // Amount the member receives in their bank account.
     amount: {
       type: Number,

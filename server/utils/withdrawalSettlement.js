@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import Loan from "../models/Loan.js";
 
 const DEFAULT_ADMINISTRATIVE_FEE = 0;
 
@@ -28,11 +29,10 @@ export async function settleWithdrawal(
   const administrativeFee = Number(
     withdrawal.administrativeFee ?? DEFAULT_ADMINISTRATIVE_FEE
   );
-  // New withdrawals store the full deduction. Existing legacy records may
-  // not have the field, so preserve their original reserved amount.
   const totalDeduction = Number(
     withdrawal.totalDeduction ?? amount
   );
+  const source = withdrawal.source || "savings";
 
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Invalid withdrawal amount.");
@@ -46,26 +46,64 @@ export async function settleWithdrawal(
     throw new Error("Invalid total withdrawal deduction.");
   }
 
-  if (finalStatus === "success") {
-    const user = await User.findOneAndUpdate(
-      {
-        _id: withdrawal.user,
-        withdrawalReserved: { $gte: totalDeduction },
-        savingsBalance: { $gte: totalDeduction },
-      },
-      {
-        $inc: {
-          savingsBalance: -totalDeduction,
-          withdrawalReserved: -totalDeduction,
-        },
-      },
-      { new: true }
-    );
+  if (source === "loan" && !withdrawal.loan) {
+    throw new Error("Loan withdrawal is missing its loan reference.");
+  }
 
-    if (!user) {
-      throw new Error(
-        "Could not safely settle the withdrawal against the member balance."
+  if (finalStatus === "success") {
+    if (source === "loan") {
+      const loan = await Loan.findOneAndUpdate(
+        {
+          _id: withdrawal.loan,
+          status: { $in: ["active", "defaulted"] },
+          loanFundsReserved: { $gte: amount },
+          $expr: {
+            $gte: [
+              {
+                $subtract: [
+                  "$amount",
+                  { $add: ["$loanFundsWithdrawn", "$loanFundsReserved"] },
+                ],
+              },
+              0,
+            ],
+          },
+        },
+        {
+          $inc: {
+            loanFundsWithdrawn: amount,
+            loanFundsReserved: -amount,
+          },
+        },
+        { new: true }
       );
+
+      if (!loan) {
+        throw new Error(
+          "Could not safely settle the withdrawal against the available loan funds."
+        );
+      }
+    } else {
+      const user = await User.findOneAndUpdate(
+        {
+          _id: withdrawal.user,
+          withdrawalReserved: { $gte: totalDeduction },
+          savingsBalance: { $gte: totalDeduction },
+        },
+        {
+          $inc: {
+            savingsBalance: -totalDeduction,
+            withdrawalReserved: -totalDeduction,
+          },
+        },
+        { new: true }
+      );
+
+      if (!user) {
+        throw new Error(
+          "Could not safely settle the withdrawal against the member balance."
+        );
+      }
     }
 
     withdrawal.administrativeFee = administrativeFee;
@@ -74,23 +112,44 @@ export async function settleWithdrawal(
     withdrawal.paidAt = new Date();
     withdrawal.failureReason = "";
   } else if (["failed", "reversed", "rejected"].includes(finalStatus)) {
-    const user = await User.findOneAndUpdate(
-      {
-        _id: withdrawal.user,
-        withdrawalReserved: { $gte: totalDeduction },
-      },
-      {
-        $inc: {
-          withdrawalReserved: -totalDeduction,
+    if (source === "loan") {
+      const loan = await Loan.findOneAndUpdate(
+        {
+          _id: withdrawal.loan,
+          loanFundsReserved: { $gte: amount },
         },
-      },
-      { new: true }
-    );
-
-    if (!user) {
-      throw new Error(
-        "Could not safely release the withdrawal reservation."
+        {
+          $inc: {
+            loanFundsReserved: -amount,
+          },
+        },
+        { new: true }
       );
+
+      if (!loan) {
+        throw new Error(
+          "Could not safely release the reserved loan funds."
+        );
+      }
+    } else {
+      const user = await User.findOneAndUpdate(
+        {
+          _id: withdrawal.user,
+          withdrawalReserved: { $gte: totalDeduction },
+        },
+        {
+          $inc: {
+            withdrawalReserved: -totalDeduction,
+          },
+        },
+        { new: true }
+      );
+
+      if (!user) {
+        throw new Error(
+          "Could not safely release the withdrawal reservation."
+        );
+      }
     }
 
     withdrawal.administrativeFee = administrativeFee;

@@ -430,7 +430,6 @@ router.patch(
         }
 
         user.savingsBalance += txn.amount;
-        user.savingsWithdrawalLocked = false;
 
         await user.save();
 
@@ -1015,8 +1014,8 @@ router.patch(
         loan.approvedDate =
           approvalDate;
         loan.amountPaid = 0;
-        loan.outstandingBalance =
-          totalRepayment;
+        // Debt starts only when the approved loan is actually disbursed.
+        loan.outstandingBalance = 0;
         loan.repaymentSchedule =
           schedule;
 
@@ -1081,6 +1080,34 @@ router.patch(
         });
       }
 
+      const member = await User.findById(loan.user);
+
+      if (!member) {
+        return res.status(404).json({
+          message: "Member associated with this loan was not found.",
+        });
+      }
+
+      if (!member.isApprovedMember) {
+        return res.status(400).json({
+          message: "This member is no longer an approved cooperative member.",
+        });
+      }
+
+      // Re-check eligibility at the moment of disbursement. This protects
+      // the cooperative if the member's savings changed after approval.
+      const currentSavings = Number(member.savingsBalance || 0);
+      const currentEligibility = currentSavings * 2;
+
+      if (loan.amount > currentEligibility) {
+        return res.status(400).json({
+          message:
+            `This loan can no longer be disbursed because the requested amount of ₦${Number(
+              loan.amount || 0
+            ).toLocaleString()} exceeds the member's current eligibility of ₦${currentEligibility.toLocaleString()}.`,
+        });
+      }
+
       loan.status = "active";
       loan.disbursedDate =
         new Date();
@@ -1091,17 +1118,9 @@ router.patch(
 
       await loan.save();
 
-      await User.findByIdAndUpdate(
-        loan.user,
-        {
-          $inc: {
-            savingsBalance:
-              loan.amount,
-            loanFundsBalance:
-              loan.amount,
-          },
-        }
-      );
+      // Loan proceeds are NOT savings. Keep the member's savings balance
+      // untouched; the loan itself is tracked by Loan.amount and
+      // Loan.outstandingBalance.
 
       await Notification.create({
         user: loan.user,
@@ -1343,44 +1362,9 @@ router.patch(
         });
       }
 
-      const totalRepayment =
-        Number(
-          loan.totalRepayment ||
-            loan.amount ||
-            0
-        );
-
-      const principalRatio =
-        loan.amount > 0
-          ? Number(loan.amount) /
-            totalRepayment
-          : 1;
-
-      const principalPortion =
-        Math.min(
-          Number(
-            loan.amount || 0
-          ),
-          Math.round(
-            Number(
-              repayment.amount || 0
-            ) *
-              principalRatio *
-              100
-          ) / 100
-        );
-
-      await User.findByIdAndUpdate(
-        loan.user,
-        {
-          $inc: {
-            savingsBalance:
-              -repayment.amount,
-            loanFundsBalance:
-              -principalPortion,
-          },
-        }
-      );
+      // Repayment is a loan ledger transaction. It must NOT reduce the
+      // member's savings balance unless a future, explicitly supported
+      // savings-to-loan transfer is performed.
 
       res.json({
         repayment,

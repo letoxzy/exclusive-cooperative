@@ -1,13 +1,13 @@
 import User from "../models/User.js";
 
-const DEFAULT_ADMINISTRATIVE_FEE = 20000;
+const DEFAULT_ADMINISTRATIVE_FEE = 0;
 
 /**
  * Finalize a withdrawal after Paystack reports its result.
  *
  * A withdrawal amount is the amount paid to the member.
- * The administrative/processing fee is deducted from the member's savings,
- * so totalDeduction = amount + administrativeFee.
+ * Ordinary savings withdrawals currently have no administrative fee;
+ * totalDeduction therefore equals amount for new ordinary withdrawals.
  *
  * success:
  *   - deducts totalDeduction from savingsBalance

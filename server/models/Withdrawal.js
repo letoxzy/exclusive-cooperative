@@ -15,9 +15,9 @@ const withdrawalSchema = new mongoose.Schema(
       min: 1,
     },
 
-    // The bye-law provides for a ₦20,000 administrative/processing fee,
-    // deducted from the member's savings when a withdrawal is processed.
-    administrativeFee: { type: Number, default: 20000, min: 0 },
+    // Ordinary savings withdrawals do not apply the membership-withdrawal
+    // fee from section 15.8(iii). Kept for future membership-withdrawal records.
+    administrativeFee: { type: Number, default: 0, min: 0 },
 
     // Total amount deducted from the member's savings.
     totalDeduction: { type: Number, required: true, min: 1 },

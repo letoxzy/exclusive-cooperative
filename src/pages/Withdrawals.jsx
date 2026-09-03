@@ -19,7 +19,7 @@ function Withdrawals() {
   const [data, setData] = useState({
     savingsBalance: 0,
     withdrawalPercentage: 60,
-    administrativeFee: 20000,
+    administrativeFee: 0,
     maxGrossDeduction: 0,
     availableAmount: 0,
     reservedAmount: 0,
@@ -202,7 +202,6 @@ function Withdrawals() {
   };
 
   const withdrawalInputMax = Number(data.availableAmount || 0);
-  const administrativeFee = Number(data.administrativeFee || 20000);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -249,7 +248,7 @@ function Withdrawals() {
     const confirmed = window.confirm(
       `Confirm withdrawal of ${money(value)} to ${accountName} at ${
         selectedBank?.name || "your bank"
-      }, account ending ${accountNumber.slice(-4)}?\n\nAdministrative/processing fee: ${money(administrativeFee)}\nTotal deducted from savings: ${money(value + administrativeFee)}`,
+      }, account ending ${accountNumber.slice(-4)}?\n\nTotal deducted from savings: ${money(value)}`,
     );
 
     if (!confirmed) return;
@@ -300,7 +299,6 @@ function Withdrawals() {
       });
 
       const amountFormatted = money(receipt.amount);
-      const feeFormatted = money(receipt.administrativeFee);
       const totalDeductionFormatted = money(receipt.totalDeduction);
       const dateFormatted = receipt.createdAt
         ? new Date(receipt.createdAt).toLocaleString()
@@ -443,10 +441,6 @@ function Withdrawals() {
 
               <div class="details">
                 <div class="row">
-                  <span class="label">Administrative Fee</span>
-                  <span class="value">${escapeHtml(feeFormatted)}</span>
-                </div>
-                <div class="row">
                   <span class="label">Total Deducted from Savings</span>
                   <span class="value">${escapeHtml(totalDeductionFormatted)}</span>
                 </div>
@@ -550,11 +544,6 @@ function Withdrawals() {
           <strong>{loading ? "Loading..." : money(data.maxGrossDeduction)}</strong>
         </div>
 
-        <div className="withdrawal-balance-card">
-          <span>Administrative Fee</span>
-          <strong>{loading ? "Loading..." : money(data.administrativeFee)}</strong>
-        </div>
-
         <div className="withdrawal-balance-card available">
           <span>Available to Withdraw</span>
           <strong>
@@ -575,9 +564,8 @@ function Withdrawals() {
           <strong>60% annual withdrawal limit</strong>
           <span>
             You may withdraw once per calendar year, up to 60% of your total
-            savings. The ₦20,000 administrative/processing fee is deducted from
-            your savings within that 60% limit. Withdrawals are not available
-            while you have an outstanding loan.
+            savings. Withdrawals are not available while you have an
+            outstanding loan.
           </span>
         </div>
 
@@ -620,14 +608,6 @@ function Withdrawals() {
             />
           </label>
 
-          <div className="withdrawal-rule">
-            <strong>Withdrawal fee</strong>
-            <span>
-              A {money(administrativeFee)} administrative/processing fee will
-              be deducted from your savings. The amount you enter is the amount
-              sent to your verified bank account.
-            </span>
-          </div>
 
           <label className="bank-selector-label">
             Bank

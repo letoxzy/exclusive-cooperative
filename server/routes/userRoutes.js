@@ -236,7 +236,7 @@ router.get("/me/transactions", protect, async (req, res) => {
       ...loans.map((loan) => ({
         id: `loan-${loan._id}`,
         type: "Loan Disbursement",
-        description: `${loan.loanType || "Loan"} loan disbursed`,
+        description: `${loan.loanType || "Loan"} loan disbursed (not savings)`,
         amount: Number(loan.amount || 0),
         status: "approved",
         direction: "credit",

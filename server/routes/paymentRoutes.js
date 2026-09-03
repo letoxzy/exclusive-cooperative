@@ -78,7 +78,6 @@ router.get("/paystack/verify/:reference", protect, async (req, res) => {
     });
 
     req.user.savingsBalance += amount;
-    req.user.savingsWithdrawalLocked = false;
     await req.user.save();
 
     await Notification.create({

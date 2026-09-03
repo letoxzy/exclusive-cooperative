@@ -291,6 +291,10 @@ function Dashboard() {
 
   const currentLoan = activeLoan || approvedLoan;
 
+  const outstandingLoanAmount = activeLoan
+    ? Math.max(0, Number(activeLoan.outstandingBalance || 0))
+    : 0;
+
   /*
    * ================================
    * LOAN HISTORY
@@ -377,6 +381,14 @@ function Dashboard() {
           <span className="dash-label">Loan Eligibility (2x savings)</span>
 
           <span className="dash-figure gold">{displayMoney(eligibleLoan)}</span>
+        </div>
+
+        <div className="dash-card">
+          <span className="dash-label">Outstanding Loan</span>
+
+          <span className="dash-figure">
+            {displayMoney(outstandingLoanAmount)}
+          </span>
         </div>
       </section>
 
@@ -778,10 +790,9 @@ function Dashboard() {
             <p className="eyebrow">Savings</p>
             <h2>Withdraw your savings</h2>
             <p className="dash-note">
-              Withdraw up to 60% of your total savings once each year. A
-              ₦20,000 administrative/processing fee is deducted from your
-              savings within that limit, and your bank account is verified
-              before payment.
+              Withdraw up to 60% of your total savings once each year.
+              Withdrawals are unavailable while you have an outstanding loan,
+              and your bank account is verified before payment.
             </p>
           </div>
           <Link to="/withdrawals" className="withdraw-dashboard-btn">

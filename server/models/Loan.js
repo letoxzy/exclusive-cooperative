@@ -100,13 +100,15 @@ const loanSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // Amount already paid
+    // Amount already paid against the loan repayment obligation.
+    // This is independent of the member's savingsBalance.
     amountPaid: {
       type: Number,
       default: 0,
     },
 
-    // Remaining balance
+    // Remaining loan debt. This becomes the totalRepayment only when the
+    // approved loan is actually disbursed; it remains 0 before disbursement.
     outstandingBalance: {
       type: Number,
       default: 0,

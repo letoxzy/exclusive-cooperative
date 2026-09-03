@@ -17,7 +17,7 @@ const PAYSTACK_BASE = "https://api.paystack.co";
 
 // Withdrawal rules from the cooperative bye-law.
 const WITHDRAWAL_PERCENTAGE = 0.60;
-const ADMINISTRATIVE_FEE = 20000;
+const ADMINISTRATIVE_FEE = 0;
 
 // Create a separate 4-digit withdrawal PIN.
 router.post(
@@ -300,11 +300,12 @@ router.get(
       const maxGrossDeduction = savings * WITHDRAWAL_PERCENTAGE;
       const availableAmount = Math.max(
         0,
-        maxGrossDeduction - ADMINISTRATIVE_FEE - reserved
+        maxGrossDeduction - reserved
       );
 
       const hasOutstandingLoan = await Loan.exists({
         user: req.user._id,
+        status: { $in: ["active", "defaulted"] },
         outstandingBalance: { $gt: 0 },
       });
 
@@ -386,9 +387,8 @@ router.get("/:id/receipt", protect, requireApprovedMember, async (req, res) => {
 // 3. checks the member has no outstanding loan
 // 4. enforces one withdrawal per calendar year
 // 5. limits the total savings deduction to 60% of savings
-// 6. deducts the ₦20,000 administrative/processing fee from savings
-// 7. atomically reserves the total deduction
-// 8. creates the Paystack recipient and starts the transfer
+// 6. atomically reserves the withdrawal amount
+// 7. creates the Paystack recipient and starts the transfer
 //
 // Paystack webhook later confirms success/failure/reversal.
 router.post(
@@ -523,8 +523,9 @@ router.post(
       // outstanding loan remains unpaid.
       const outstandingLoan = await Loan.findOne({
         user: freshMember._id,
+        status: { $in: ["active", "defaulted"] },
         outstandingBalance: { $gt: 0 },
-      }).select("outstandingBalance");
+      }).select("outstandingBalance status");
 
       if (outstandingLoan) {
         return res.status(400).json({
@@ -547,32 +548,24 @@ router.post(
         });
       }
 
-      // The bye-law permits a maximum withdrawal of 60% of total savings
-      // once per year. The ₦20,000 administrative fee is deducted from
-      // savings, so the member's bank payout must leave room for the fee.
+      // Section 14.3 permits a maximum withdrawal of 60% of total
+      // contribution once per year. The ₦20,000 fee in section 15.8(iii)
+      // specifically refers to withdrawal of membership, so it is not
+      // applied to this ordinary savings-withdrawal endpoint.
       const maxGrossDeduction = savings * WITHDRAWAL_PERCENTAGE;
-      const totalDeduction = amount + ADMINISTRATIVE_FEE;
+      const totalDeduction = amount;
       const availableBeforeReservation = Math.max(
         0,
-        maxGrossDeduction - reserved - ADMINISTRATIVE_FEE
+        maxGrossDeduction - reserved
       );
 
       if (amount <= 0 || amount > availableBeforeReservation) {
         return res.status(400).json({
-          message: `You can withdraw up to ₦${availableBeforeReservation.toLocaleString()} this year. The ₦${ADMINISTRATIVE_FEE.toLocaleString()} administrative fee is included within the 60% withdrawal limit.`,
+          message: `You can withdraw up to ₦${availableBeforeReservation.toLocaleString()} this year.`,
         });
       }
 
-      if (totalDeduction > savings * WITHDRAWAL_PERCENTAGE - reserved) {
-        return res.status(400).json({
-          message: "The withdrawal amount plus the administrative fee exceeds your 60% annual withdrawal limit.",
-        });
-      }
-
-      /*
-       * Atomically reserve the total amount that will be removed from
-       * savings (member payout + administrative fee).
-       */
+      /* Atomically reserve the exact amount that will be paid out. */
       const reservedUser = await User.findOneAndUpdate(
         {
           _id: freshMember._id,
@@ -634,7 +627,7 @@ router.post(
         withdrawal = await Withdrawal.create({
           user: freshMember._id,
           amount,
-          administrativeFee: ADMINISTRATIVE_FEE,
+          administrativeFee: 0,
           totalDeduction,
           bankCode,
           bankName,
@@ -714,13 +707,12 @@ router.post(
           withdrawal,
           savingsBalance: finalSavings,
           withdrawalPercentage: WITHDRAWAL_PERCENTAGE * 100,
-          administrativeFee: ADMINISTRATIVE_FEE,
+          administrativeFee: 0,
           availableAmount: finalAnnualWithdrawal
             ? 0
             : Math.max(
                 0,
                 finalSavings * WITHDRAWAL_PERCENTAGE -
-                  ADMINISTRATIVE_FEE -
                   finalReserved
               ),
           annualWithdrawalUsed: finalAnnualWithdrawal,

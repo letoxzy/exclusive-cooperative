@@ -1164,7 +1164,7 @@ function AdminDashboard() {
             <p className="admin-subtitle">
               Monitor member withdrawal requests and Paystack transfer status.
               Withdrawals are paid automatically after the member confirms with
-              their password.
+              their withdrawal PIN.
             </p>
           </div>
           <button

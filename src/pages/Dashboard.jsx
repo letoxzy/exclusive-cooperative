@@ -778,8 +778,9 @@ function Dashboard() {
             <p className="eyebrow">Savings</p>
             <h2>Withdraw your savings</h2>
             <p className="dash-note">
-              Keep 50% of your current savings as the cooperative reserve and
-              withdraw up to the remaining 50%. Your bank account is verified
+              Withdraw up to 60% of your total savings once each year. A
+              ₦20,000 administrative/processing fee is deducted from your
+              savings within that limit, and your bank account is verified
               before payment.
             </p>
           </div>

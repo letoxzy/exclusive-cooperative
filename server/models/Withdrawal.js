@@ -8,16 +8,19 @@ const withdrawalSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Amount the member receives in their bank account.
     amount: {
       type: Number,
       required: true,
       min: 1,
     },
 
-    // Recorded when the withdrawal settles so the system can distinguish
-    // loan-fund withdrawals from withdrawals that used personal savings.
-    loanFundsUsed: { type: Number, default: 0, min: 0 },
-    personalSavingsUsed: { type: Number, default: 0, min: 0 },
+    // The bye-law provides for a ₦20,000 administrative/processing fee,
+    // deducted from the member's savings when a withdrawal is processed.
+    administrativeFee: { type: Number, default: 20000, min: 0 },
+
+    // Total amount deducted from the member's savings.
+    totalDeduction: { type: Number, required: true, min: 1 },
 
     bankCode: {
       type: String,

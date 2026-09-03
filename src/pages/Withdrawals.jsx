@@ -18,11 +18,13 @@ function Withdrawals() {
 
   const [data, setData] = useState({
     savingsBalance: 0,
-    lockedAmount: 0,
+    withdrawalPercentage: 60,
+    administrativeFee: 20000,
+    maxGrossDeduction: 0,
     availableAmount: 0,
     reservedAmount: 0,
-    loanFundsBalance: 0,
-    savingsWithdrawalLocked: false,
+    annualWithdrawalUsed: false,
+    hasOutstandingLoan: false,
     withdrawals: [],
   });
 
@@ -199,11 +201,8 @@ function Withdrawals() {
     }
   };
 
-  const savingsWithdrawalLocked = Boolean(data.savingsWithdrawalLocked);
-  const loanFundsAvailable = Number(data.loanFundsBalance || 0);
-  const withdrawalInputMax = savingsWithdrawalLocked
-    ? Math.min(Number(data.availableAmount || 0), loanFundsAvailable)
-    : Number(data.availableAmount || 0);
+  const withdrawalInputMax = Number(data.availableAmount || 0);
+  const administrativeFee = Number(data.administrativeFee || 20000);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -217,10 +216,13 @@ function Withdrawals() {
       return;
     }
 
-    if (savingsWithdrawalLocked && value > loanFundsAvailable) {
-      setError(
-        "Your personal-savings withdrawal is locked. Make a new savings contribution to unlock it. You can still withdraw available loan funds."
-      );
+    if (data.hasOutstandingLoan) {
+      setError("You cannot withdraw while you have an outstanding loan. Please fully repay your loan first.");
+      return;
+    }
+
+    if (data.annualWithdrawalUsed) {
+      setError("You have already made a withdrawal this year. You can make another withdrawal next year.");
       return;
     }
 
@@ -247,7 +249,7 @@ function Withdrawals() {
     const confirmed = window.confirm(
       `Confirm withdrawal of ${money(value)} to ${accountName} at ${
         selectedBank?.name || "your bank"
-      }, account ending ${accountNumber.slice(-4)}?`,
+      }, account ending ${accountNumber.slice(-4)}?\n\nAdministrative/processing fee: ${money(administrativeFee)}\nTotal deducted from savings: ${money(value + administrativeFee)}`,
     );
 
     if (!confirmed) return;
@@ -298,6 +300,8 @@ function Withdrawals() {
       });
 
       const amountFormatted = money(receipt.amount);
+      const feeFormatted = money(receipt.administrativeFee);
+      const totalDeductionFormatted = money(receipt.totalDeduction);
       const dateFormatted = receipt.createdAt
         ? new Date(receipt.createdAt).toLocaleString()
         : "—";
@@ -439,6 +443,14 @@ function Withdrawals() {
 
               <div class="details">
                 <div class="row">
+                  <span class="label">Administrative Fee</span>
+                  <span class="value">${escapeHtml(feeFormatted)}</span>
+                </div>
+                <div class="row">
+                  <span class="label">Total Deducted from Savings</span>
+                  <span class="value">${escapeHtml(totalDeductionFormatted)}</span>
+                </div>
+                <div class="row">
                   <span class="label">Member</span>
                   <span class="value">${escapeHtml(receipt.memberName)}</span>
                 </div>
@@ -518,8 +530,8 @@ function Withdrawals() {
           <p className="eyebrow">Savings</p>
           <h1>Withdrawals</h1>
           <p>
-            Withdraw from your savings while keeping the cooperative's 50%
-            savings reserve in place.
+            Withdraw up to 60% of your total savings once each year, subject
+            to the cooperative's withdrawal rules.
           </p>
         </div>
       </div>
@@ -534,15 +546,13 @@ function Withdrawals() {
         </div>
 
         <div className="withdrawal-balance-card locked">
-          <span>50% Locked Reserve</span>
-          <strong>{loading ? "Loading..." : money(data.lockedAmount)}</strong>
+          <span>60% Annual Withdrawal Limit</span>
+          <strong>{loading ? "Loading..." : money(data.maxGrossDeduction)}</strong>
         </div>
 
         <div className="withdrawal-balance-card">
-          <span>Loan Funds Included</span>
-          <strong>
-            {loading ? "Loading..." : money(data.loanFundsBalance)}
-          </strong>
+          <span>Administrative Fee</span>
+          <strong>{loading ? "Loading..." : money(data.administrativeFee)}</strong>
         </div>
 
         <div className="withdrawal-balance-card available">
@@ -562,31 +572,42 @@ function Withdrawals() {
         </div>
 
         <div className="withdrawal-rule">
-          <strong>50% savings reserve</strong>
+          <strong>60% annual withdrawal limit</strong>
           <span>
-            You can withdraw 100% of your loan funds plus up to 50% of your
-            personal savings. A withdrawal that uses personal savings requires
-            a new contribution before another personal-savings withdrawal.
+            You may withdraw once per calendar year, up to 60% of your total
+            savings. The ₦20,000 administrative/processing fee is deducted from
+            your savings within that 60% limit. Withdrawals are not available
+            while you have an outstanding loan.
           </span>
         </div>
 
-        {savingsWithdrawalLocked && (
+        {data.annualWithdrawalUsed && (
           <div className="withdrawal-lock-notice">
             <div>
-              <strong>Personal savings withdrawal locked</strong>
+              <strong>Annual withdrawal already used</strong>
               <p>
-                Make a new savings contribution of any amount to unlock
-                personal-savings withdrawals. Your available loan funds can
-                still be withdrawn during this period.
+                You have already made a withdrawal this year. Your next
+                withdrawal becomes available next year.
               </p>
             </div>
-            <span>Loan funds available: {money(loanFundsAvailable)}</span>
+          </div>
+        )}
+
+        {data.hasOutstandingLoan && (
+          <div className="withdrawal-lock-notice">
+            <div>
+              <strong>Withdrawal unavailable</strong>
+              <p>
+                You have an outstanding loan. Please fully repay it before
+                requesting a savings withdrawal.
+              </p>
+            </div>
           </div>
         )}
 
         <form className="withdrawal-form" onSubmit={handleSubmit}>
           <label>
-            Withdrawal Amount (₦)
+            Amount to Receive (₦)
             <input
               type="number"
               min="1"
@@ -594,10 +615,19 @@ function Withdrawals() {
               max={withdrawalInputMax}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. 250000"
+              placeholder="e.g. 40000"
               disabled={submitting}
             />
           </label>
+
+          <div className="withdrawal-rule">
+            <strong>Withdrawal fee</strong>
+            <span>
+              A {money(administrativeFee)} administrative/processing fee will
+              be deducted from your savings. The amount you enter is the amount
+              sent to your verified bank account.
+            </span>
+          </div>
 
           <label className="bank-selector-label">
             Bank
@@ -797,7 +827,13 @@ function Withdrawals() {
           <button
             type="submit"
             className="withdraw-submit-btn"
-            disabled={submitting || loading || data.availableAmount <= 0}
+            disabled={
+              submitting ||
+              loading ||
+              data.availableAmount <= 0 ||
+              data.annualWithdrawalUsed ||
+              data.hasOutstandingLoan
+            }
           >
             {submitting ? "Processing Withdrawal..." : "Confirm Withdrawal"}
           </button>

@@ -1,13 +1,17 @@
 import User from "../models/User.js";
 
+const DEFAULT_ADMINISTRATIVE_FEE = 20000;
+
 /**
  * Finalize a withdrawal after Paystack reports its result.
  *
+ * A withdrawal amount is the amount paid to the member.
+ * The administrative/processing fee is deducted from the member's savings,
+ * so totalDeduction = amount + administrativeFee.
+ *
  * success:
- *   - deducts the money from savingsBalance
+ *   - deducts totalDeduction from savingsBalance
  *   - releases the temporary withdrawal reservation
- *   - reduces loanFundsBalance only when the withdrawn amount is
- *     covered by the member's loan-funds portion
  *
  * failed/reversed/rejected:
  *   - releases the temporary withdrawal reservation
@@ -21,46 +25,39 @@ export async function settleWithdrawal(
   if (!withdrawal) return;
 
   const amount = Number(withdrawal.amount || 0);
+  const administrativeFee = Number(
+    withdrawal.administrativeFee ?? DEFAULT_ADMINISTRATIVE_FEE
+  );
+  // New withdrawals store the full deduction. Existing legacy records may
+  // not have the field, so preserve their original reserved amount.
+  const totalDeduction = Number(
+    withdrawal.totalDeduction ?? amount
+  );
 
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Invalid withdrawal amount.");
   }
 
+  if (!Number.isFinite(administrativeFee) || administrativeFee < 0) {
+    throw new Error("Invalid withdrawal administrative fee.");
+  }
+
+  if (!Number.isFinite(totalDeduction) || totalDeduction <= 0) {
+    throw new Error("Invalid total withdrawal deduction.");
+  }
+
   if (finalStatus === "success") {
-    // Work out which portion of this successful withdrawal actually came
-    // from the member's loan funds. Anything beyond the available loan
-    // funds necessarily comes from personal savings.
-    const currentUser = await User.findById(withdrawal.user).select(
-      "savingsBalance loanFundsBalance withdrawalReserved savingsWithdrawalLocked"
-    );
-
-    if (!currentUser) {
-      throw new Error("Member account not found while settling withdrawal.");
-    }
-
-    const currentLoanFunds = Math.max(
-      0,
-      Number(currentUser.loanFundsBalance || 0)
-    );
-    const loanFundsUsed = Math.min(currentLoanFunds, amount);
-    const personalSavingsUsed = Math.max(0, amount - loanFundsUsed);
-
     const user = await User.findOneAndUpdate(
       {
         _id: withdrawal.user,
-        withdrawalReserved: { $gte: amount },
-        savingsBalance: { $gte: amount },
-        loanFundsBalance: { $gte: loanFundsUsed },
+        withdrawalReserved: { $gte: totalDeduction },
+        savingsBalance: { $gte: totalDeduction },
       },
       {
         $inc: {
-          savingsBalance: -amount,
-          withdrawalReserved: -amount,
-          loanFundsBalance: -loanFundsUsed,
+          savingsBalance: -totalDeduction,
+          withdrawalReserved: -totalDeduction,
         },
-        ...(personalSavingsUsed > 0
-          ? { $set: { savingsWithdrawalLocked: true } }
-          : {}),
       },
       { new: true }
     );
@@ -71,22 +68,20 @@ export async function settleWithdrawal(
       );
     }
 
-    withdrawal.loanFundsUsed = loanFundsUsed;
-    withdrawal.personalSavingsUsed = personalSavingsUsed;
+    withdrawal.administrativeFee = administrativeFee;
+    withdrawal.totalDeduction = totalDeduction;
     withdrawal.status = "success";
     withdrawal.paidAt = new Date();
     withdrawal.failureReason = "";
-  } else if (
-    ["failed", "reversed", "rejected"].includes(finalStatus)
-  ) {
+  } else if (["failed", "reversed", "rejected"].includes(finalStatus)) {
     const user = await User.findOneAndUpdate(
       {
         _id: withdrawal.user,
-        withdrawalReserved: { $gte: amount },
+        withdrawalReserved: { $gte: totalDeduction },
       },
       {
         $inc: {
-          withdrawalReserved: -amount,
+          withdrawalReserved: -totalDeduction,
         },
       },
       { new: true }
@@ -98,6 +93,8 @@ export async function settleWithdrawal(
       );
     }
 
+    withdrawal.administrativeFee = administrativeFee;
+    withdrawal.totalDeduction = totalDeduction;
     withdrawal.status = finalStatus;
     withdrawal.failureReason =
       reason || "Withdrawal could not be completed.";

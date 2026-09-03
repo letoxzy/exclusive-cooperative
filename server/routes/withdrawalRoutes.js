@@ -15,10 +15,9 @@ const router = express.Router();
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
-// 50% of personal savings is locked.
-// Loan funds are not subject to this reserve.
-const LOCK_PERCENTAGE = 0.50;
-const AVAILABLE_PERCENTAGE = 0.50;
+// Withdrawal rules from the cooperative bye-law.
+const WITHDRAWAL_PERCENTAGE = 0.60;
+const ADMINISTRATIVE_FEE = 20000;
 
 // Create a separate 4-digit withdrawal PIN.
 router.post(
@@ -176,78 +175,6 @@ router.patch(
   }
 );
 
-async function ensureLoanFundsBalance(user) {
-  let loanFunds = Number(user.loanFundsBalance || 0);
-
-  if (loanFunds > 0) return loanFunds;
-
-  const activeLoan = await Loan.findOne({
-    user: user._id,
-    status: "active",
-  }).select("amount totalRepayment outstandingBalance");
-
-  if (!activeLoan) return 0;
-
-  const totalRepayment = Number(
-    activeLoan.totalRepayment || activeLoan.amount || 0
-  );
-
-  const principalOutstanding = Math.min(
-    Number(activeLoan.amount || 0),
-    totalRepayment > 0
-      ? (Number(activeLoan.outstandingBalance || 0) /
-          totalRepayment) *
-        Number(activeLoan.amount || 0)
-      : 0
-  );
-
-  loanFunds =
-    Math.max(0, Math.round(principalOutstanding * 100) / 100);
-
-  if (loanFunds > 0) {
-    user.loanFundsBalance = loanFunds;
-    await user.save();
-  }
-
-  return loanFunds;
-}
-
-function getWithdrawalBreakdown(
-  savingsBalance,
-  loanFundsBalance,
-  reserved,
-  savingsWithdrawalLocked = false
-) {
-  const savings = Math.max(0, Number(savingsBalance || 0));
-  const loanFunds = Math.max(
-    0,
-    Math.min(savings, Number(loanFundsBalance || 0))
-  );
-
-  const personalSavings = Math.max(0, savings - loanFunds);
-
-  // 50% of personal savings is locked.
-  const lockedAmount = personalSavings * LOCK_PERCENTAGE;
-
-  // Loan funds remain fully available.
-  // Only 50% of personal savings is available.
-  const availableBeforeReservations = savingsWithdrawalLocked
-    ? loanFunds
-    : loanFunds + personalSavings * AVAILABLE_PERCENTAGE;
-
-  const availableAmount = Math.max(
-    0,
-    availableBeforeReservations - Number(reserved || 0)
-  );
-
-  return {
-    loanFunds,
-    personalSavings,
-    lockedAmount,
-    availableAmount,
-  };
-}
-
 async function paystack(path, options = {}) {
   if (!process.env.PAYSTACK_SECRET_KEY) {
     throw new Error("PAYSTACK_SECRET_KEY is not configured.");
@@ -358,25 +285,39 @@ router.get(
         user: req.user._id,
       }).sort("-createdAt");
 
-      const savings = Number(req.user.savingsBalance || 0);
-      const reserved = Number(req.user.withdrawalReserved || 0);
-      const loanFunds = await ensureLoanFundsBalance(req.user);
+      const savings = Math.max(0, Number(req.user.savingsBalance || 0));
+      const reserved = Math.max(0, Number(req.user.withdrawalReserved || 0));
 
-      const breakdown = getWithdrawalBreakdown(
-        savings,
-        loanFunds,
-        reserved,
-        Boolean(req.user.savingsWithdrawalLocked)
+      const yearStart = new Date(new Date().getFullYear(), 0, 1);
+      const yearEnd = new Date(new Date().getFullYear() + 1, 0, 1);
+
+      const annualWithdrawal = await Withdrawal.findOne({
+        user: req.user._id,
+        createdAt: { $gte: yearStart, $lt: yearEnd },
+        status: { $in: ["processing", "success"] },
+      }).sort("createdAt");
+
+      const maxGrossDeduction = savings * WITHDRAWAL_PERCENTAGE;
+      const availableAmount = Math.max(
+        0,
+        maxGrossDeduction - ADMINISTRATIVE_FEE - reserved
       );
+
+      const hasOutstandingLoan = await Loan.exists({
+        user: req.user._id,
+        outstandingBalance: { $gt: 0 },
+      });
 
       res.json({
         savingsBalance: savings,
-        loanFundsBalance: breakdown.loanFunds,
-        personalSavingsBalance: breakdown.personalSavings,
-        lockedAmount: breakdown.lockedAmount,
-        availableAmount: breakdown.availableAmount,
+        withdrawalPercentage: WITHDRAWAL_PERCENTAGE * 100,
+        administrativeFee: ADMINISTRATIVE_FEE,
+        maxGrossDeduction,
+        availableAmount: annualWithdrawal ? 0 : availableAmount,
         reservedAmount: reserved,
-        savingsWithdrawalLocked: Boolean(req.user.savingsWithdrawalLocked),
+        annualWithdrawalUsed: Boolean(annualWithdrawal),
+        annualWithdrawal: annualWithdrawal || null,
+        hasOutstandingLoan: Boolean(hasOutstandingLoan),
         withdrawals,
       });
     } catch (err) {
@@ -419,6 +360,9 @@ router.get("/:id/receipt", protect, requireApprovedMember, async (req, res) => {
       memberName: member?.fullName || "Member",
       memberEmail: member?.email || "",
       amount: withdrawal.amount,
+      administrativeFee: withdrawal.administrativeFee ?? ADMINISTRATIVE_FEE,
+      totalDeduction:
+        withdrawal.totalDeduction ?? Number(withdrawal.amount || 0),
       bankName: withdrawal.bankName,
       accountName: withdrawal.accountName,
       accountNumberLast4: withdrawal.accountNumberLast4,
@@ -439,11 +383,12 @@ router.get("/:id/receipt", protect, requireApprovedMember, async (req, res) => {
 // The server:
 // 1. verifies the 4-digit PIN
 // 2. resolves the bank account again
-// 3. gets the member's current database balance
-// 4. enforces the 50% personal-savings reserve
-// 5. atomically reserves the withdrawal
-// 6. creates the Paystack recipient
-// 7. starts the Paystack transfer
+// 3. checks the member has no outstanding loan
+// 4. enforces one withdrawal per calendar year
+// 5. limits the total savings deduction to 60% of savings
+// 6. deducts the ₦20,000 administrative/processing fee from savings
+// 7. atomically reserves the total deduction
+// 8. creates the Paystack recipient and starts the transfer
 //
 // Paystack webhook later confirms success/failure/reversal.
 router.post(
@@ -563,9 +508,7 @@ router.post(
       }
 
       // Get a fresh balance from MongoDB.
-      const freshMember = await User.findById(
-        req.user._id
-      );
+      const freshMember = await User.findById(req.user._id);
 
       if (!freshMember) {
         return res.status(404).json({
@@ -573,95 +516,86 @@ router.post(
         });
       }
 
-      const savings = Number(
-        freshMember.savingsBalance || 0
-      );
+      const savings = Math.max(0, Number(freshMember.savingsBalance || 0));
+      const reserved = Math.max(0, Number(freshMember.withdrawalReserved || 0));
 
-      const reserved = Number(
-        freshMember.withdrawalReserved || 0
-      );
+      // The bye-law does not permit a member to withdraw while an
+      // outstanding loan remains unpaid.
+      const outstandingLoan = await Loan.findOne({
+        user: freshMember._id,
+        outstandingBalance: { $gt: 0 },
+      }).select("outstandingBalance");
 
-      const loanFunds = await ensureLoanFundsBalance(
-        freshMember
-      );
-
-      const breakdown = getWithdrawalBreakdown(
-        savings,
-        loanFunds,
-        reserved,
-        Boolean(freshMember.savingsWithdrawalLocked)
-      );
-
-      const available = breakdown.availableAmount;
-
-      // If a previous successful withdrawal used personal savings, another
-      // personal-savings withdrawal is blocked until the member makes a new
-      // contribution. Loan funds remain withdrawable during this lock.
-      if (freshMember.savingsWithdrawalLocked && amount > breakdown.loanFunds) {
+      if (outstandingLoan) {
         return res.status(400).json({
-          message:
-            "Your personal-savings withdrawal is locked. Make a new savings contribution to unlock it. You can still withdraw available loan funds.",
+          message: "You cannot withdraw while you have an outstanding loan. Please fully repay your loan first.",
         });
       }
 
-      if (amount > available) {
+      const yearStart = new Date(new Date().getFullYear(), 0, 1);
+      const yearEnd = new Date(new Date().getFullYear() + 1, 0, 1);
+
+      const annualWithdrawal = await Withdrawal.findOne({
+        user: freshMember._id,
+        createdAt: { $gte: yearStart, $lt: yearEnd },
+        status: { $in: ["processing", "success"] },
+      });
+
+      if (annualWithdrawal) {
         return res.status(400).json({
-          message: `You can withdraw up to ₦${available.toLocaleString()} based on your current 50% savings reserve.`,
+          message: "You have already made a withdrawal this year. You can make another withdrawal next year.",
+        });
+      }
+
+      // The bye-law permits a maximum withdrawal of 60% of total savings
+      // once per year. The ₦20,000 administrative fee is deducted from
+      // savings, so the member's bank payout must leave room for the fee.
+      const maxGrossDeduction = savings * WITHDRAWAL_PERCENTAGE;
+      const totalDeduction = amount + ADMINISTRATIVE_FEE;
+      const availableBeforeReservation = Math.max(
+        0,
+        maxGrossDeduction - reserved - ADMINISTRATIVE_FEE
+      );
+
+      if (amount <= 0 || amount > availableBeforeReservation) {
+        return res.status(400).json({
+          message: `You can withdraw up to ₦${availableBeforeReservation.toLocaleString()} this year. The ₦${ADMINISTRATIVE_FEE.toLocaleString()} administrative fee is included within the 60% withdrawal limit.`,
+        });
+      }
+
+      if (totalDeduction > savings * WITHDRAWAL_PERCENTAGE - reserved) {
+        return res.status(400).json({
+          message: "The withdrawal amount plus the administrative fee exceeds your 60% annual withdrawal limit.",
         });
       }
 
       /*
-       * Atomically reserve the amount.
-       *
-       * This is the actual backend enforcement of the 50% rule.
-       * Two simultaneous requests cannot spend the same available
-       * balance.
+       * Atomically reserve the total amount that will be removed from
+       * savings (member payout + administrative fee).
        */
       const reservedUser = await User.findOneAndUpdate(
         {
           _id: freshMember._id,
-
           $expr: {
             $gte: [
               {
                 $subtract: [
                   {
-                    $cond: [
-                      "$savingsWithdrawalLocked",
-                      "$loanFundsBalance",
-                      {
-                        $add: [
-                          "$loanFundsBalance",
-                          {
-                            $multiply: [
-                              {
-                                $max: [
-                                  {
-                                    $subtract: [
-                                      "$savingsBalance",
-                                      "$loanFundsBalance",
-                                    ],
-                                  },
-                                  0,
-                                ],
-                              },
-                              AVAILABLE_PERCENTAGE,
-                            ],
-                          },
-                        ],
-                      },
+                    $multiply: [
+                      "$savingsBalance",
+                      WITHDRAWAL_PERCENTAGE,
                     ],
                   },
                   "$withdrawalReserved",
                 ],
               },
-              amount,
+              totalDeduction,
             ],
           },
         },
         {
           $inc: {
-            withdrawalReserved: amount,
+            withdrawalReserved: totalDeduction,
           },
         },
         { new: true }
@@ -700,6 +634,8 @@ router.post(
         withdrawal = await Withdrawal.create({
           user: freshMember._id,
           amount,
+          administrativeFee: ADMINISTRATIVE_FEE,
+          totalDeduction,
           bankCode,
           bankName,
           accountName: resolved.account_name,
@@ -755,47 +691,40 @@ router.post(
           await withdrawal.save();
         }
 
-        const finalUser = await User.findById(
-          freshMember._id
-        ).select(
-          "savingsBalance withdrawalReserved loanFundsBalance savingsWithdrawalLocked"
+        const finalUser = await User.findById(freshMember._id).select(
+          "savingsBalance withdrawalReserved"
         );
 
-        const finalBreakdown =
-          getWithdrawalBreakdown(
-            Number(finalUser?.savingsBalance || 0),
-            Number(finalUser?.loanFundsBalance || 0),
-            Number(finalUser?.withdrawalReserved || 0),
-            Boolean(finalUser?.savingsWithdrawalLocked)
-          );
+        const finalSavings = Math.max(
+          0,
+          Number(finalUser?.savingsBalance || 0)
+        );
+        const finalReserved = Math.max(
+          0,
+          Number(finalUser?.withdrawalReserved || 0)
+        );
+        const finalAnnualWithdrawal =
+          withdrawal.status === "success" || withdrawal.status === "processing";
 
         return res.status(201).json({
           message:
             withdrawal.status === "success"
               ? "Withdrawal completed successfully."
               : "Withdrawal submitted and is being processed.",
-
           withdrawal,
-
-          savingsBalance: Number(
-            finalUser?.savingsBalance || 0
-          ),
-
-          loanFundsBalance: finalBreakdown.loanFunds,
-          personalSavingsBalance:
-            finalBreakdown.personalSavings,
-
-          lockedAmount: finalBreakdown.lockedAmount,
-          availableAmount:
-            finalBreakdown.availableAmount,
-
-          savingsWithdrawalLocked: Boolean(
-            finalUser?.savingsWithdrawalLocked
-          ),
-
-          withdrawalReserved: Number(
-            finalUser?.withdrawalReserved || 0
-          ),
+          savingsBalance: finalSavings,
+          withdrawalPercentage: WITHDRAWAL_PERCENTAGE * 100,
+          administrativeFee: ADMINISTRATIVE_FEE,
+          availableAmount: finalAnnualWithdrawal
+            ? 0
+            : Math.max(
+                0,
+                finalSavings * WITHDRAWAL_PERCENTAGE -
+                  ADMINISTRATIVE_FEE -
+                  finalReserved
+              ),
+          annualWithdrawalUsed: finalAnnualWithdrawal,
+          withdrawalReserved: finalReserved,
         });
       } catch (err) {
         if (withdrawal) {
@@ -826,12 +755,12 @@ router.post(
             {
               _id: freshMember._id,
               withdrawalReserved: {
-                $gte: amount,
+                $gte: totalDeduction,
               },
             },
             {
               $inc: {
-                withdrawalReserved: -amount,
+                withdrawalReserved: -totalDeduction,
               },
             }
           );

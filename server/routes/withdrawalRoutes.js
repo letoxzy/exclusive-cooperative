@@ -15,6 +15,38 @@ const router = express.Router();
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
+// Small server-side Paystack helper used by bank lookup, account verification,
+// recipient creation, and transfers. The secret key never reaches the client.
+async function paystack(path, options = {}) {
+  if (!process.env.PAYSTACK_SECRET_KEY) {
+    throw new Error("Paystack is not configured on the server.");
+  }
+
+  const response = await fetch(`${PAYSTACK_BASE}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error(`Paystack returned an invalid response (${response.status}).`);
+  }
+
+  if (!response.ok || !payload?.status) {
+    throw new Error(
+      payload?.message || `Paystack request failed (${response.status}).`
+    );
+  }
+
+  return payload.data;
+}
+
 // Withdrawal rules from the cooperative bye-law.
 const WITHDRAWAL_PERCENTAGE = 0.60;
 // Section 15.8(iii) applies its N20,000 fee to membership withdrawal,

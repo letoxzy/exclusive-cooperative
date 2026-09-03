@@ -6,7 +6,7 @@ import request from "../utils/api";
 import "../styles/dashboard.css";
 
 function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
 
   const [amount, setAmount] = useState("");
   const [requests, setRequests] = useState([]);
@@ -159,13 +159,18 @@ function Dashboard() {
   /*
    * ================================
    * LOAD MEMBERSHIP + DASHBOARD DATA
+   * ================================
    *
    * IMPORTANT:
-   * We intentionally DO NOT call refreshUser()
-   * here. Calling refreshUser() was causing the
-   * dashboard state to reload and could make the
-   * loan card appear/disappear.
-   * ================================
+   * The dashboard must always use the latest
+   * member balance from the backend. The AuthContext
+   * can contain an older cached user object when a
+   * member tops up from another device.
+   *
+   * We refresh the authenticated user once when the
+   * dashboard loads. This updates user.savingsBalance
+   * from the database without changing the loan-fetch
+   * flow, so the loan card remains stable.
    */
   useEffect(() => {
     if (!user?.token) return;
@@ -183,6 +188,15 @@ function Dashboard() {
       .catch(() => {
         setMembershipApp(null);
       });
+
+    // Refresh the cached member record so savings balance
+    // and loan eligibility always reflect MongoDB.
+    // Do not add refreshUser to this effect's dependency list:
+    // AuthContext implementations commonly recreate it when
+    // user state changes, which can cause repeated requests.
+    refreshUser().catch((err) => {
+      console.error("DASHBOARD USER REFRESH ERROR:", err);
+    });
   }, [user?.token, loadRequests, loadLoans, loadTransactions]);
 
   /*

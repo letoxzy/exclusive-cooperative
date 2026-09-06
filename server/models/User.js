@@ -32,6 +32,10 @@ const userSchema = new mongoose.Schema(
 
     savingsBalance: { type: Number, default: 0 },
 
+    // Total value of the member's cooperative shares.
+    // Managed by administrators and displayed on the member dashboard.
+    shareholding: { type: Number, default: 0, min: 0 },
+
     // Amount reserved by withdrawal requests that are still processing.
     // This does not reduce savingsBalance until Paystack confirms success.
     withdrawalReserved: { type: Number, default: 0 },

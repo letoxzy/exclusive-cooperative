@@ -392,6 +392,14 @@ function Dashboard() {
         </div>
 
         <div className="dash-card">
+          <span className="dash-label">Shareholding</span>
+
+          <span className="dash-figure gold">
+            {displayMoney(user?.shareholding)}
+          </span>
+        </div>
+
+        <div className="dash-card">
           <span className="dash-label">Loan Eligibility (2x savings)</span>
 
           <span className="dash-figure gold">{displayMoney(eligibleLoan)}</span>

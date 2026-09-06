@@ -291,6 +291,45 @@ function AdminDashboard() {
   };
 
   /* ================================
+     MEMBER SHAREHOLDING
+  ================================= */
+
+  const handleShareholdingUpdate = async (member) => {
+    if (!member?._id || member.role === "admin") return;
+
+    const currentValue = Number(member.shareholding || 0);
+    const enteredValue = window.prompt(
+      `Enter the total shareholding value for ${member.fullName || "this member"}:`,
+      String(currentValue),
+    );
+
+    if (enteredValue === null) return;
+
+    const value = Number(enteredValue);
+
+    if (!Number.isFinite(value) || value < 0) {
+      setError("Shareholding must be a valid amount of 0 or more.");
+      return;
+    }
+
+    try {
+      setError("");
+
+      const updated = await request(`/admin/users/${member._id}/shareholding`, {
+        method: "PATCH",
+        token: user.token,
+        body: { shareholding: value },
+      });
+
+      setMembers((prev) =>
+        prev.map((item) => (item._id === updated._id ? updated : item)),
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  /* ================================
      DELETE MEMBER ACCOUNT
   ================================= */
 
@@ -1646,6 +1685,7 @@ function AdminDashboard() {
                   <th>Role</th>
                   <th>Membership Type</th>
                   <th>Savings Balance</th>
+                  <th>Shareholding</th>
                   <th>Loan Eligibility</th>
                   <th>Account Setup</th>
                   <th>Joined</th>
@@ -1682,6 +1722,19 @@ function AdminDashboard() {
                     </td>
 
                     <td>₦{Number(m.savingsBalance || 0).toLocaleString()}</td>
+
+                    <td>
+                      <div className="member-shareholding-cell">
+                        <span>₦{Number(m.shareholding || 0).toLocaleString()}</span>
+                        <button
+                          type="button"
+                          className="admin-secondary-btn member-shareholding-btn"
+                          onClick={() => handleShareholdingUpdate(m)}
+                        >
+                          Update
+                        </button>
+                      </div>
+                    </td>
 
                     <td>
                       ₦{(Number(m.savingsBalance || 0) * 2).toLocaleString()}

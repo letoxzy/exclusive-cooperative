@@ -1290,3 +1290,33 @@ button.loan-type-badge.full-application-badge {
     padding: 12px;
   }
 }
+/* Member shareholding update action */
+.member-shareholding-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.member-shareholding-btn {
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--navy);
+  border-radius: 7px;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.member-shareholding-btn:hover {
+  border-color: var(--navy);
+}
+
+@media (max-width: 900px) {
+  .member-shareholding-cell {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

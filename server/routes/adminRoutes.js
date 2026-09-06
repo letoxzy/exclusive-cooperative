@@ -70,6 +70,46 @@ router.get("/users", async (req, res) => {
   ============================
 */
 
+// PATCH /api/admin/users/:id/shareholding
+// Updates a member's total cooperative shareholding value.
+router.patch("/users/:id/shareholding", async (req, res) => {
+  try {
+    const { shareholding } = req.body;
+    const value = Number(shareholding);
+
+    if (!Number.isFinite(value) || value < 0) {
+      return res.status(400).json({
+        message: "Shareholding must be a valid amount of 0 or more.",
+      });
+    }
+
+    const member = await User.findById(req.params.id).select("-password");
+
+    if (!member) {
+      return res.status(404).json({
+        message: "Member account not found.",
+      });
+    }
+
+    if (member.role === "admin") {
+      return res.status(403).json({
+        message: "Administrator shareholding cannot be edited here.",
+      });
+    }
+
+    member.shareholding = value;
+    await member.save();
+
+    return res.json(member);
+  } catch (err) {
+    console.error("Update member shareholding error:", err);
+
+    return res.status(500).json({
+      message: err.message || "Failed to update member shareholding.",
+    });
+  }
+});
+
 // DELETE /api/admin/users/:id
 // Removes a member login account and its linked membership record.
 // Admin accounts are protected. Financial transaction history is preserved.

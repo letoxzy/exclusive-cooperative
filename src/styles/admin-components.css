@@ -1320,3 +1320,212 @@ button.loan-type-badge.full-application-badge {
     flex-direction: column;
   }
 }
+
+
+/* =========================================
+   PROFESSIONAL ADMIN ACTION MODAL
+========================================= */
+
+.admin-action-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.admin-action-modal {
+  width: min(100%, 520px);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+  animation: adminActionModalIn 0.18s ease-out;
+}
+
+.admin-action-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 24px 18px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-action-modal-eyebrow {
+  margin: 0 0 5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.admin-action-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #0f172a;
+}
+
+.admin-action-modal-close {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.admin-action-modal-close:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.admin-action-modal-body {
+  padding: 22px 24px;
+}
+
+.admin-action-modal-description {
+  margin: 0 0 20px;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.admin-action-modal-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.admin-action-modal-hint {
+  margin-left: 8px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.admin-action-modal-label input,
+.admin-action-modal-label textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 11px;
+  padding: 12px 13px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  outline: none;
+  resize: vertical;
+}
+
+.admin-action-modal-label input:focus,
+.admin-action-modal-label textarea:focus {
+  border-color: #64748b;
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.12);
+}
+
+.admin-action-modal-warning {
+  margin-top: 16px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.admin-action-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 24px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.admin-action-modal-cancel,
+.admin-action-modal-confirm {
+  min-height: 42px;
+  padding: 0 17px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-action-modal-cancel {
+  border-color: #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.admin-action-modal-cancel:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.admin-action-modal-confirm {
+  background: #0f172a;
+  color: #fff;
+}
+
+.admin-action-modal-confirm:hover:not(:disabled) {
+  background: #1e293b;
+}
+
+.admin-action-modal-confirm.danger {
+  background: #b91c1c;
+}
+
+.admin-action-modal-confirm.danger:hover:not(:disabled) {
+  background: #991b1b;
+}
+
+.admin-action-modal button:disabled,
+.admin-action-modal input:disabled,
+.admin-action-modal textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+@keyframes adminActionModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-action-modal-backdrop {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .admin-action-modal {
+    border-radius: 18px 18px 12px 12px;
+  }
+
+  .admin-action-modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .admin-action-modal-cancel,
+  .admin-action-modal-confirm {
+    width: 100%;
+  }
+}

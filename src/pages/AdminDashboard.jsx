@@ -17,6 +17,7 @@ import AdminSidebar from "../components/admin/AdminSidebar";
 import MembershipModal from "../components/admin/MembershipModal";
 import AddExistingMemberModal from "../components/admin/AddExistingMemberModal";
 import AdminNotifications from "../components/admin/AdminNotifications";
+import AdminActionModal from "../components/admin/AdminActionModal";
 import GalleryManagement from "../components/admin/GalleryManagement";
 
 function AdminDashboard() {
@@ -64,6 +65,8 @@ function AdminDashboard() {
   const [expandedEligibilityId, setExpandedEligibilityId] = useState(null);
   const [showAddExistingMember, setShowAddExistingMember] = useState(false);
   const [deletingMemberId, setDeletingMemberId] = useState(null);
+  const [actionModal, setActionModal] = useState(null);
+  const [actionModalLoading, setActionModalLoading] = useState(false);
 
   /* ================================
      LOAD DATA
@@ -294,69 +297,37 @@ function AdminDashboard() {
      MEMBER SHAREHOLDING
   ================================= */
 
-  const handleShareholdingUpdate = async (member) => {
+  const handleShareholdingUpdate = (member) => {
     if (!member?._id || member.role === "admin") return;
 
-    const currentValue = Number(member.shareholding || 0);
-    const enteredValue = window.prompt(
-      `Enter the total shareholding value for ${member.fullName || "this member"}:`,
-      String(currentValue),
-    );
-
-    if (enteredValue === null) return;
-
-    const value = Number(enteredValue);
-
-    if (!Number.isFinite(value) || value < 0) {
-      setError("Shareholding must be a valid amount of 0 or more.");
-      return;
-    }
-
-    try {
-      setError("");
-
-      const updated = await request(`/admin/users/${member._id}/shareholding`, {
-        method: "PATCH",
-        token: user.token,
-        body: { shareholding: value },
-      });
-
-      setMembers((prev) =>
-        prev.map((item) => (item._id === updated._id ? updated : item)),
-      );
-    } catch (err) {
-      setError(err.message);
-    }
+    setActionModal({
+      type: "shareholding",
+      title: "Update Shareholding",
+      description: `Update the total shareholding value for ${member.fullName || "this member"}.`,
+      member,
+      value: String(Number(member.shareholding || 0)),
+      label: "Shareholding Amount",
+      placeholder: "Enter amount",
+      inputType: "number",
+      confirmText: "Update Shareholding",
+    });
   };
 
   /* ================================
      DELETE MEMBER ACCOUNT
   ================================= */
 
-  const handleDeleteMember = async (member) => {
-    if (!member?._id) return;
+  const handleDeleteMember = (member) => {
+    if (!member?._id || member.role === "admin") return;
 
-    const confirmed = window.confirm(
-      `Delete the account for ${member.fullName || member.email}?\n\nThis will remove the member login account and membership record. This action cannot be undone.`,
-    );
-
-    if (!confirmed) return;
-
-    try {
-      setError("");
-      setDeletingMemberId(member._id);
-
-      await request(`/admin/users/${member._id}`, {
-        method: "DELETE",
-        token: user.token,
-      });
-
-      await loadMembers();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setDeletingMemberId(null);
-    }
+    setActionModal({
+      type: "delete-member",
+      title: "Delete Member Account",
+      description: `Delete the account for ${member.fullName || member.email}? This will remove the member login account and membership record. This action cannot be undone.`,
+      member,
+      confirmText: "Delete Account",
+      danger: true,
+    });
   };
 
   /* ================================
@@ -399,26 +370,31 @@ function AdminDashboard() {
 ================================ */
 
   const handleLoanAction = async (id, action) => {
+    if (action === "reject") {
+      setActionModal({
+        type: "reject-loan",
+        title: "Reject Loan Application",
+        description: "Please provide a reason for rejecting this loan application.",
+        id,
+        value: "",
+        label: "Rejection Reason",
+        placeholder: "Enter the reason for rejection",
+        inputType: "textarea",
+        confirmText: "Reject Loan",
+        danger: true,
+      });
+      return;
+    }
+
     try {
       setError("");
-
-      let rejectionReason = "";
-
-      if (action === "reject") {
-        rejectionReason =
-          window.prompt("Enter the reason for rejecting this loan:") || "";
-
-        if (!rejectionReason.trim()) {
-          return;
-        }
-      }
 
       await request(`/admin/loans/${id}`, {
         method: "PATCH",
         token: user.token,
         body: {
           action,
-          rejectionReason,
+          rejectionReason: "",
         },
       });
 
@@ -448,34 +424,129 @@ function AdminDashboard() {
 ================================ */
 
   const handleLoanEligibilityAction = async (id, action) => {
+    if (action === "reject") {
+      setActionModal({
+        type: "reject-loan-eligibility",
+        title: "Reject Loan Application",
+        description: "Please provide a reason for rejecting this full loan application.",
+        id,
+        value: "",
+        label: "Rejection Reason",
+        placeholder: "Enter the reason for rejection",
+        inputType: "textarea",
+        confirmText: "Reject Application",
+        danger: true,
+      });
+      return;
+    }
+
     try {
       setError("");
-
-      let rejectionReason = "";
-
-      if (action === "reject") {
-        rejectionReason =
-          window.prompt(
-            "Enter the reason for rejecting this full loan application:",
-          ) || "";
-
-        if (!rejectionReason.trim()) {
-          return;
-        }
-      }
 
       await request(`/admin/loan-eligibility-applications/${id}`, {
         method: "PATCH",
         token: user.token,
         body: {
           action,
-          rejectionReason,
+          rejectionReason: "",
         },
       });
 
       await loadLoanEligibilityApplications();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  /* ================================
+     PROFESSIONAL ACTION MODAL SUBMIT
+  ================================= */
+
+  const handleActionModalSubmit = async (value) => {
+    if (!actionModal) return;
+
+    try {
+      setError("");
+      setActionModalLoading(true);
+
+      if (actionModal.type === "shareholding") {
+        const amount = Number(value);
+
+        if (!Number.isFinite(amount) || amount < 0) {
+          setError("Shareholding must be a valid amount of 0 or more.");
+          return;
+        }
+
+        const updated = await request(
+          `/admin/users/${actionModal.member._id}/shareholding`,
+          {
+            method: "PATCH",
+            token: user.token,
+            body: { shareholding: amount },
+          },
+        );
+
+        setMembers((prev) =>
+          prev.map((item) => (item._id === updated._id ? updated : item)),
+        );
+      }
+
+      if (actionModal.type === "delete-member") {
+        setDeletingMemberId(actionModal.member._id);
+
+        await request(`/admin/users/${actionModal.member._id}`, {
+          method: "DELETE",
+          token: user.token,
+        });
+
+        await loadMembers();
+      }
+
+      if (actionModal.type === "reject-loan") {
+        if (!String(value || "").trim()) {
+          setError("Please provide a rejection reason.");
+          return;
+        }
+
+        await request(`/admin/loans/${actionModal.id}`, {
+          method: "PATCH",
+          token: user.token,
+          body: {
+            action: "reject",
+            rejectionReason: String(value).trim(),
+          },
+        });
+
+        await loadLoans();
+      }
+
+      if (actionModal.type === "reject-loan-eligibility") {
+        if (!String(value || "").trim()) {
+          setError("Please provide a rejection reason.");
+          return;
+        }
+
+        await request(
+          `/admin/loan-eligibility-applications/${actionModal.id}`,
+          {
+            method: "PATCH",
+            token: user.token,
+            body: {
+              action: "reject",
+              rejectionReason: String(value).trim(),
+            },
+          },
+        );
+
+        await loadLoanEligibilityApplications();
+      }
+
+      setActionModal(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionModalLoading(false);
+      setDeletingMemberId(null);
     }
   };
 
@@ -2629,6 +2700,25 @@ function AdminDashboard() {
           {!loading && renderContent()}
         </div>
       </main>
+
+      {actionModal && (
+        <AdminActionModal
+          open
+          title={actionModal.title}
+          description={actionModal.description}
+          label={actionModal.label}
+          value={actionModal.value}
+          placeholder={actionModal.placeholder}
+          inputType={actionModal.inputType}
+          confirmText={actionModal.confirmText}
+          danger={actionModal.danger}
+          loading={actionModalLoading}
+          onClose={() => {
+            if (!actionModalLoading) setActionModal(null);
+          }}
+          onSubmit={handleActionModalSubmit}
+        />
+      )}
 
       <AddExistingMemberModal
         open={showAddExistingMember}

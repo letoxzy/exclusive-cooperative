@@ -1201,7 +1201,7 @@ function AdminDashboard() {
             <p className="eyebrow">Finance</p>
             <h1>Withdrawals</h1>
             <p className="admin-subtitle">
-              Monitor member withdrawal requests and Paystack transfer status.
+              Monitor member withdrawal requests and transfer status.
               Withdrawals are paid automatically after the member confirms with
               their withdrawal PIN.
             </p>
@@ -1725,7 +1725,9 @@ function AdminDashboard() {
 
                     <td>
                       <div className="member-shareholding-cell">
-                        <span>₦{Number(m.shareholding || 0).toLocaleString()}</span>
+                        <span>
+                          ₦{Number(m.shareholding || 0).toLocaleString()}
+                        </span>
                         <button
                           type="button"
                           className="admin-secondary-btn member-shareholding-btn"

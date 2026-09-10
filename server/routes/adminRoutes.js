@@ -97,8 +97,29 @@ router.patch("/users/:id/shareholding", async (req, res) => {
       });
     }
 
+    const previousShareholding = Number(member.shareholding || 0);
+
     member.shareholding = value;
     await member.save();
+
+    // Notify the member whenever an administrator changes the recorded
+    // shareholding value. Notification failure should not undo the saved
+    // shareholding update.
+    try {
+      await Notification.create({
+        user: member._id,
+        type: "shareholding",
+        title: "Shareholding Updated",
+        message:
+          `Your cooperative shareholding has been updated from ₦${previousShareholding.toLocaleString()} ` +
+          `to ₦${value.toLocaleString()}.`,
+      });
+    } catch (notificationError) {
+      console.error(
+        "Shareholding updated but member notification failed:",
+        notificationError,
+      );
+    }
 
     return res.json(member);
   } catch (err) {

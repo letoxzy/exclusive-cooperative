@@ -16,7 +16,7 @@
   height: 520px;
   overflow: hidden;
   border-radius: 18px;
-  background: #0d2342;
+  background: #075c3b;
 }
 
 .gallery-slide {
@@ -102,7 +102,7 @@
   cursor: pointer;
   transform: translateY(-50%);
   background: rgba(255, 255, 255, 0.9);
-  color: #0d2342;
+  color: #075c3b;
   transition: 0.2s ease;
 }
 

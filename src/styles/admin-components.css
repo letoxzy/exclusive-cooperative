@@ -555,7 +555,7 @@ button.loan-type-badge.full-application-badge {
 }
 
 .admin-primary-btn:hover {
-  background: #17375f;
+  background: #075c3b;
   transform: translateY(-1px);
 }
 
@@ -817,7 +817,7 @@ button.loan-type-badge.full-application-badge {
 }
 
 .add-member-notice strong {
-  color: #0b1f3a;
+  color: #075c3b;
   font-size: 14px;
 }
 
@@ -847,7 +847,7 @@ button.loan-type-badge.full-application-badge {
 .modal-section h3 {
   margin: 0 0 20px;
 
-  color: #0b1f3a;
+  color: #075c3b;
   font-size: 17px;
   font-weight: 700;
 
@@ -950,7 +950,7 @@ button.loan-type-badge.full-application-badge {
   border-radius: 6px;
 
   background: #f8fafc;
-  color: #0b1f3a;
+  color: #075c3b;
 
   font-family: inherit;
   font-size: 12px;
@@ -998,20 +998,20 @@ button.loan-type-badge.full-application-badge {
 }
 
 .modal-field .pill:hover {
-  border-color: #0b1f3a;
+  border-color: #075c3b;
 }
 
 .modal-field .pill input {
   width: auto;
   min-height: auto;
   margin: 0;
-  accent-color: #0b1f3a;
+  accent-color: #075c3b;
 }
 
 .modal-field .pill:has(input:checked) {
-  border-color: #0b1f3a;
+  border-color: #075c3b;
   background: #f1f5f9;
-  color: #0b1f3a;
+  color: #075c3b;
   font-weight: 600;
 }
 
@@ -1090,7 +1090,7 @@ button.loan-type-badge.full-application-badge {
 
   border-radius: 50%;
 
-  background: #0b1f3a;
+  background: #075c3b;
   color: #ffffff;
 
   font-size: 23px;
@@ -1100,7 +1100,7 @@ button.loan-type-badge.full-application-badge {
 .existing-member-success h3 {
   margin: 0 0 8px;
 
-  color: #0b1f3a;
+  color: #075c3b;
   font-size: 21px;
 }
 
@@ -1143,7 +1143,7 @@ button.loan-type-badge.full-application-badge {
 }
 
 .temporary-credentials-card strong {
-  color: #0b1f3a;
+  color: #075c3b;
   font-size: 14px;
 }
 
@@ -1207,7 +1207,7 @@ button.loan-type-badge.full-application-badge {
 .admin-link-btn {
   border: 1px solid #e5e7eb;
   background: #ffffff;
-  color: #0b1f3a;
+  color: #075c3b;
 
   border-radius: 7px;
   padding: 10px 15px;
@@ -1219,7 +1219,7 @@ button.loan-type-badge.full-application-badge {
 }
 
 .admin-link-btn:hover {
-  border-color: #0b1f3a;
+  border-color: #075c3b;
 }
 
 /* =========================================

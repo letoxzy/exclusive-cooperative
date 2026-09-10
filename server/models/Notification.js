@@ -19,6 +19,7 @@ const notificationSchema = new mongoose.Schema(
         "repayment",
         "withdrawal",
         "dividend",
+        "shareholding",
         "announcement",
       ],
       required: true,

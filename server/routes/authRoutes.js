@@ -79,6 +79,9 @@ router.post("/register", async (req, res) => {
       isApprovedMember: user.isApprovedMember,
       mustChangePassword: user.mustChangePassword,
       isBlocked: user.isBlocked,
+      hasAppPin: Boolean(user.appPinHash),
+      autoLockSeconds: user.autoLockSeconds,
+      biometricEnabled: user.biometricEnabled,
       createdAt: user.createdAt,
       token: generateToken(user._id),
     });
@@ -202,6 +205,9 @@ router.post("/login", async (req, res) => {
       isApprovedMember: user.isApprovedMember,
       mustChangePassword: user.mustChangePassword,
       isBlocked: user.isBlocked,
+      hasAppPin: Boolean(user.appPinHash),
+      autoLockSeconds: user.autoLockSeconds,
+      biometricEnabled: user.biometricEnabled,
       createdAt: user.createdAt,
       token: generateToken(user._id),
     });

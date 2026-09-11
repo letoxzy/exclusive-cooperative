@@ -78,6 +78,7 @@ router.post("/register", async (req, res) => {
       avatarUrl: user.avatarUrl,
       isApprovedMember: user.isApprovedMember,
       mustChangePassword: user.mustChangePassword,
+      isBlocked: user.isBlocked,
       createdAt: user.createdAt,
       token: generateToken(user._id),
     });
@@ -184,6 +185,13 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
+    if (user.isBlocked) {
+      return res.status(403).json({
+        code: "ACCOUNT_BLOCKED",
+        message: "Your account has been blocked by an administrator. Please contact the cooperative.",
+      });
+    }
+
     res.json({
       _id: user._id,
       fullName: user.fullName,
@@ -193,6 +201,7 @@ router.post("/login", async (req, res) => {
       avatarUrl: user.avatarUrl,
       isApprovedMember: user.isApprovedMember,
       mustChangePassword: user.mustChangePassword,
+      isBlocked: user.isBlocked,
       createdAt: user.createdAt,
       token: generateToken(user._id),
     });

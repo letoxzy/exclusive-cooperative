@@ -28,6 +28,13 @@ export const protect = async (req, res, next) => {
       });
     }
 
+    if (req.user.isBlocked) {
+      return res.status(403).json({
+        code: "ACCOUNT_BLOCKED",
+        message: "Your account has been blocked by an administrator. Please contact the cooperative.",
+      });
+    }
+
     next();
   } catch (err) {
     console.error("Authentication error:", err);

@@ -21,6 +21,7 @@ const notificationSchema = new mongoose.Schema(
         "dividend",
         "shareholding",
         "announcement",
+        "security",
       ],
       required: true,
     },

@@ -66,6 +66,67 @@ router.get("/users", async (req, res) => {
 
 /*
   ============================
+  BLOCK / UNBLOCK MEMBER ACCOUNT
+  ============================
+*/
+
+router.patch("/users/:id/block", async (req, res) => {
+  try {
+    const member = await User.findById(req.params.id);
+    if (!member) return res.status(404).json({ message: "Member account not found." });
+    if (member.role === "admin") return res.status(403).json({ message: "Administrator accounts cannot be blocked here." });
+
+    const blocked = req.body?.blocked !== false;
+    const reason = String(req.body?.reason || "Security review by administrator").trim();
+
+    member.isBlocked = blocked;
+    member.blockedAt = blocked ? new Date() : null;
+    member.blockedBy = blocked ? req.user._id : null;
+    member.blockReason = blocked ? reason : null;
+    await member.save();
+
+    try {
+      await Notification.create({
+        user: member._id,
+        type: "security",
+        title: blocked ? "Account Blocked" : "Account Unblocked",
+        message: blocked
+          ? "Your account has been blocked by an administrator. Please contact the cooperative for assistance."
+          : "Your account has been unblocked by an administrator. You can sign in again.",
+      });
+    } catch (notificationError) {
+      console.error("Account status notification failed:", notificationError);
+    }
+
+    return res.json({
+      _id: member._id,
+      fullName: member.fullName,
+      email: member.email,
+      isBlocked: member.isBlocked,
+      blockedAt: member.blockedAt,
+      blockReason: member.blockReason,
+    });
+  } catch (err) {
+    console.error("Block/unblock member error:", err);
+    return res.status(500).json({ message: err.message || "Failed to update account status." });
+  }
+});
+
+// GET /api/admin/security-alerts
+router.get("/security-alerts", async (req, res) => {
+  try {
+    const alerts = await Notification.find({
+      user: req.user._id,
+      type: "security",
+    }).sort("-createdAt").limit(50);
+    res.json(alerts);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load security alerts." });
+  }
+});
+
+/*
+  ============================
   DELETE MEMBER ACCOUNT
   ============================
 */

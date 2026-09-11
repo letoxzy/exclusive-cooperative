@@ -8,6 +8,7 @@ function AdminNotifications({
   loanEligibilityApplications = [],
   loanRepayments = [],
   withdrawals = [],
+  securityAlerts = [],
   onNavigate,
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -133,6 +134,19 @@ function AdminNotifications({
         })),
 
       /* ================================
+         SECURITY ALERTS
+      ================================= */
+
+      ...securityAlerts.map((item) => ({
+        id: `security-${item._id}`,
+        type: "security",
+        title: item.title || "Security Alert",
+        message: item.message,
+        date: item.createdAt,
+        section: "members",
+      })),
+
+      /* ================================
          WITHDRAWALS
       ================================= */
 
@@ -177,6 +191,7 @@ function AdminNotifications({
     loanEligibilityApplications,
     loanRepayments,
     withdrawals,
+    securityAlerts,
   ]);
 
   /* ================================

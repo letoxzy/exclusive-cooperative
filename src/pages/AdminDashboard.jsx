@@ -34,6 +34,7 @@ function AdminDashboard() {
   const [loanRepayments, setLoanRepayments] = useState([]);
   const [dividends, setDividends] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
+  const [securityAlerts, setSecurityAlerts] = useState([]);
   const [selectedDividendId, setSelectedDividendId] = useState(null);
   const [selectedDividend, setSelectedDividend] = useState(null);
   const [dividendEntries, setDividendEntries] = useState([]);
@@ -86,6 +87,15 @@ function AdminDashboard() {
     });
 
     setMembers(data);
+  }, [user.token]);
+
+  const loadSecurityAlerts = useCallback(async () => {
+    try {
+      const data = await request("/admin/security-alerts", { token: user.token });
+      setSecurityAlerts(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Security alerts load error:", err);
+    }
   }, [user.token]);
 
   const updateNotifications = useCallback((applications) => {
@@ -188,6 +198,7 @@ function AdminDashboard() {
         loadLoanEligibilityApplications(),
         loadLoanRepayments(),
         loadWithdrawals(),
+        loadSecurityAlerts(),
       ]).catch((err) => {
         setError(err.message);
       });
@@ -203,7 +214,7 @@ function AdminDashboard() {
     if (activeSection === "savings") {
       loader = loadRequests;
     } else if (activeSection === "members") {
-      loader = loadMembers;
+      loader = async () => { await Promise.all([loadMembers(), loadSecurityAlerts()]); };
     } else if (activeSection === "membership") {
       loader = loadApplications;
     } else if (activeSection === "loan-requests") {
@@ -236,6 +247,7 @@ function AdminDashboard() {
     loadLoanRepayments,
     loadDividends,
     loadWithdrawals,
+    loadSecurityAlerts,
   ]);
 
   /* ================================
@@ -489,6 +501,17 @@ function AdminDashboard() {
         setMembers((prev) =>
           prev.map((item) => (item._id === updated._id ? updated : item)),
         );
+      }
+
+      if (actionModal.type === "block-member" || actionModal.type === "unblock-member") {
+        const blocked = actionModal.type === "block-member";
+        const updated = await request(`/admin/users/${actionModal.member._id}/block`, {
+          method: "PATCH",
+          token: user.token,
+          body: { blocked, reason: String(value || "Security review by administrator").trim() },
+        });
+        setMembers((prev) => prev.map((item) => item._id === updated._id ? { ...item, ...updated } : item));
+        setActionModal(null);
       }
 
       if (actionModal.type === "delete-member") {
@@ -1721,6 +1744,24 @@ function AdminDashboard() {
     );
   };
 
+  const handleBlockToggle = (member) => {
+    const blocked = Boolean(member.isBlocked);
+    setActionModal({
+      type: blocked ? "unblock-member" : "block-member",
+      member,
+      title: blocked ? "Unblock Member Account" : "Block Member Account",
+      description: blocked
+        ? `Allow ${member.fullName || member.email} to access the website and mobile app again.`
+        : `Block ${member.fullName || member.email} on both the website and mobile app.`,
+      label: blocked ? "Reason (optional)" : "Reason",
+      value: blocked ? "" : "Security review by administrator",
+      placeholder: blocked ? "Optional reason" : "Why is this account being blocked?",
+      inputType: "textarea",
+      confirmText: blocked ? "Unblock Account" : "Block Account",
+      danger: !blocked,
+    });
+  };
+
   /* ================================
      MEMBERS
   ================================= */
@@ -1759,6 +1800,7 @@ function AdminDashboard() {
                   <th>Shareholding</th>
                   <th>Loan Eligibility</th>
                   <th>Account Setup</th>
+                  <th>Account Status</th>
                   <th>Joined</th>
                   <th>Action</th>
                 </tr>
@@ -1821,24 +1863,38 @@ function AdminDashboard() {
                       </span>
                     </td>
 
+                    <td>
+                      <span className={`status-badge ${m.isBlocked ? "rejected" : "approved"}`}>
+                        {m.isBlocked ? "Blocked" : "Active"}
+                      </span>
+                    </td>
+
                     <td>{new Date(m.createdAt).toLocaleDateString()}</td>
 
                     <td className="actions-cell">
                       {m.role === "admin" ? (
                         <span className="muted">Protected</span>
                       ) : (
-                        <button
-                          type="button"
-                          className="reject-btn"
-                          onClick={() => handleDeleteMember(m)}
-                          disabled={deletingMemberId === m._id}
-                          title={`Delete ${m.fullName || "member"}`}
-                        >
-                          <FaTrash />
-                          {deletingMemberId === m._id
-                            ? "Deleting..."
-                            : "Delete Account"}
-                        </button>
+                        <div className="member-action-stack">
+                          <button
+                            type="button"
+                            className={m.isBlocked ? "admin-secondary-btn" : "reject-btn"}
+                            onClick={() => handleBlockToggle(m)}
+                            title={m.isBlocked ? `Unblock ${m.fullName || "member"}` : `Block ${m.fullName || "member"}`}
+                          >
+                            {m.isBlocked ? "Unblock Account" : "Block Account"}
+                          </button>
+                          <button
+                            type="button"
+                            className="reject-btn"
+                            onClick={() => handleDeleteMember(m)}
+                            disabled={deletingMemberId === m._id}
+                            title={`Delete ${m.fullName || "member"}`}
+                          >
+                            <FaTrash />
+                            {deletingMemberId === m._id ? "Deleting..." : "Delete Account"}
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -2676,6 +2732,7 @@ function AdminDashboard() {
               loanEligibilityApplications={loanEligibilityApplications}
               loanRepayments={loanRepayments}
               withdrawals={withdrawals}
+              securityAlerts={securityAlerts}
               onNavigate={setActiveSection}
             />
 

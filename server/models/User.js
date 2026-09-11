@@ -63,36 +63,55 @@ const userSchema = new mongoose.Schema(
     // member can submit an actual loan request.
     isLoanEligible: { type: Boolean, default: false },
 
-    // App security PIN. The actual 6-digit PIN is never stored; only a bcrypt hash is stored.
+    // App unlock security. The actual 6-digit app PIN is never stored; only
+    // its bcrypt hash is stored in MongoDB so the same account works across devices.
     appPinHash: {
       type: String,
       default: null,
       select: false,
     },
-
     appPinFailedAttempts: {
       type: Number,
       default: 0,
       select: false,
     },
-
     appPinLockedUntil: {
       type: Date,
       default: null,
       select: false,
     },
-
-    // Account-level app security preferences. These are synced across devices.
+    appPinSecurityAlertedAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
     autoLockSeconds: {
       type: Number,
       default: 300,
       min: 0,
-      max: 3600,
     },
-
     biometricEnabled: {
       type: Boolean,
       default: false,
+    },
+    isBlocked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    blockedAt: {
+      type: Date,
+      default: null,
+    },
+    blockedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    blockReason: {
+      type: String,
+      default: null,
+      trim: true,
     },
 
     // Withdrawal security PIN.

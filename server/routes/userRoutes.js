@@ -1,4 +1,5 @@
 import express from "express";
+import bcrypt from "bcryptjs";
 import multer from "multer";
 import User from "../models/User.js";
 import SavingsTransaction from "../models/SavingsTransaction.js";
@@ -11,6 +12,11 @@ import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { validatePassword } from "../utils/passwordPolicy.js";
 
 const router = express.Router();
+
+const APP_AUTO_LOCK_OPTIONS = new Set([0, 60, 300, 600, 900, 1800, 3600]);
+const APP_PIN_MAX_ATTEMPTS = 5;
+const APP_PIN_LOCK_MINUTES = 15;
+
 
 const uploadAvatar = multer({
   storage: multer.memoryStorage(),
@@ -39,6 +45,153 @@ router.patch("/me", protect, async (req, res) => {
     res.status(500).json({
       message: "Failed to update profile",
     });
+  }
+});
+
+// GET /api/users/me/security
+// Account-level app security settings. The PIN hash is never returned.
+router.get("/me/security", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select(
+      "autoLockSeconds biometricEnabled appPinHash"
+    );
+
+    if (!user) return res.status(404).json({ message: "User no longer exists" });
+
+    res.json({
+      pinConfigured: Boolean(user.appPinHash),
+      autoLockSeconds: Number.isFinite(user.autoLockSeconds)
+        ? user.autoLockSeconds
+        : 300,
+      biometricEnabled: Boolean(user.biometricEnabled),
+    });
+  } catch (err) {
+    console.error("Security settings fetch error:", err);
+    res.status(500).json({ message: "Failed to load security settings" });
+  }
+});
+
+// PATCH /api/users/me/security/pin
+// Creates or changes the 6-digit app unlock PIN.
+router.patch("/me/security/pin", protect, async (req, res) => {
+  try {
+    const pin = String(req.body?.pin || "");
+
+    if (!/^\d{6}$/.test(pin)) {
+      return res.status(400).json({ message: "PIN must be exactly 6 digits." });
+    }
+
+    const user = await User.findById(req.user._id).select(
+      "+appPinHash +appPinFailedAttempts +appPinLockedUntil"
+    );
+
+    if (!user) return res.status(404).json({ message: "User no longer exists" });
+
+    user.appPinHash = await bcrypt.hash(pin, 12);
+    user.appPinFailedAttempts = 0;
+    user.appPinLockedUntil = null;
+    await user.save();
+
+    res.json({ message: "App PIN saved successfully.", pinConfigured: true });
+  } catch (err) {
+    console.error("App PIN save error:", err);
+    res.status(500).json({ message: "Failed to save app PIN" });
+  }
+});
+
+// POST /api/users/me/security/pin/verify
+// Verifies the app PIN without ever returning the stored hash.
+router.post("/me/security/pin/verify", protect, async (req, res) => {
+  try {
+    const pin = String(req.body?.pin || "");
+
+    if (!/^\d{6}$/.test(pin)) {
+      return res.status(400).json({ message: "PIN must be exactly 6 digits." });
+    }
+
+    const user = await User.findById(req.user._id).select(
+      "+appPinHash +appPinFailedAttempts +appPinLockedUntil"
+    );
+
+    if (!user) return res.status(404).json({ message: "User no longer exists" });
+    if (!user.appPinHash) {
+      return res.status(409).json({ message: "No app PIN has been configured." });
+    }
+
+    if (user.appPinLockedUntil && user.appPinLockedUntil > new Date()) {
+      return res.status(429).json({
+        message: "Too many incorrect PIN attempts. Please try again later.",
+        lockedUntil: user.appPinLockedUntil,
+      });
+    }
+
+    const matches = await bcrypt.compare(pin, user.appPinHash);
+
+    if (!matches) {
+      user.appPinFailedAttempts = Number(user.appPinFailedAttempts || 0) + 1;
+
+      if (user.appPinFailedAttempts >= APP_PIN_MAX_ATTEMPTS) {
+        user.appPinFailedAttempts = 0;
+        user.appPinLockedUntil = new Date(
+          Date.now() + APP_PIN_LOCK_MINUTES * 60 * 1000
+        );
+      }
+
+      await user.save();
+
+      return res.status(401).json({
+        message:
+          user.appPinLockedUntil && user.appPinLockedUntil > new Date()
+            ? "Too many incorrect PIN attempts. Please try again later."
+            : "Incorrect PIN. Please try again.",
+      });
+    }
+
+    user.appPinFailedAttempts = 0;
+    user.appPinLockedUntil = null;
+    await user.save();
+
+    res.json({ verified: true });
+  } catch (err) {
+    console.error("App PIN verification error:", err);
+    res.status(500).json({ message: "Unable to verify app PIN" });
+  }
+});
+
+// PATCH /api/users/me/security/auto-lock
+router.patch("/me/security/auto-lock", protect, async (req, res) => {
+  try {
+    const seconds = Number(req.body?.seconds);
+
+    if (!Number.isInteger(seconds) || !APP_AUTO_LOCK_OPTIONS.has(seconds)) {
+      return res.status(400).json({ message: "Invalid auto-lock setting." });
+    }
+
+    req.user.autoLockSeconds = seconds;
+    await req.user.save();
+
+    res.json({ autoLockSeconds: seconds });
+  } catch (err) {
+    console.error("Auto-lock update error:", err);
+    res.status(500).json({ message: "Failed to update auto-lock setting" });
+  }
+});
+
+// PATCH /api/users/me/security/biometric
+// The biometric credential itself remains on the device; only the account preference is synced.
+router.patch("/me/security/biometric", protect, async (req, res) => {
+  try {
+    if (typeof req.body?.enabled !== "boolean") {
+      return res.status(400).json({ message: "Biometric setting must be true or false." });
+    }
+
+    req.user.biometricEnabled = req.body.enabled;
+    await req.user.save();
+
+    res.json({ biometricEnabled: req.user.biometricEnabled });
+  } catch (err) {
+    console.error("Biometric setting update error:", err);
+    res.status(500).json({ message: "Failed to update biometric setting" });
   }
 });
 

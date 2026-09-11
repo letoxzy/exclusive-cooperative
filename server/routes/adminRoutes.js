@@ -19,6 +19,7 @@ import { protect } from "../middleware/authMiddleware.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
+import { sendPushNotification } from "../utils/pushNotification.js";
 
 const router = express.Router();
 
@@ -85,18 +86,29 @@ router.patch("/users/:id/block", async (req, res) => {
     member.blockReason = blocked ? reason : null;
     await member.save();
 
+    const notificationTitle = blocked ? "Account Blocked" : "Account Unblocked";
+    const notificationMessage = blocked
+      ? `Your account has been blocked by an administrator.${reason ? ` Reason: ${reason}` : ""} Please contact the cooperative for assistance.`
+      : "Your account has been unblocked by an administrator. You can sign in again.";
+
     try {
       await Notification.create({
         user: member._id,
         type: "security",
-        title: blocked ? "Account Blocked" : "Account Unblocked",
-        message: blocked
-          ? "Your account has been blocked by an administrator. Please contact the cooperative for assistance."
-          : "Your account has been unblocked by an administrator. You can sign in again.",
+        title: notificationTitle,
+        message: notificationMessage,
       });
     } catch (notificationError) {
       console.error("Account status notification failed:", notificationError);
     }
+
+    // Send a real device notification as well. This is important for a blocked
+    // member because a blocked account cannot fetch in-app notifications.
+    await sendPushNotification(member, {
+      title: notificationTitle,
+      body: notificationMessage,
+      data: { type: "security", action: blocked ? "account_blocked" : "account_unblocked" },
+    });
 
     return res.json({
       _id: member._id,

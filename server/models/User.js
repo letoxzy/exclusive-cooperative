@@ -94,6 +94,16 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // Expo push tokens are stored on the account so security notifications
+    // can reach the member even when the app is not open.
+    pushTokens: [
+      {
+        token: { type: String, trim: true },
+        platform: { type: String, enum: ["ios", "android"], required: true },
+        updatedAt: { type: Date, default: Date.now },
+      },
+    ],
     isBlocked: {
       type: Boolean,
       default: false,

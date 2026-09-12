@@ -67,6 +67,39 @@ router.post(
   }
 );
 
+// GET /api/payments/paystack/receipt/:reference
+// Returns receipt data for a successful Paystack savings payment owned by the member.
+router.get("/paystack/receipt/:reference", protect, requireApprovedMember, async (req, res) => {
+  try {
+    const transaction = await SavingsTransaction.findOne({
+      user: req.user._id,
+      reference: req.params.reference,
+      method: "paystack",
+      status: "approved",
+    });
+
+    if (!transaction) {
+      return res.status(404).json({
+        message: "Payment receipt not found.",
+      });
+    }
+
+    return res.json({
+      cooperativeName: "EXCLUSIVE (OSHODI/ISOLO) COOPERATIVE MULTIPURPOSE SOCIETY LIMITED",
+      memberName: req.user.fullName || req.user.name || "Member",
+      memberEmail: req.user.email || "",
+      amount: Number(transaction.amount || 0),
+      method: transaction.method,
+      reference: transaction.reference,
+      status: transaction.status,
+      createdAt: transaction.createdAt,
+    });
+  } catch (err) {
+    console.error("Get payment receipt:", err);
+    return res.status(500).json({ message: "Could not load payment receipt." });
+  }
+});
+
 // GET /api/payments/paystack/verify/:reference
 // Called after the member returns from Paystack's checkout page.
 router.get("/paystack/verify/:reference", protect, async (req, res) => {
@@ -105,7 +138,7 @@ router.get("/paystack/verify/:reference", protect, async (req, res) => {
     const amount = data.data.amount / 100;
 
     // Record the successful savings transaction.
-    await SavingsTransaction.create({
+    const transaction = await SavingsTransaction.create({
       user: req.user._id,
       amount,
       status: "approved",
@@ -123,6 +156,11 @@ router.get("/paystack/verify/:reference", protect, async (req, res) => {
       type: "savings",
       title: "Savings Payment Successful",
       message: `Your savings payment of ₦${amount.toLocaleString()} was successful.`,
+      data: {
+        reference,
+        amount,
+        transactionId: transaction._id.toString(),
+      },
     });
 
     res.json({

@@ -38,6 +38,13 @@ const notificationSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Optional structured data for notifications that need an action,
+    // such as downloading a payment receipt.
+    data: {
+      type: mongoose.Schema.Types.Mixed,
+      default: undefined,
+    },
+
     isRead: {
       type: Boolean,
       default: false,

@@ -3,6 +3,7 @@ import SavingsTransaction from "../models/SavingsTransaction.js";
 import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
+import { sendPushNotification } from "../utils/pushNotification.js";
 
 const router = express.Router();
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -162,6 +163,17 @@ router.get("/paystack/verify/:reference", protect, async (req, res) => {
         transactionId: transaction._id.toString(),
       },
     });
+
+    await sendPushNotification(req.user, {
+  title: "Savings Payment Successful",
+  body: `Your savings payment of ₦${amount.toLocaleString()} was successful.`,
+  data: {
+    type: "savings",
+    reference,
+    amount,
+    transactionId: transaction._id.toString(),
+  },
+});
 
     res.json({
       status: "success",

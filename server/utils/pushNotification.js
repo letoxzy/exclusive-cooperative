@@ -34,6 +34,8 @@ export async function sendPushNotification(user, { title, body, data = {} }) {
     });
 
     const resultText = await response.text();
+    
+    console.log("EXPO PUSH RESPONSE:", response.status, resultText);
 
     if (!response.ok) {
       console.error("Expo push notification failed:", response.status, resultText);

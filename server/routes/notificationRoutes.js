@@ -19,22 +19,28 @@ router.post("/device-token", protect, async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: "Account not found." });
 
-    const tokens = Array.isArray(user.pushTokens) ? user.pushTokens : [];
-    const existing = tokens.find((item) => item.token === token);
+    // Use atomic updates instead of user.save(). This avoids validating
+    // unrelated legacy push-token entries already stored on the account.
+    // First remove this exact token if it already exists, then add the
+    // current device with a normalized platform value.
+    await User.updateOne(
+      { _id: user._id },
+      { $pull: { pushTokens: { token } } },
+    );
 
-    if (existing) {
-      existing.platform = platform;
-      existing.updatedAt = new Date();
-    } else {
-      tokens.push({ token, platform, updatedAt: new Date() });
-    }
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $push: {
+          pushTokens: {
+            $each: [{ token, platform, updatedAt: new Date() }],
+            $sort: { updatedAt: -1 },
+            $slice: 5,
+          },
+        },
+      },
+    );
 
-    // Keep only the most recent five devices/tokens for an account.
-    user.pushTokens = tokens
-      .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
-      .slice(0, 5);
-
-    await user.save();
     res.json({ message: "Push notification device registered." });
   } catch (err) {
     console.error("Device token registration error:", err);

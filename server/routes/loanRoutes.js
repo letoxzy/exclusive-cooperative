@@ -1,4 +1,5 @@
 import express from "express";
+import multer from "multer";
 import Loan from "../models/Loan.js";
 import LoanRepayment from "../models/LoanRepayment.js";
 import LoanEligibility from "../models/LoanEligibility.js";
@@ -6,8 +7,19 @@ import Membership from "../models/Membership.js";
 import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
+import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 
 const router = express.Router();
+
+const uploadReceipt = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Only image receipts are allowed."));
+  },
+});
+
 
 /*
   Loan rules
@@ -517,7 +529,7 @@ router.get("/:id", protect, async (req, res) => {
   This does NOT change the balance yet — an admin has to confirm it first,
   same pattern as savings deposit requests.
 */
-router.post("/:id/repayments", protect, async (req, res) => {
+router.post("/:id/repayments", protect, uploadReceipt.single("receipt"), async (req, res) => {
   try {
     const { amount } = req.body;
     const requestedAmount = Number(amount);
@@ -544,17 +556,31 @@ router.post("/:id/repayments", protect, async (req, res) => {
       });
     }
 
+    let receiptUrl = "";
+    let receiptPublicId = "";
+
+    if (req.file) {
+      const uploadedReceipt = await uploadBufferToCloudinary(req.file.buffer, {
+        folder: "exclusive-cooperative/repayment-receipts",
+        resource_type: "image",
+      });
+      receiptUrl = uploadedReceipt.secure_url || uploadedReceipt.url || "";
+      receiptPublicId = uploadedReceipt.public_id || "";
+    }
+
     const repayment = await LoanRepayment.create({
       loan: loan._id,
       user: req.user._id,
       amount: requestedAmount,
+      receiptUrl,
+      receiptPublicId,
     });
 
     await Notification.create({
       user: req.user._id,
       type: "repayment",
       title: "Loan Repayment Submitted",
-      message: `Your loan repayment of ₦${requestedAmount.toLocaleString()} has been submitted and is awaiting confirmation.`,
+      message: `Your loan repayment of ₦${requestedAmount.toLocaleString()} has been submitted with a transfer receipt and is awaiting confirmation.`,
     });
 
     res.status(201).json(repayment);

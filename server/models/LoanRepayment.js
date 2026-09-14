@@ -7,6 +7,8 @@ const loanRepaymentSchema = new mongoose.Schema(
     amount: { type: Number, required: true, min: 1 },
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
     method: { type: String, enum: ["manual"], default: "manual" },
+    receiptUrl: { type: String, default: "" },
+    receiptPublicId: { type: String, default: "" },
   },
   { timestamps: true }
 );

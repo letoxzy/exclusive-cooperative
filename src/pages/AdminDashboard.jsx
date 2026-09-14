@@ -91,7 +91,9 @@ function AdminDashboard() {
 
   const loadSecurityAlerts = useCallback(async () => {
     try {
-      const data = await request("/admin/security-alerts", { token: user.token });
+      const data = await request("/admin/security-alerts", {
+        token: user.token,
+      });
       setSecurityAlerts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Security alerts load error:", err);
@@ -214,7 +216,9 @@ function AdminDashboard() {
     if (activeSection === "savings") {
       loader = loadRequests;
     } else if (activeSection === "members") {
-      loader = async () => { await Promise.all([loadMembers(), loadSecurityAlerts()]); };
+      loader = async () => {
+        await Promise.all([loadMembers(), loadSecurityAlerts()]);
+      };
     } else if (activeSection === "membership") {
       loader = loadApplications;
     } else if (activeSection === "loan-requests") {
@@ -386,7 +390,8 @@ function AdminDashboard() {
       setActionModal({
         type: "reject-loan",
         title: "Reject Loan Application",
-        description: "Please provide a reason for rejecting this loan application.",
+        description:
+          "Please provide a reason for rejecting this loan application.",
         id,
         value: "",
         label: "Rejection Reason",
@@ -440,7 +445,8 @@ function AdminDashboard() {
       setActionModal({
         type: "reject-loan-eligibility",
         title: "Reject Loan Application",
-        description: "Please provide a reason for rejecting this full loan application.",
+        description:
+          "Please provide a reason for rejecting this full loan application.",
         id,
         value: "",
         label: "Rejection Reason",
@@ -503,14 +509,29 @@ function AdminDashboard() {
         );
       }
 
-      if (actionModal.type === "block-member" || actionModal.type === "unblock-member") {
+      if (
+        actionModal.type === "block-member" ||
+        actionModal.type === "unblock-member"
+      ) {
         const blocked = actionModal.type === "block-member";
-        const updated = await request(`/admin/users/${actionModal.member._id}/block`, {
-          method: "PATCH",
-          token: user.token,
-          body: { blocked, reason: String(value || "Security review by administrator").trim() },
-        });
-        setMembers((prev) => prev.map((item) => item._id === updated._id ? { ...item, ...updated } : item));
+        const updated = await request(
+          `/admin/users/${actionModal.member._id}/block`,
+          {
+            method: "PATCH",
+            token: user.token,
+            body: {
+              blocked,
+              reason: String(
+                value || "Security review by administrator",
+              ).trim(),
+            },
+          },
+        );
+        setMembers((prev) =>
+          prev.map((item) =>
+            item._id === updated._id ? { ...item, ...updated } : item,
+          ),
+        );
         setActionModal(null);
       }
 
@@ -1180,6 +1201,7 @@ function AdminDashboard() {
                     <th>Loan Type</th>
                     <th>Amount</th>
                     <th>Status</th>
+                    <th>Receipt</th>
                     <th>Submitted</th>
                     <th>Action</th>
                   </tr>
@@ -1206,6 +1228,21 @@ function AdminDashboard() {
                         <span className={`status-badge ${r.status}`}>
                           {r.status}
                         </span>
+                      </td>
+
+                      <td>
+                        {r.receiptUrl ? (
+                          <a
+                            href={r.receiptUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="view-btn"
+                          >
+                            View Receipt
+                          </a>
+                        ) : (
+                          <span className="muted">No receipt</span>
+                        )}
                       </td>
 
                       <td>{new Date(r.createdAt).toLocaleDateString()}</td>
@@ -1755,7 +1792,9 @@ function AdminDashboard() {
         : `Block ${member.fullName || member.email} on both the website and mobile app.`,
       label: blocked ? "Reason (optional)" : "Reason",
       value: blocked ? "" : "Security review by administrator",
-      placeholder: blocked ? "Optional reason" : "Why is this account being blocked?",
+      placeholder: blocked
+        ? "Optional reason"
+        : "Why is this account being blocked?",
       inputType: "textarea",
       confirmText: blocked ? "Unblock Account" : "Block Account",
       danger: !blocked,
@@ -1864,7 +1903,9 @@ function AdminDashboard() {
                     </td>
 
                     <td>
-                      <span className={`status-badge ${m.isBlocked ? "rejected" : "approved"}`}>
+                      <span
+                        className={`status-badge ${m.isBlocked ? "rejected" : "approved"}`}
+                      >
                         {m.isBlocked ? "Blocked" : "Active"}
                       </span>
                     </td>
@@ -1878,9 +1919,15 @@ function AdminDashboard() {
                         <div className="member-action-stack">
                           <button
                             type="button"
-                            className={m.isBlocked ? "admin-secondary-btn" : "reject-btn"}
+                            className={
+                              m.isBlocked ? "admin-secondary-btn" : "reject-btn"
+                            }
                             onClick={() => handleBlockToggle(m)}
-                            title={m.isBlocked ? `Unblock ${m.fullName || "member"}` : `Block ${m.fullName || "member"}`}
+                            title={
+                              m.isBlocked
+                                ? `Unblock ${m.fullName || "member"}`
+                                : `Block ${m.fullName || "member"}`
+                            }
                           >
                             {m.isBlocked ? "Unblock Account" : "Block Account"}
                           </button>
@@ -1892,7 +1939,9 @@ function AdminDashboard() {
                             title={`Delete ${m.fullName || "member"}`}
                           >
                             <FaTrash />
-                            {deletingMemberId === m._id ? "Deleting..." : "Delete Account"}
+                            {deletingMemberId === m._id
+                              ? "Deleting..."
+                              : "Delete Account"}
                           </button>
                         </div>
                       )}

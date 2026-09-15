@@ -113,14 +113,14 @@ function Dashboard() {
    * LOAD TRANSACTIONS
    * ================================
    */
-  const loadTransactions = useCallback(async () => {
+  const loadTransactions = useCallback(async (silent = false) => {
     if (!user?.token) {
       setTransactionsLoading(false);
       return;
     }
 
     try {
-      setTransactionsLoading(true);
+      if (!silent) setTransactionsLoading(true);
       setTransactionsError("");
 
       const data = await request("/users/me/transactions", {
@@ -132,18 +132,18 @@ function Dashboard() {
       setTransactionsError(err.message);
       setTransactions([]);
     } finally {
-      setTransactionsLoading(false);
+      if (!silent) setTransactionsLoading(false);
     }
   }, [user?.token]);
 
-  const loadLoans = useCallback(async () => {
+  const loadLoans = useCallback(async (silent = false) => {
     if (!user?.token) {
       setLoanLoading(false);
       return;
     }
 
     try {
-      setLoanLoading(true);
+      if (!silent) setLoanLoading(true);
 
       const data = await request("/loans/my-loans", {
         token: user.token,
@@ -157,7 +157,7 @@ function Dashboard() {
       setError(err.message);
       setLoans([]);
     } finally {
-      setLoanLoading(false);
+      if (!silent) setLoanLoading(false);
     }
   }, [user?.token]);
 
@@ -218,8 +218,8 @@ function Dashboard() {
     if (!user?.token) return;
 
     const refreshLoanData = () => {
-      loadLoans();
-      loadTransactions();
+      void loadLoans(true);
+      void loadTransactions(true);
     };
 
     const handleVisibility = () => {
@@ -237,6 +237,35 @@ function Dashboard() {
       window.clearInterval(interval);
     };
   }, [user?.token, loadLoans, loadTransactions]);
+
+  useEffect(() => {
+    const modalOpen = Boolean(selectedTransaction || showAllTransactions || showAllRequests);
+    if (!modalOpen) return;
+
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      setSelectedTransaction(null);
+      setShowAllTransactions(false);
+      setShowAllRequests(false);
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [selectedTransaction, showAllTransactions, showAllRequests]);
+
+  // Keep the page underneath a transaction/history modal from scrolling.
+  // This also prevents the dashboard from visibly jumping when a modal opens.
+  useEffect(() => {
+    const modalOpen = Boolean(selectedTransaction || showAllTransactions || showAllRequests);
+    if (!modalOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedTransaction, showAllTransactions, showAllRequests]);
 
   /*
    * ================================
@@ -268,10 +297,19 @@ function Dashboard() {
     if (!file) return;
 
     setRepaymentReceipt(file);
-    setRepaymentReceiptPreview(URL.createObjectURL(file));
+    setRepaymentReceiptPreview((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return URL.createObjectURL(file);
+    });
     setRepaymentError("");
     setRepaymentSuccess("");
   };
+
+  useEffect(() => {
+    return () => {
+      if (repaymentReceiptPreview) URL.revokeObjectURL(repaymentReceiptPreview);
+    };
+  }, [repaymentReceiptPreview]);
 
   const copyRepaymentAccount = async () => {
     try {

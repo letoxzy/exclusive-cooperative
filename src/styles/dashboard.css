@@ -1767,3 +1767,56 @@
     font-size: 14px;
   }
 }
+
+/* =================================
+   MEMBER DASHBOARD STABILITY FIXES
+================================= */
+.dashboard-modal-backdrop {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dashboard-modal {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.dashboard-modal-close:focus-visible,
+.transaction-clickable-row:focus-visible,
+.transaction-view-all-btn:focus-visible,
+.dashboard-list-link:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.transaction-clickable-row {
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .dashboard-modal-backdrop {
+    min-height: 100dvh;
+    padding: 8px;
+  }
+
+  .dashboard-modal {
+    width: 100%;
+    max-height: calc(100dvh - 16px);
+    margin: 0;
+  }
+
+  .transaction-details-modal {
+    max-height: calc(100dvh - 16px);
+  }
+
+  .transaction-detail-amount {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+    padding: 18px;
+  }
+
+  .transaction-detail-amount strong {
+    font-size: 22px;
+  }
+}

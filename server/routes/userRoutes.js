@@ -181,6 +181,38 @@ router.patch("/me/security/auto-lock", protect, async (req, res) => {
 
 // PATCH /api/users/me/security/biometric
 // The biometric credential itself remains on the device; only the account preference is synced.
+// GET /api/users/me/theme
+router.get("/me/theme", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("themePreference");
+    if (!user) return res.status(404).json({ message: "User no longer exists" });
+
+    res.json({ themePreference: user.themePreference || "system" });
+  } catch (err) {
+    console.error("Theme preference fetch error:", err);
+    res.status(500).json({ message: "Failed to load theme preference" });
+  }
+});
+
+// PATCH /api/users/me/theme
+router.patch("/me/theme", protect, async (req, res) => {
+  try {
+    const themePreference = String(req.body?.themePreference || "");
+
+    if (!["light", "dark", "system"].includes(themePreference)) {
+      return res.status(400).json({ message: "Invalid theme preference." });
+    }
+
+    req.user.themePreference = themePreference;
+    await req.user.save();
+
+    res.json({ themePreference });
+  } catch (err) {
+    console.error("Theme preference update error:", err);
+    res.status(500).json({ message: "Failed to save theme preference" });
+  }
+});
+
 router.patch("/me/security/biometric", protect, async (req, res) => {
   try {
     if (typeof req.body?.enabled !== "boolean") {

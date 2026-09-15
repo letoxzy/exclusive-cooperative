@@ -95,6 +95,14 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
+    // Account-level theme preference. The mobile app uses this to keep
+    // Light/Dark/System consistent across devices.
+    themePreference: {
+      type: String,
+      enum: ["light", "dark", "system"],
+      default: "system",
+    },
+
     // Expo push tokens are stored on the account so security notifications
     // can reach the member even when the app is not open.
     pushTokens: [

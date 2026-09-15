@@ -650,6 +650,12 @@ router.post(
             type: "withdrawal",
             title: "Withdrawal Successful",
             message: `Your ${source === "loan" ? "loan-funds" : "savings"} withdrawal of ₦${amount.toLocaleString()} has been successfully processed.`,
+            data: {
+              withdrawalId: withdrawal._id.toString(),
+              reference: withdrawal.reference,
+              source: withdrawal.source,
+              status: withdrawal.status,
+            },
           });
         } else {
           await withdrawal.save();
@@ -809,6 +815,12 @@ router.post("/paystack/webhook", async (req, res) => {
     message: `Your withdrawal of ₦${Number(
       withdrawal.amount || 0
     ).toLocaleString()} has been successfully processed.`,
+    data: {
+      withdrawalId: withdrawal._id.toString(),
+      reference: withdrawal.reference,
+      source: withdrawal.source,
+      status: withdrawal.status,
+    },
   });
 
   return;

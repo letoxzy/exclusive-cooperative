@@ -1,4 +1,6 @@
 import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import User from "../models/User.js";
@@ -299,6 +301,42 @@ router.post(
     }
   }
 );
+
+// POST /api/users/me/avatar/preset
+// Store a built-in avatar as a persistent app-served image URL.
+const AVATAR_PRESETS = new Set([
+  "male1", "female1", "male2", "female2",
+  "male3", "female3", "male4", "female4",
+]);
+
+router.post("/me/avatar/preset", protect, async (req, res) => {
+  const key = String(req.body?.key || "").trim().toLowerCase();
+  if (!AVATAR_PRESETS.has(key)) {
+    return res.status(400).json({ message: "Invalid avatar selection." });
+  }
+
+  try {
+    const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+    const protocol = forwardedProto || req.protocol || "https";
+    const avatarUrl = `${protocol}://${req.get("host")}/api/users/me/avatar-presets/${key}`;
+    req.user.avatarUrl = avatarUrl;
+    await req.user.save();
+    return res.json({ avatarUrl });
+  } catch (err) {
+    console.error("Preset avatar update error:", err);
+    return res.status(500).json({ message: "Unable to update profile picture." });
+  }
+});
+
+router.get("/me/avatar-presets/:key", async (req, res) => {
+  const key = String(req.params.key || "").trim().toLowerCase();
+  if (!AVATAR_PRESETS.has(key)) return res.status(404).end();
+
+  const filename = `${key}.png`;
+  const currentFile = fileURLToPath(import.meta.url);
+  const filePath = path.resolve(path.dirname(currentFile), "../assets/avatar-presets", filename);
+  return res.sendFile(filePath);
+});
 
 // GET /api/users/me/savings-requests
 // History of a member's savings top-ups.

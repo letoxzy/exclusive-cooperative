@@ -1638,6 +1638,12 @@ router.post(
             `Your withdrawal of ₦${Number(
               withdrawal.amount || 0
             ).toLocaleString()} has been successfully processed.`,
+          data: {
+            withdrawalId: withdrawal._id.toString(),
+            reference: withdrawal.reference,
+            source: withdrawal.source,
+            status: withdrawal.status,
+          },
         });
       } else if (
         transfer.status ===

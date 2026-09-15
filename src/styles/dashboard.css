@@ -1279,3 +1279,491 @@
     padding: 18px;
   }
 }
+
+
+/* =================================
+   2026 MEMBER DASHBOARD REFRESH
+   UI-only refinements; existing layout/data remain intact.
+================================= */
+.dashboard-page {
+  max-width: 1120px;
+  padding: 40px 24px 90px;
+}
+
+.dashboard-header {
+  margin-bottom: 28px;
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  font-size: clamp(28px, 3vw, 36px);
+  letter-spacing: -0.7px;
+}
+
+.logout-btn {
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: 12px;
+}
+
+.dashboard-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.dashboard-grid .dash-card {
+  border-radius: 16px;
+  padding: 20px 22px;
+  min-height: 104px;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(11, 31, 58, 0.035);
+}
+
+.dashboard-grid .dash-card:first-child {
+  grid-column: 1 / -1;
+  min-height: 150px;
+  padding: 26px 28px;
+  background: linear-gradient(135deg, var(--white), var(--light));
+  border-color: rgba(6, 95, 70, 0.16);
+}
+
+.dashboard-grid .dash-card:first-child .dash-figure {
+  font-size: clamp(34px, 5vw, 46px);
+  letter-spacing: -1px;
+}
+
+.dash-label {
+  font-weight: 600;
+}
+
+.dash-figure {
+  letter-spacing: -0.5px;
+}
+
+.loan-card,
+.dash-form-card {
+  border-radius: 18px;
+  box-shadow: 0 3px 18px rgba(11, 31, 58, 0.035);
+}
+
+.loan-card {
+  padding: 28px;
+}
+
+.loan-card-header {
+  position: relative;
+  margin-bottom: 22px;
+}
+
+.loan-card-title {
+  font-size: 24px;
+  letter-spacing: -0.3px;
+}
+
+.loan-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.loan-summary-item {
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.loan-summary-value {
+  font-size: 18px;
+}
+
+.loan-notice {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+/* Mobile-inspired repayment area */
+.repayment-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.repayment-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.repayment-eyebrow {
+  margin: 0 0 5px;
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.repayment-section h3 {
+  margin: 0 0 5px;
+  color: var(--navy);
+  font-size: 21px;
+}
+
+.repayment-heading .dash-note {
+  max-width: 650px;
+  margin: 0;
+}
+
+.repayment-outstanding {
+  flex: 0 0 auto;
+  min-width: 150px;
+  padding: 12px 15px;
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.repayment-outstanding span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.repayment-outstanding strong {
+  color: var(--navy);
+  font-size: 19px;
+}
+
+.repayment-bank-card {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  margin-bottom: 22px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 15px;
+}
+
+.repayment-bank-icon,
+.repayment-upload-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--gold-soft);
+  color: var(--navy);
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.repayment-bank-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.repayment-bank-label {
+  margin: 0 0 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+}
+
+.repayment-bank-content > strong {
+  display: block;
+  color: var(--navy);
+  font-size: 15px;
+  line-height: 1.4;
+  margin-bottom: 14px;
+}
+
+.repayment-bank-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.repayment-bank-row b {
+  color: var(--navy);
+}
+
+.repayment-account-row > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.copy-account-btn {
+  min-height: 34px !important;
+  padding: 0 11px !important;
+  background: var(--light) !important;
+  color: var(--navy) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 9px !important;
+  font-size: 11px !important;
+}
+
+.copy-account-btn:hover {
+  background: var(--gold-soft) !important;
+}
+
+.repayment-form-new {
+  display: block !important;
+}
+
+.repayment-field-label {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.repayment-amount-input-wrap {
+  display: flex;
+  align-items: center;
+  min-height: 58px;
+  margin-bottom: 22px;
+  padding: 0 16px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+}
+
+.repayment-amount-input-wrap > span {
+  color: var(--muted);
+  font-size: 20px;
+  font-weight: 800;
+  margin-right: 9px;
+}
+
+.repayment-amount-input-wrap input {
+  width: 100%;
+  min-width: 0;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  font-size: 21px !important;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.repayment-amount-input-wrap:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.receipt-label {
+  margin-bottom: 8px;
+}
+
+.repayment-upload-card {
+  padding: 26px 20px 20px;
+  text-align: center;
+  background: var(--light);
+  border: 1px dashed var(--border);
+  border-radius: 15px;
+}
+
+.repayment-upload-icon {
+  margin: 0 auto 12px;
+}
+
+.repayment-upload-card > strong {
+  display: block;
+  color: var(--navy);
+  font-size: 15px;
+}
+
+.repayment-upload-card > p {
+  max-width: 440px;
+  margin: 6px auto 16px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.repayment-upload-card.has-receipt {
+  border-style: solid;
+}
+
+.receipt-preview-wrap {
+  max-width: 420px;
+  margin: 0 auto 15px;
+}
+
+.receipt-preview {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--white);
+}
+
+.receipt-file-name {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repayment-upload-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.repayment-upload-actions button {
+  min-height: 42px;
+  min-width: 120px;
+  padding: 0 18px !important;
+  background: var(--white) !important;
+  color: var(--navy) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 11px !important;
+}
+
+.repayment-upload-actions button:hover {
+  background: var(--gold-soft) !important;
+  border-color: var(--gold) !important;
+}
+
+.repayment-submit-btn {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 16px;
+  background: var(--navy) !important;
+  color: var(--white) !important;
+  border-radius: 12px !important;
+  font-size: 15px !important;
+}
+
+.repayment-submit-btn:hover {
+  background: var(--gold) !important;
+  color: var(--navy) !important;
+}
+
+.repayment-history-block {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.repayment-history-block h4 {
+  margin: 0 0 10px;
+  color: var(--navy);
+  font-size: 14px;
+}
+
+.transactions-card,
+.withdrawal-dashboard-card {
+  margin-top: 18px;
+}
+
+.transactions-table-wrap {
+  border-radius: 13px;
+}
+
+.transactions-table th {
+  font-weight: 700;
+}
+
+@media (max-width: 800px) {
+  .loan-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-page {
+    padding: 28px 15px 60px;
+  }
+
+  .dashboard-header {
+    margin-bottom: 22px;
+  }
+
+  .dashboard-header h1 {
+    font-size: 25px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-grid .dash-card:first-child {
+    grid-column: auto;
+  }
+
+  .dashboard-grid .dash-card:first-child .dash-figure {
+    font-size: 35px;
+  }
+
+  .loan-card {
+    padding: 20px;
+  }
+
+  .loan-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .repayment-heading {
+    flex-direction: column;
+  }
+
+  .repayment-outstanding {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .repayment-bank-card {
+    padding: 16px;
+  }
+
+  .repayment-bank-row {
+    align-items: flex-start;
+  }
+
+  .repayment-account-row > div {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .repayment-upload-actions button {
+    min-width: 0;
+    flex: 1;
+  }
+}
+
+@media (max-width: 430px) {
+  .loan-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .repayment-bank-card {
+    gap: 10px;
+  }
+
+  .repayment-bank-content > strong {
+    font-size: 14px;
+  }
+}

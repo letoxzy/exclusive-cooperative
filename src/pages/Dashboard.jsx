@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
@@ -24,6 +24,11 @@ function Dashboard() {
   const [repaymentLoading, setRepaymentLoading] = useState(false);
   const [repaymentError, setRepaymentError] = useState("");
   const [repaymentSuccess, setRepaymentSuccess] = useState("");
+  const [repaymentReceipt, setRepaymentReceipt] = useState(null);
+  const [repaymentReceiptPreview, setRepaymentReceiptPreview] = useState("");
+  const [copyAccountMessage, setCopyAccountMessage] = useState("");
+  const repaymentGalleryInputRef = useRef(null);
+  const repaymentCameraInputRef = useRef(null);
 
   const [showBalances, setShowBalances] = useState(true);
 
@@ -258,32 +263,89 @@ function Dashboard() {
     if (active) loadRepayments(active._id);
   }, [loans, loadRepayments]);
 
+  const handleRepaymentReceiptChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setRepaymentReceipt(file);
+    setRepaymentReceiptPreview(URL.createObjectURL(file));
+    setRepaymentError("");
+    setRepaymentSuccess("");
+  };
+
+  const copyRepaymentAccount = async () => {
+    try {
+      await navigator.clipboard.writeText("0123456789");
+      setCopyAccountMessage("Copied");
+      window.setTimeout(() => setCopyAccountMessage(""), 1800);
+    } catch {
+      setCopyAccountMessage("Copy failed");
+    }
+  };
+
   const handleRepaymentSubmit = async (e, loanId) => {
     e.preventDefault();
     setRepaymentError("");
     setRepaymentSuccess("");
 
     const value = Number(repaymentAmount);
+    const outstanding = Number(currentLoan?.outstandingBalance || 0);
+
     if (!value || value <= 0) {
-      setRepaymentError("Enter a valid amount.");
+      setRepaymentError("Enter a valid repayment amount.");
+      return;
+    }
+
+    if (value > outstanding) {
+      setRepaymentError(
+        `Repayment cannot exceed your outstanding balance of ${money(outstanding)}.`,
+      );
+      return;
+    }
+
+    if (!repaymentReceipt) {
+      setRepaymentError(
+        "Please upload your transfer receipt before submitting.",
+      );
       return;
     }
 
     setRepaymentLoading(true);
     try {
-      await request(`/loans/${loanId}/repayments`, {
+      const apiBaseUrl =
+        import.meta.env.VITE_API_URL ||
+        "https://exclusive-cooperative-api.onrender.com/api";
+      const formData = new FormData();
+      formData.append("amount", String(value));
+      formData.append("receipt", repaymentReceipt);
+
+      const response = await fetch(`${apiBaseUrl}/loans/${loanId}/repayments`, {
         method: "POST",
-        token: user.token,
-        body: { amount: value },
+        headers: { Authorization: `Bearer ${user.token}` },
+        body: formData,
       });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          data.message || data.error || "Failed to submit repayment.",
+        );
+      }
+
       setRepaymentAmount("");
+      setRepaymentReceipt(null);
+      setRepaymentReceiptPreview("");
+      if (repaymentGalleryInputRef.current)
+        repaymentGalleryInputRef.current.value = "";
+      if (repaymentCameraInputRef.current)
+        repaymentCameraInputRef.current.value = "";
       setRepaymentSuccess(
-        "Repayment submitted — an admin will confirm it shortly.",
+        "Repayment submitted — an admin will review your transfer receipt and confirm it shortly.",
       );
       await loadRepayments(loanId);
       await Promise.all([loadLoans(), loadTransactions()]);
     } catch (err) {
-      setRepaymentError(err.message);
+      setRepaymentError(err.message || "Failed to submit repayment.");
     } finally {
       setRepaymentLoading(false);
     }
@@ -604,48 +666,169 @@ function Dashboard() {
           {currentLoan.status === "active" &&
             currentLoan.outstandingBalance > 0 && (
               <div className="repayment-section">
-                <h3>Record a Repayment</h3>
-                <p className="dash-note">
-                  Already sent money towards this loan? Record it here — an
-                  admin will confirm it before your outstanding balance updates.
-                </p>
+                <div className="repayment-heading">
+                  <div>
+                    <p className="repayment-eyebrow">Loan repayment</p>
+                    <h3>Make a repayment</h3>
+                    <p className="dash-note">
+                      Transfer your repayment to the cooperative account, then
+                      upload the transfer receipt for admin confirmation.
+                    </p>
+                  </div>
+                  <div className="repayment-outstanding">
+                    <span>Outstanding</span>
+                    <strong>{money(currentLoan.outstandingBalance)}</strong>
+                  </div>
+                </div>
+
+                <div className="repayment-bank-card">
+                  <div className="repayment-bank-icon">▥</div>
+                  <div className="repayment-bank-content">
+                    <p className="repayment-bank-label">
+                      Transfer repayment to
+                    </p>
+                    <strong>
+                      Exclusive Cooperative Multipurpose Society Limited
+                    </strong>
+                    <div className="repayment-bank-row">
+                      <span>Bank</span>
+                      <b>UBA</b>
+                    </div>
+                    <div className="repayment-bank-row repayment-account-row">
+                      <span>Account number</span>
+                      <div>
+                        <b>0123456789</b>
+                        <button
+                          type="button"
+                          className="copy-account-btn"
+                          onClick={copyRepaymentAccount}
+                          aria-label="Copy repayment account number"
+                        >
+                          {copyAccountMessage || "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <form
-                  className="repayment-form"
+                  className="repayment-form-new"
                   onSubmit={(e) => handleRepaymentSubmit(e, currentLoan._id)}
                 >
-                  <input
-                    type="number"
-                    min="0"
-                    max={currentLoan.outstandingBalance}
-                    placeholder="Amount in ₦"
-                    value={repaymentAmount}
-                    onChange={(e) => setRepaymentAmount(e.target.value)}
-                  />
-                  <button type="submit" disabled={repaymentLoading}>
+                  <label
+                    className="repayment-field-label"
+                    htmlFor="repayment-amount"
+                  >
+                    Repayment amount
+                  </label>
+                  <div className="repayment-amount-input-wrap">
+                    <span>₦</span>
+                    <input
+                      id="repayment-amount"
+                      type="number"
+                      min="1"
+                      max={currentLoan.outstandingBalance}
+                      step="1"
+                      placeholder="0.00"
+                      value={repaymentAmount}
+                      onChange={(e) => setRepaymentAmount(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="repayment-field-label receipt-label">
+                    Transfer receipt
+                  </div>
+                  <div
+                    className={`repayment-upload-card ${repaymentReceipt ? "has-receipt" : ""}`}
+                  >
+                    {repaymentReceiptPreview ? (
+                      <div className="receipt-preview-wrap">
+                        <img
+                          src={repaymentReceiptPreview}
+                          alt="Transfer receipt preview"
+                          className="receipt-preview"
+                        />
+                        <div className="receipt-file-name">
+                          {repaymentReceipt.name}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="repayment-upload-icon">▤</div>
+                        <strong>Upload your transfer receipt</strong>
+                        <p>
+                          Use a clear screenshot or photo showing the payment
+                          details.
+                        </p>
+                      </>
+                    )}
+
+                    <div className="repayment-upload-actions">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          repaymentGalleryInputRef.current?.click()
+                        }
+                      >
+                        Gallery
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => repaymentCameraInputRef.current?.click()}
+                      >
+                        Camera
+                      </button>
+                    </div>
+                    <input
+                      ref={repaymentGalleryInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleRepaymentReceiptChange}
+                      hidden
+                    />
+                    <input
+                      ref={repaymentCameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleRepaymentReceiptChange}
+                      hidden
+                    />
+                  </div>
+
+                  {repaymentError && (
+                    <p className="form-error">{repaymentError}</p>
+                  )}
+                  {repaymentSuccess && (
+                    <p className="form-success">{repaymentSuccess}</p>
+                  )}
+
+                  <button
+                    className="repayment-submit-btn"
+                    type="submit"
+                    disabled={repaymentLoading}
+                  >
                     {repaymentLoading ? "Submitting..." : "Submit Repayment"}
                   </button>
                 </form>
-                {repaymentError && (
-                  <p className="form-error">{repaymentError}</p>
-                )}
-                {repaymentSuccess && (
-                  <p className="form-success">{repaymentSuccess}</p>
-                )}
 
                 {repayments.length > 0 && (
-                  <ul className="requests-ul repayment-history">
-                    {repayments.map((r) => (
-                      <li key={r._id}>
-                        <span>{money(r.amount)}</span>
-                        <span className={`status-badge ${r.status}`}>
-                          {r.status}
-                        </span>
-                        <span className="req-date">
-                          {new Date(r.createdAt).toLocaleDateString()}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="repayment-history-block">
+                    <h4>Repayment history</h4>
+                    <ul className="requests-ul repayment-history">
+                      {repayments.map((r) => (
+                        <li key={r._id}>
+                          <span>{money(r.amount)}</span>
+                          <span className={`status-badge ${r.status}`}>
+                            {r.status}
+                          </span>
+                          <span className="req-date">
+                            {new Date(r.createdAt).toLocaleDateString()}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             )}

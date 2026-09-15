@@ -255,6 +255,24 @@ function AdminDashboard() {
   ]);
 
   /* ================================
+     REPAYMENT QUEUE SYNC
+  ================================= */
+
+  useEffect(() => {
+    if (!user?.token || activeSection !== "repayments") return;
+
+    const refreshRepaymentQueue = () => {
+      loadLoanRepayments().catch((err) => {
+        console.error("Repayment queue refresh error:", err);
+      });
+    };
+
+    const interval = window.setInterval(refreshRepaymentQueue, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [user?.token, activeSection, loadLoanRepayments]);
+
+  /* ================================
      SAVINGS REQUEST ACTION
   ================================= */
 
@@ -731,7 +749,13 @@ function AdminDashboard() {
         body: { action },
       });
 
-      await loadLoanRepayments();
+      // Refresh both the repayment queue and loan records immediately.
+      // This keeps the admin dashboard's repayment status, amount paid,
+      // outstanding balance, and loan status in sync after confirmation.
+      await Promise.all([
+        loadLoanRepayments(),
+        loadLoans(),
+      ]);
     } catch (err) {
       setError(err.message);
     }

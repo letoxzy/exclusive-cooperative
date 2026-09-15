@@ -9,6 +9,7 @@ import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
+import { createNotificationAndPush } from "../utils/createNotification.js";
 
 
 const router = express.Router();
@@ -615,7 +616,7 @@ router.post(
           status: "processing",
         });
 
-        await Notification.create({
+        await createNotificationAndPush({
           user: freshMember._id,
           type: "withdrawal",
           title: source === "loan" ? "Loan Funds Withdrawal Submitted" : "Savings Withdrawal Submitted",
@@ -645,7 +646,7 @@ router.post(
 
         if (withdrawal.status === "success") {
           await settleWithdrawal(withdrawal, "success");
-          await Notification.create({
+          await createNotificationAndPush({
             user: withdrawal.user,
             type: "withdrawal",
             title: "Withdrawal Successful",
@@ -808,7 +809,7 @@ router.post("/paystack/webhook", async (req, res) => {
     "success"
   );
 
-  await Notification.create({
+  await createNotificationAndPush({
     user: withdrawal.user,
     type: "withdrawal",
     title: "Withdrawal Successful",
@@ -857,7 +858,7 @@ const notificationMessage =
         withdrawal.amount || 0
       ).toLocaleString()} could not be completed.`;
 
-await Notification.create({
+await createNotificationAndPush({
   user: withdrawal.user,
   type: "withdrawal",
   title: notificationTitle,

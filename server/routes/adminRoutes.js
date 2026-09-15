@@ -19,7 +19,7 @@ import { protect } from "../middleware/authMiddleware.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
-import { sendPushNotification } from "../utils/pushNotification.js";
+import { createNotificationAndPush } from "../utils/createNotification.js";
 
 const router = express.Router();
 
@@ -92,7 +92,7 @@ router.patch("/users/:id/block", async (req, res) => {
       : "Your account has been unblocked by an administrator. You can sign in again.";
 
     try {
-      await Notification.create({
+      await createNotificationAndPush({
         user: member._id,
         type: "security",
         title: notificationTitle,
@@ -101,14 +101,6 @@ router.patch("/users/:id/block", async (req, res) => {
     } catch (notificationError) {
       console.error("Account status notification failed:", notificationError);
     }
-
-    // Send a real device notification as well. This is important for a blocked
-    // member because a blocked account cannot fetch in-app notifications.
-    await sendPushNotification(member, {
-      title: notificationTitle,
-      body: notificationMessage,
-      data: { type: "security", action: blocked ? "account_blocked" : "account_unblocked" },
-    });
 
     return res.json({
       _id: member._id,
@@ -179,7 +171,7 @@ router.patch("/users/:id/shareholding", async (req, res) => {
     // shareholding value. Notification failure should not undo the saved
     // shareholding update.
     try {
-      await Notification.create({
+      await createNotificationAndPush({
         user: member._id,
         type: "shareholding",
         title: "Shareholding Updated",
@@ -459,7 +451,7 @@ router.post(
           ============================
         */
 
-        await Notification.create({
+        await createNotificationAndPush({
           user: user._id,
           type: "membership",
           title: "Member Account Created",
@@ -593,7 +585,7 @@ router.patch(
               ).toLocaleString()} was rejected.`,
             };
 
-      await Notification.create({
+      await createNotificationAndPush({
         user: txn.user,
         type: "savings",
         ...savingsNotification,
@@ -729,7 +721,7 @@ router.patch(
         );
 
         if (updates.status === "approved") {
-          await Notification.create({
+          await createNotificationAndPush({
             user: app.user,
             type: "membership",
             title: "Membership Approved",
@@ -739,7 +731,7 @@ router.patch(
         }
 
         if (updates.status === "rejected") {
-          await Notification.create({
+          await createNotificationAndPush({
             user: app.user,
             type: "membership",
             title:
@@ -838,7 +830,7 @@ router.patch(
 
         await application.save();
 
-        await Notification.create({
+        await createNotificationAndPush({
           user: application.user,
           type: "loan-eligibility",
           title:
@@ -873,7 +865,7 @@ router.patch(
           }
         );
 
-        await Notification.create({
+        await createNotificationAndPush({
           user: application.user,
           type: "loan-eligibility",
           title: "Loan Eligibility Approved",
@@ -995,7 +987,7 @@ router.patch(
 
         await loan.save();
 
-        await Notification.create({
+        await createNotificationAndPush({
           user: loan.user,
           type: "loan",
           title: "Loan Application Rejected",
@@ -1155,7 +1147,7 @@ router.patch(
 
         await loan.save();
 
-        await Notification.create({
+        await createNotificationAndPush({
           user: loan.user,
           type: "loan",
           title:
@@ -1263,7 +1255,7 @@ router.patch(
       // loanFundsWithdrawn/loanFundsReserved track how much of the loan
       // has actually been taken out by the member.
 
-      await Notification.create({
+      await createNotificationAndPush({
         user: loan.user,
         type: "loan",
         title: "Loan Disbursed",
@@ -1367,7 +1359,7 @@ router.patch(
 
         await repayment.save();
 
-        await Notification.create({
+        await createNotificationAndPush({
           user: repayment.user,
           type: "repayment",
           title:
@@ -1478,7 +1470,7 @@ router.patch(
 
       await repayment.save();
 
-      await Notification.create({
+      await createNotificationAndPush({
         user: repayment.user,
         type: "repayment",
         title:
@@ -1493,7 +1485,7 @@ router.patch(
         loan.status ===
         "completed"
       ) {
-        await Notification.create({
+        await createNotificationAndPush({
           user: loan.user,
           type: "loan",
           title:
@@ -1629,7 +1621,7 @@ router.post(
           "success"
         );
 
-        await Notification.create({
+        await createNotificationAndPush({
           user: withdrawal.user,
           type: "withdrawal",
           title:
@@ -1656,7 +1648,7 @@ router.post(
             "Paystack marked the transfer as failed."
         );
 
-        await Notification.create({
+        await createNotificationAndPush({
           user: withdrawal.user,
           type: "withdrawal",
           title:
@@ -1676,7 +1668,7 @@ router.post(
           "Paystack reversed the transfer."
         );
 
-        await Notification.create({
+        await createNotificationAndPush({
           user: withdrawal.user,
           type: "withdrawal",
           title:
@@ -2118,7 +2110,7 @@ router.patch(
 
       await entry.save();
 
-      await Notification.create({
+      await createNotificationAndPush({
         user: entry.user,
         type: "dividend",
         title: "Dividend Paid",
@@ -2208,7 +2200,7 @@ router.patch(
       await Promise.all(
         pendingEntries.map(
           (entry) =>
-            Notification.create({
+            createNotificationAndPush({
               user: entry.user,
               type: "dividend",
               title: "Dividend Paid",

@@ -201,6 +201,40 @@ function Dashboard() {
 
   /*
    * ================================
+   * KEEP LOAN BALANCE IN SYNC
+   * ================================
+   *
+   * Repayment confirmation happens in the admin dashboard, so the member
+   * dashboard must re-read the loan from the backend instead of relying on
+   * the copy that was loaded when the page first opened. Refresh on tab focus
+   * and periodically while the dashboard is open.
+   */
+  useEffect(() => {
+    if (!user?.token) return;
+
+    const refreshLoanData = () => {
+      loadLoans();
+      loadTransactions();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshLoanData();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    const interval = window.setInterval(refreshLoanData, 15000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.clearInterval(interval);
+    };
+  }, [user?.token, loadLoans, loadTransactions]);
+
+  /*
+   * ================================
    * LOAD REPAYMENT HISTORY FOR ACTIVE LOAN
    * ================================
    */
@@ -246,7 +280,8 @@ function Dashboard() {
       setRepaymentSuccess(
         "Repayment submitted — an admin will confirm it shortly.",
       );
-      loadRepayments(loanId);
+      await loadRepayments(loanId);
+      await Promise.all([loadLoans(), loadTransactions()]);
     } catch (err) {
       setRepaymentError(err.message);
     } finally {

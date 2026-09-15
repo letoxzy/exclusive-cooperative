@@ -8,6 +8,7 @@ import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
+import { createNotificationAndPush } from "../utils/createNotification.js";
 
 const router = express.Router();
 
@@ -185,7 +186,7 @@ router.post(
         "-bvn"
       );
 
-      await Notification.create({
+      await createNotificationAndPush({
         user: req.user._id,
         type: "loan-eligibility",
         title: "Full Loan Application Submitted",
@@ -462,7 +463,7 @@ router.post("/", protect, requireApprovedMember, async (req, res) => {
       "fullName email savingsBalance isApprovedMember"
     );
 
-    await Notification.create({
+    await createNotificationAndPush({
       user: req.user._id,
       type: "loan",
       title: "Loan Application Submitted",
@@ -576,7 +577,7 @@ router.post("/:id/repayments", protect, uploadReceipt.single("receipt"), async (
       receiptPublicId,
     });
 
-    await Notification.create({
+    await createNotificationAndPush({
       user: req.user._id,
       type: "repayment",
       title: "Loan Repayment Submitted",

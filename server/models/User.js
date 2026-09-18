@@ -70,21 +70,6 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false,
     },
-    appPinFailedAttempts: {
-      type: Number,
-      default: 0,
-      select: false,
-    },
-    appPinLockedUntil: {
-      type: Date,
-      default: null,
-      select: false,
-    },
-    appPinSecurityAlertedAt: {
-      type: Date,
-      default: null,
-      select: false,
-    },
     autoLockSeconds: {
       type: Number,
       default: 300,

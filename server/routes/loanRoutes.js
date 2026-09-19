@@ -108,15 +108,9 @@ router.post(
   requireApprovedMember,
   async (req, res) => {
     try {
-      const { bvn } = req.body;
-
-      const trimmedBvn = String(bvn || "").trim();
-
-      if (!BVN_REGEX.test(trimmedBvn)) {
-        return res.status(400).json({
-          message: "Enter a valid 11-digit BVN.",
-        });
-      }
+      // BVN verification is handled by /api/kyc/bvn/verify. This endpoint
+      // creates the application only after the member has a verified BVN.
+      // Raw BVNs are never accepted or stored here.
 
       // A member who is already loan eligible, or who has a pending
       // application, doesn't need to submit another one.
@@ -150,12 +144,20 @@ router.post(
         });
       }
 
-      const application = await LoanEligibility.create({
+      const existingVerified = await LoanEligibility.findOne({
         user: req.user._id,
+        bvnVerificationStatus: "verified",
+      }).sort("-createdAt");
 
-        bvn: trimmedBvn,
+      if (!existingVerified) {
+        return res.status(400).json({
+          message: "Please complete BVN verification before submitting your Full Loan Application.",
+        });
+      }
 
-        applicantDetails: {
+      const application = existingVerified;
+
+      application.applicantDetails = {
           fullName: membership.fullName || "",
           phone: membership.phone || "",
           email: membership.email || "",
@@ -171,19 +173,14 @@ router.post(
           kinPhone: membership.kinPhone || "",
           kinRelationship: membership.kinRelationship || "",
           kinAddress: membership.kinAddress || "",
-        },
+        };
 
-        status: "pending",
+      application.status = "pending";
+      application.submittedDate = application.submittedDate || new Date();
+      await application.save();
 
-        submittedDate: new Date(),
-      });
-
-      // Never return the member's raw BVN to the browser. The BVN is
-      // retained server-side for the eventual authorized verification
-      // provider integration, while the frontend only receives
-      // verification statuses and application details.
       const safeApplication = await LoanEligibility.findById(application._id).select(
-        "-bvn"
+        "-bvnHash"
       );
 
       await createNotificationAndPush({

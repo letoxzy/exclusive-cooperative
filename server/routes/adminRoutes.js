@@ -853,6 +853,12 @@ router.patch(
       }
 
       if (action === "approve") {
+        if (application.bvnVerificationStatus !== "verified") {
+          return res.status(400).json({
+            message: "This application cannot be approved until the member's BVN has been successfully verified.",
+          });
+        }
+
         application.status = "approved";
         application.reviewedDate = new Date();
 

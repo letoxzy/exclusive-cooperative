@@ -19,10 +19,24 @@ const loanEligibilitySchema = new mongoose.Schema(
       required: true,
     },
 
-    bvn: {
+    // Raw BVNs are intentionally never returned to clients or admin screens.
+    // New verification attempts store only a hash and the final four digits.
+    bvnHash: {
       type: String,
       trim: true,
-      required: true,
+      default: "",
+      select: false,
+    },
+
+    bvnLast4: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    bvnVerifiedAt: {
+      type: Date,
+      default: null,
     },
 
     // Identity-verification state. These fields are populated as the
@@ -60,6 +74,12 @@ const loanEligibilitySchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+
+    verificationProvider: {
+      type: String,
+      trim: true,
+      default: "dojah",
     },
 
     consentGrantedAt: {

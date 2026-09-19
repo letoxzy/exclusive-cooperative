@@ -18,6 +18,11 @@ function FullLoanApplication() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [success, setSuccess] = useState("");
+  const [kycLoading, setKycLoading] = useState(false);
+  const [showKycWidget, setShowKycWidget] = useState(false);
+  const [kycStatus, setKycStatus] = useState(null);
+
+  const DOJAH_WIDGET_URL = import.meta.env.VITE_DOJAH_WIDGET_URL || "";
 
   // Savings/contributions are a separate concern — this only loads
   // the member's bio-data (membership) and their existing Full Loan
@@ -34,11 +39,12 @@ function FullLoanApplication() {
       try {
         setPageLoading(true);
 
-        const [membershipData, applicationData] = await Promise.all([
+        const [membershipData, applicationData, kycData] = await Promise.all([
           request("/membership/me", { token: user.token }),
           request("/loans/eligibility-application/me", {
             token: user.token,
           }),
+          request("/kyc/status", { token: user.token }),
         ]);
 
         if (cancelled) return;
@@ -51,7 +57,8 @@ function FullLoanApplication() {
           setMembership(membershipData);
         }
 
-        setApplication(applicationData);
+        setApplication(applicationData || kycData?.application || null);
+        setKycStatus(kycData?.application || null);
       } catch (err) {
         if (!cancelled) setPageError(err.message);
       } finally {
@@ -78,21 +85,45 @@ function FullLoanApplication() {
     try {
       setSubmitting(true);
 
-      const created = await request("/loans/eligibility-application", {
+      const result = await request("/kyc/bvn/verify", {
         method: "POST",
         token: user.token,
         body: { bvn: bvn.trim() },
       });
 
-      setApplication(created);
-      setSuccess(
-        "Your full loan application has been submitted. An admin will review your details before you're eligible to apply for a loan."
-      );
+      setApplication(result.application || null);
+      setKycStatus(result.application || null);
       setBvn("");
+      setSuccess(
+        result.message ||
+          "Your BVN has been verified and your Full Loan Application is awaiting cooperative review."
+      );
     } catch (err) {
       setFormError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const startKycWidget = () => {
+    setFormError("");
+    setSuccess("");
+    if (!DOJAH_WIDGET_URL) {
+      setFormError(
+        "Dojah Sandbox widget is not configured yet. Add VITE_DOJAH_WIDGET_URL to the website environment variables after publishing your EasyOnboard Sandbox flow."
+      );
+      return;
+    }
+    setShowKycWidget(true);
+  };
+
+  const refreshKycStatus = async () => {
+    try {
+      const data = await request("/kyc/status", { token: user.token });
+      setKycStatus(data?.application || null);
+      setApplication(data?.application || application);
+    } catch {
+      // Keep the current UI state if the status refresh fails.
     }
   };
 
@@ -212,7 +243,7 @@ function FullLoanApplication() {
             Before you can apply for a loan, submit your full loan
             application for review. Your personal details below were
             pulled from your approved membership record — review them,
-            then add your BVN to submit.
+            then complete secure BVN verification to submit.
           </p>
         </div>
 
@@ -301,18 +332,18 @@ function FullLoanApplication() {
                 <input
                   id="bvn"
                   name="bvn"
-                  type="text"
+                  type="password"
                   inputMode="numeric"
+                  autoComplete="off"
                   maxLength="11"
-                  placeholder="e.g. 22112233445"
+                  placeholder="Enter your 11-digit BVN"
                   value={bvn}
-                  onChange={(e) => setBvn(e.target.value)}
+                  onChange={(e) => setBvn(e.target.value.replace(/\D/g, "").slice(0, 11))}
                   required
                 />
 
                 <small>
-                  Enter your 11-digit BVN. Your BVN will be used for identity
-                  verification as part of the eligibility review.
+                  Your BVN is sent to the cooperative backend for Dojah Sandbox verification. The raw BVN is not returned to this website or stored in the loan application.
                 </small>
               </div>
 
@@ -320,11 +351,7 @@ function FullLoanApplication() {
                 <strong>Important</strong>
 
                 <p>
-                  This is not a loan request — it's the eligibility review
-                  step. Your membership information is already on file, so you
-                  only need to provide your BVN here. Once approved, you'll be
-                  able to apply for an actual loan (amount, term, and purpose)
-                  separately.
+                  This is not a loan request. BVN verification happens inside Exclusive Cooperative before the Full Loan Application can proceed. If your EasyOnboard flow includes liveness or face verification, you can complete that inside this page without being sent to another website.
                 </p>
               </div>
 
@@ -338,11 +365,51 @@ function FullLoanApplication() {
                   className="btn-primary"
                   disabled={submitting}
                 >
-                  {submitting ? "Submitting..." : "Submit for Review"}
+                  {submitting ? "Verifying..." : "Verify BVN"}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={startKycWidget}
+                  disabled={kycLoading}
+                >
+                  Face & Liveness Verification
                 </button>
               </div>
             </form>
+
+            <div className="kyc-status-panel">
+              <div><strong>BVN status:</strong> {kycStatus?.bvnVerificationStatus || "not started"}</div>
+              <div><strong>Identity match:</strong> {kycStatus?.identityMatchStatus || "not started"}</div>
+              <div><strong>Face/liveness:</strong> {kycStatus?.faceVerificationStatus || "not started"}</div>
+            </div>
           </>
+        )}
+
+        {showKycWidget && (
+          <div className="kyc-widget-overlay" role="dialog" aria-modal="true" aria-label="Identity verification">
+            <div className="kyc-widget-card">
+              <div className="kyc-widget-header">
+                <div>
+                  <p className="eyebrow">Exclusive Cooperative</p>
+                  <h2>Identity verification</h2>
+                  <p>Complete the Dojah Sandbox verification inside this page.</p>
+                </div>
+                <button type="button" className="kyc-close" onClick={() => setShowKycWidget(false)}>Close</button>
+              </div>
+              <iframe
+                title="Dojah identity verification"
+                src={DOJAH_WIDGET_URL}
+                className="kyc-widget-frame"
+                allow="camera; microphone; geolocation"
+              />
+              <div className="kyc-widget-footer">
+                <button type="button" className="btn-secondary" onClick={refreshKycStatus}>Refresh verification status</button>
+                <button type="button" className="btn-primary" onClick={() => setShowKycWidget(false)}>Done</button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

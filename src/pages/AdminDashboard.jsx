@@ -2146,7 +2146,15 @@ function AdminDashboard() {
                           </span>
                         </td>
 
-                        <td>{application.bvn}</td>
+                        <td>
+                          {application.bvnLast4
+                            ? `•••••••${application.bvnLast4}`
+                            : "Not stored"}
+                          <br />
+                          <span className="muted">
+                            {application.bvnVerificationStatus || "not started"}
+                          </span>
+                        </td>
 
                         <td>
                           {application.applicantDetails?.occupation || "—"}

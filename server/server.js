@@ -9,9 +9,11 @@ import membershipRoutes from "./routes/membershipRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import loanRoutes from "./routes/loanRoutes.js";
+import kycRoutes from "./routes/kycRoutes.js";
 import withdrawalRoutes from "./routes/withdrawalRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import galleryRoutes from "./routes/galleryRoutes.js";
+
 
 connectDB();
 
@@ -47,6 +49,7 @@ app.use("/api/membership", membershipRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/loans", loanRoutes);
+app.use("/api/kyc", kycRoutes);
 app.use("/api/withdrawals", withdrawalRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/gallery", galleryRoutes);

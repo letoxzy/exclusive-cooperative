@@ -188,7 +188,7 @@ router.post(
         type: "loan-eligibility",
         title: "Full Loan Application Submitted",
         message:
-          "Your Full Loan Application has been submitted and is awaiting review.",
+          "Your Full Loan Application has been submitted successfully and is now awaiting administrator review. You will be notified once a decision is made.",
       });
 
       res.status(201).json(safeApplication);

@@ -5,6 +5,7 @@ import Membership from "../models/Membership.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { compareBVNIdentity, getVerificationDetails, lookupBVN } from "../services/dojahService.js";
+import { createNotificationAndPush } from "../utils/createNotification.js";
 
 const router = express.Router();
 const BVN_REGEX = /^\d{11}$/;
@@ -216,6 +217,15 @@ router.post("/widget-result", protect, requireApprovedMember, async (req, res) =
     let application = await LoanEligibility.findOne({ user: req.user._id }).sort("-createdAt");
     if (!application) application = new LoanEligibility({ user: req.user._id });
 
+    // Keep track of whether this verification has already been submitted
+    // for administrator review. This prevents repeated taps on
+    // "I've completed verification" from creating duplicate notifications.
+    const wasAlreadySubmitted = application.status === "pending" &&
+      application.providerVerificationStatus === "completed" &&
+      application.bvnVerificationStatus === "verified" &&
+      application.identityMatchStatus === "matched" &&
+      application.faceVerificationStatus === "verified";
+
     application.verificationReference = referenceId;
     application.verificationProvider = "dojah";
     application.providerVerificationStatus = providerStatus || "pending";
@@ -238,8 +248,15 @@ router.post("/widget-result", protect, requireApprovedMember, async (req, res) =
     const selfiePassed = verificationData?.selfie?.status === true;
     application.faceVerificationStatus = selfiePassed ? "verified" : "failed";
 
-    if (providerStatus === "completed" && bvnPassed && identityAccepted && selfiePassed) {
+    const verificationPassed =
+      providerStatus === "completed" &&
+      bvnPassed &&
+      identityAccepted &&
+      selfiePassed;
+
+    if (verificationPassed) {
       application.status = "pending";
+      application.submittedDate = new Date();
       application.verifiedAt = new Date();
       application.providerVerificationCompletedAt = new Date();
       application.rejectionReason = "";
@@ -271,15 +288,31 @@ router.post("/widget-result", protect, requireApprovedMember, async (req, res) =
 
     await application.save();
 
-    const message =
-      application.status === "pending" && application.bvnVerificationStatus === "verified" && application.faceVerificationStatus === "verified"
-        ? "Identity verification completed. Your Full Loan Application is now awaiting cooperative review."
-        : providerStatus === "completed"
-          ? "Identity verification was completed, but the returned identity details could not be matched to your membership record. Please contact the cooperative."
-          : "Your verification status has been recorded. Please complete any remaining verification steps.";
+    const submittedForReview = verificationPassed;
+
+    if (submittedForReview && !wasAlreadySubmitted) {
+      await createNotificationAndPush({
+        user: req.user._id,
+        type: "loan-eligibility",
+        title: "Full Loan Application Submitted",
+        message:
+          "Your Full Loan Application has been submitted successfully and is now awaiting administrator review. You will be notified once a decision is made.",
+        data: {
+          applicationId: application._id.toString(),
+          status: "pending",
+        },
+      });
+    }
+
+    const message = submittedForReview
+      ? "Your Full Loan Application has been submitted successfully and is now awaiting administrator review."
+      : providerStatus === "completed"
+        ? "Identity verification was completed, but the returned identity details could not be matched to your membership record. Please contact the cooperative."
+        : "Your verification status has been recorded. Please complete any remaining verification steps.";
 
     res.json({
       message,
+      submitted: submittedForReview,
       verification: safeApplication(application),
       application: safeApplication(application),
     });

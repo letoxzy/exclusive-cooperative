@@ -64,6 +64,42 @@ export async function lookupBVN(bvn) {
   }
 }
 
+export async function getVerificationDetails(referenceId) {
+  const value = String(referenceId || "").trim();
+  if (!value) {
+    throw new Error("A Dojah verification reference is required.");
+  }
+
+  const url = new URL(`${DOJAH_BASE_URL}/api/v1/kyc/verification`);
+  url.searchParams.set("reference_id", value);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getHeaders(),
+      signal: controller.signal,
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const error = new Error(
+        data?.message || data?.error || `Dojah returned HTTP ${response.status}.`,
+      );
+      error.status = response.status;
+      error.providerData = data;
+      throw error;
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function compareBVNIdentity(entity, membership) {
   if (!entity) {
     return { matched: false, reason: "Dojah did not return identity data." };
@@ -82,9 +118,21 @@ export function compareBVNIdentity(entity, membership) {
 
   const returnedDob = entity.dob || entity.date_of_birth || entity.dateOfBirth || "";
   const memberDob = membership?.dob || "";
+  const normaliseDate = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+
+    const direct = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (direct) return `${direct[1]}-${String(direct[2]).padStart(2, "0")}-${String(direct[3]).padStart(2, "0")}`;
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return normalise(raw);
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+  };
+
   const dobMatched = !returnedDob || !memberDob
     ? true
-    : String(returnedDob).slice(0, 10) === String(memberDob).slice(0, 10);
+    : normaliseDate(returnedDob) === normaliseDate(memberDob);
 
   return {
     matched: nameMatched && dobMatched,

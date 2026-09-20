@@ -82,6 +82,17 @@ const loanEligibilitySchema = new mongoose.Schema(
       default: "dojah",
     },
 
+    providerVerificationStatus: {
+      type: String,
+      enum: ["not_started", "ongoing", "pending", "completed", "failed", "abandoned"],
+      default: "not_started",
+    },
+
+    providerVerificationCompletedAt: {
+      type: Date,
+      default: null,
+    },
+
     consentGrantedAt: {
       type: Date,
       default: null,

@@ -853,9 +853,21 @@ router.patch(
       }
 
       if (action === "approve") {
-        if (application.bvnVerificationStatus !== "verified") {
+        if (application.providerVerificationStatus !== "completed") {
           return res.status(400).json({
-            message: "This application cannot be approved until the member's BVN has been successfully verified.",
+            message: "This application cannot be approved until the member's identity verification has been completed.",
+          });
+        }
+
+        if (application.bvnVerificationStatus !== "verified" || application.identityMatchStatus !== "matched") {
+          return res.status(400).json({
+            message: "This application cannot be approved until the member's BVN and identity details have been successfully verified.",
+          });
+        }
+
+        if (application.faceVerificationStatus !== "verified") {
+          return res.status(400).json({
+            message: "This application cannot be approved until the member's liveness verification has been successfully completed.",
           });
         }
 

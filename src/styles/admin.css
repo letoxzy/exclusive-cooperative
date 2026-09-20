@@ -929,3 +929,90 @@
   .admin-settings-form .admin-form-grid { grid-template-columns: 1fr; }
   .admin-form-full { grid-column: auto; }
 }
+
+/* =========================================
+   FULL LOAN APPLICATIONS
+========================================= */
+.full-loan-admin-heading {
+  align-items: center;
+}
+
+.full-loan-queue-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 13px;
+  border-radius: 12px;
+  background: #ecfdf3;
+  border: 1px solid #b7e6cf;
+  color: #087443;
+  white-space: nowrap;
+}
+
+.full-loan-queue-pill strong { font-size: 18px; }
+.full-loan-queue-pill span { font-size: 11px; font-weight: 800; }
+
+.full-loan-admin-card { overflow: hidden; }
+.full-loan-table-wrap { border-radius: 14px; }
+
+.verification-mini {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 800;
+}
+.verification-mini.verified { background: #e7f6ef; color: #087443; }
+.verification-mini.pending { background: #fff6dd; color: #8b6400; }
+.verification-text-ok { color: #087443; font-weight: 700; font-size: 11px; }
+.verification-text-pending { color: var(--muted); font-size: 11px; }
+
+.full-loan-actions-cell { min-width: 210px; }
+.full-loan-actions-cell button:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+}
+
+.full-loan-admin-empty {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  text-align: center;
+  color: var(--muted);
+}
+.full-loan-admin-empty-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #ecfdf3;
+  color: #087443;
+  font-weight: 900;
+  margin-bottom: 5px;
+}
+.full-loan-admin-empty strong { color: var(--navy); font-size: 14px; }
+.full-loan-admin-empty span { font-size: 12px; }
+
+.full-loan-review-panel {
+  padding: 18px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+}
+.full-loan-review-panel > div { min-width: 0; }
+
+@media (max-width: 900px) {
+  .full-loan-admin-heading { align-items: flex-start; }
+  .full-loan-queue-pill { margin-top: 3px; }
+}
+
+@media (max-width: 640px) {
+  .full-loan-admin-heading { flex-direction: column; gap: 12px; }
+  .full-loan-queue-pill { width: 100%; box-sizing: border-box; justify-content: center; }
+  .full-loan-table-wrap { overflow-x: auto; }
+  .full-loan-admin-table { min-width: 920px; }
+}

@@ -87,14 +87,21 @@ function AdminNotifications({
       ================================= */
 
       ...loanEligibilityApplications
-        .filter((item) => item.status === "pending")
+        .filter(
+          (item) =>
+            item.status === "pending" &&
+            item.providerVerificationStatus === "completed" &&
+            item.bvnVerificationStatus === "verified" &&
+            item.identityMatchStatus === "matched" &&
+            item.faceVerificationStatus === "verified",
+        )
         .map((item) => ({
           id: `loan-eligibility-${item._id}`,
           type: "loan-eligibility",
-          title: "Full Loan Application",
+          title: "Full Loan Application Ready",
           message: `${
             item.user?.fullName || "A member"
-          } submitted a full loan application.`,
+          } has completed identity verification and is waiting for your review.`,
           date: item.submittedDate || item.createdAt,
           section: "loan-eligibility",
         })),

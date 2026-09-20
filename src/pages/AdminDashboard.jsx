@@ -20,6 +20,12 @@ import AdminNotifications from "../components/admin/AdminNotifications";
 import AdminActionModal from "../components/admin/AdminActionModal";
 import GalleryManagement from "../components/admin/GalleryManagement";
 
+
+const statusLabel = (value) =>
+  String(value || "not started")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
 function AdminDashboard() {
   const { user, logout } = useAuth();
 
@@ -162,6 +168,24 @@ function AdminDashboard() {
 
     setLoanEligibilityApplications(data);
   }, [user.token]);
+
+  // Keep the Full Loan Applications queue live so a newly completed
+  // identity verification appears in the admin notification bell without
+  // requiring the administrator to refresh the page.
+  useEffect(() => {
+    if (!user?.token) return;
+
+    const refreshLoanEligibilityQueue = () => {
+      loadLoanEligibilityApplications().catch((err) => {
+        console.error("Full loan application notification polling error:", err);
+      });
+    };
+
+    refreshLoanEligibilityQueue();
+    const interval = setInterval(refreshLoanEligibilityQueue, 10000);
+
+    return () => clearInterval(interval);
+  }, [user?.token, loadLoanEligibilityApplications]);
 
   const loadDividends = useCallback(async () => {
     const data = await request("/admin/dividends", {
@@ -2104,180 +2128,152 @@ function AdminDashboard() {
   ================================= */
 
   const renderLoanEligibility = () => {
+    const completedCount = loanEligibilityApplications.filter(
+      (item) =>
+        item.status === "pending" &&
+        item.providerVerificationStatus === "completed" &&
+        item.bvnVerificationStatus === "verified" &&
+        item.faceVerificationStatus === "verified",
+    ).length;
+
     return (
       <>
-        <div className="admin-page-heading">
+        <div className="admin-page-heading full-loan-admin-heading">
           <div>
             <p className="eyebrow">Loans</p>
             <h1>Full Loan Applications</h1>
             <p className="admin-subtitle">
-              Review a member's BVN and bio-data before they're allowed to apply
-              for an actual loan. Approving here sets them as loan eligible.
+              Review members who have completed identity verification before they
+              can submit an actual loan request.
             </p>
           </div>
+          {completedCount > 0 && (
+            <div className="full-loan-queue-pill">
+              <strong>{completedCount}</strong>
+              <span>Ready for review</span>
+            </div>
+          )}
         </div>
 
-        <section className="admin-card">
+        <section className="admin-card full-loan-admin-card">
           {loanEligibilityApplications.length === 0 ? (
-            <p className="empty-state">No full loan applications yet.</p>
+            <div className="full-loan-admin-empty">
+              <div className="full-loan-admin-empty-icon">✓</div>
+              <strong>No full loan applications yet</strong>
+              <span>Completed member verifications will appear here automatically.</span>
+            </div>
           ) : (
-            <div className="admin-table-wrap">
-              <table className="admin-table">
+            <div className="admin-table-wrap full-loan-table-wrap">
+              <table className="admin-table full-loan-admin-table">
                 <thead>
                   <tr>
                     <th>Member</th>
+                    <th>Identity</th>
                     <th>BVN</th>
-                    <th>Occupation</th>
+                    <th>Liveness</th>
                     <th>Status</th>
                     <th>Submitted</th>
                     <th>Action</th>
                   </tr>
                 </thead>
-
                 <tbody>
-                  {loanEligibilityApplications.map((application) => (
-                    <Fragment key={application._id}>
-                      <tr>
-                        <td>
-                          <strong>{application.user?.fullName || "—"}</strong>
-                          <br />
-                          <span className="muted">
-                            {application.user?.email || "—"}
-                          </span>
-                        </td>
+                  {loanEligibilityApplications.map((application) => {
+                    const ready =
+                      application.providerVerificationStatus === "completed" &&
+                      application.bvnVerificationStatus === "verified" &&
+                      application.identityMatchStatus === "matched" &&
+                      application.faceVerificationStatus === "verified";
 
-                        <td>
-                          {application.bvnLast4
-                            ? `•••••••${application.bvnLast4}`
-                            : "Not stored"}
-                          <br />
-                          <span className="muted">
-                            {application.bvnVerificationStatus || "not started"}
-                          </span>
-                        </td>
+                    return (
+                      <Fragment key={application._id}>
+                        <tr>
+                          <td>
+                            <strong>{application.user?.fullName || "—"}</strong>
+                            <br />
+                            <span className="muted">{application.user?.email || "—"}</span>
+                          </td>
+                          <td>
+                            <span className={`verification-mini ${ready ? "verified" : "pending"}`}>
+                              {ready ? "Completed" : "In progress"}
+                            </span>
+                            <br />
+                            <span className="muted">{application.providerVerificationStatus || "not started"}</span>
+                          </td>
+                          <td>
+                            {application.bvnLast4 ? `•••••••${application.bvnLast4}` : "—"}
+                            <br />
+                            <span className="muted">{application.bvnVerificationStatus || "not started"}</span>
+                          </td>
+                          <td>
+                            <span className={application.faceVerificationStatus === "verified" ? "verification-text-ok" : "verification-text-pending"}>
+                              {statusLabel(application.faceVerificationStatus)}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`status-badge ${application.status}`}>
+                              {application.status}
+                            </span>
+                          </td>
+                          <td>
+                            {application.submittedDate
+                              ? new Date(application.submittedDate).toLocaleDateString()
+                              : "—"}
+                          </td>
+                          <td className="actions-cell full-loan-actions-cell">
+                            <button
+                              className="view-btn"
+                              onClick={() =>
+                                setExpandedEligibilityId((prev) =>
+                                  prev === application._id ? null : application._id,
+                                )
+                              }
+                            >
+                              {expandedEligibilityId === application._id ? "Hide" : "Review"}
+                            </button>
 
-                        <td>
-                          {application.applicantDetails?.occupation || "—"}
-                        </td>
-
-                        <td>
-                          <span
-                            className={`status-badge ${application.status}`}
-                          >
-                            {application.status}
-                          </span>
-                        </td>
-
-                        <td>
-                          {application.submittedDate
-                            ? new Date(
-                                application.submittedDate,
-                              ).toLocaleDateString()
-                            : "—"}
-                        </td>
-
-                        <td className="actions-cell">
-                          <button
-                            className="view-btn"
-                            onClick={() =>
-                              setExpandedEligibilityId((prev) =>
-                                prev === application._id
-                                  ? null
-                                  : application._id,
-                              )
-                            }
-                          >
-                            {expandedEligibilityId === application._id
-                              ? "Hide"
-                              : "View"}
-                          </button>
-
-                          {application.status === "pending" && (
-                            <>
-                              <button
-                                className="approve-btn"
-                                onClick={() =>
-                                  handleLoanEligibilityAction(
-                                    application._id,
-                                    "approve",
-                                  )
-                                }
-                              >
-                                Approve
-                              </button>
-
-                              <button
-                                className="reject-btn"
-                                onClick={() =>
-                                  handleLoanEligibilityAction(
-                                    application._id,
-                                    "reject",
-                                  )
-                                }
-                              >
-                                Reject
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-
-                      {expandedEligibilityId === application._id && (
-                        <tr className="loan-details-row">
-                          <td colSpan={6}>
-                            <div className="full-application-details">
-                              <div>
-                                <strong>Phone</strong>
-                                <span>
-                                  {application.applicantDetails?.phone || "—"}
-                                </span>
-                              </div>
-
-                              <div>
-                                <strong>Email</strong>
-                                <span>
-                                  {application.applicantDetails?.email || "—"}
-                                </span>
-                              </div>
-
-                              <div>
-                                <strong>Address</strong>
-                                <span>
-                                  {application.applicantDetails?.address || "—"}
-                                </span>
-                              </div>
-
-                              <div>
-                                <strong>Employment Status</strong>
-                                <span>
-                                  {application.applicantDetails
-                                    ?.employmentStatus || "—"}
-                                </span>
-                              </div>
-
-                              <div>
-                                <strong>Next of Kin</strong>
-                                <span>
-                                  {application.applicantDetails?.kinName || "—"}
-                                  {application.applicantDetails?.kinPhone
-                                    ? ` (${application.applicantDetails.kinPhone})`
-                                    : ""}
-                                </span>
-                              </div>
-
-                              {application.status === "rejected" &&
-                                application.rejectionReason && (
-                                  <div className="full-application-purpose">
-                                    <strong>Rejection Reason</strong>
-                                    <span>{application.rejectionReason}</span>
-                                  </div>
-                                )}
-                            </div>
+                            {application.status === "pending" && (
+                              <>
+                                <button
+                                  className="approve-btn"
+                                  disabled={!ready}
+                                  title={!ready ? "Waiting for all required verification steps" : "Approve application"}
+                                  onClick={() => handleLoanEligibilityAction(application._id, "approve")}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  className="reject-btn"
+                                  onClick={() => handleLoanEligibilityAction(application._id, "reject")}
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
                           </td>
                         </tr>
-                      )}
-                    </Fragment>
-                  ))}
+
+                        {expandedEligibilityId === application._id && (
+                          <tr className="loan-details-row">
+                            <td colSpan={7}>
+                              <div className="full-application-details full-loan-review-panel">
+                                <div><strong>Phone</strong><span>{application.applicantDetails?.phone || "—"}</span></div>
+                                <div><strong>Email</strong><span>{application.applicantDetails?.email || "—"}</span></div>
+                                <div><strong>Address</strong><span>{application.applicantDetails?.address || "—"}</span></div>
+                                <div><strong>Occupation</strong><span>{application.applicantDetails?.occupation || "—"}</span></div>
+                                <div><strong>Employment</strong><span>{application.applicantDetails?.employmentStatus || "—"}</span></div>
+                                <div><strong>Next of kin</strong><span>{application.applicantDetails?.kinName || "—"}{application.applicantDetails?.kinPhone ? ` (${application.applicantDetails.kinPhone})` : ""}</span></div>
+                                <div><strong>Identity</strong><span>{statusLabel(application.identityMatchStatus)}</span></div>
+                                <div><strong>Verification</strong><span>{statusLabel(application.providerVerificationStatus)}</span></div>
+                                {application.status === "rejected" && application.rejectionReason && (
+                                  <div className="full-application-purpose"><strong>Rejection reason</strong><span>{application.rejectionReason}</span></div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -21,6 +21,7 @@ import AdminActionModal from "../components/admin/AdminActionModal";
 import GalleryManagement from "../components/admin/GalleryManagement";
 import KycReviewModal from "../components/admin/KycReviewModal";
 
+
 const statusLabel = (value) =>
   String(value || "not started")
     .replaceAll("_", " ")
@@ -716,7 +717,10 @@ function AdminDashboard() {
       // Refresh both the repayment queue and loan records immediately.
       // This keeps the admin dashboard's repayment status, amount paid,
       // outstanding balance, and loan status in sync after confirmation.
-      await Promise.all([loadLoanRepayments(), loadLoans()]);
+      await Promise.all([
+        loadLoanRepayments(),
+        loadLoans(),
+      ]);
     } catch (err) {
       setError(err.message);
     }
@@ -2073,15 +2077,9 @@ function AdminDashboard() {
 
     const counts = {
       review: loanEligibilityApplications.filter(isReady).length,
-      progress: loanEligibilityApplications.filter(
-        (item) => item.status === "draft",
-      ).length,
-      approved: loanEligibilityApplications.filter(
-        (item) => item.status === "approved",
-      ).length,
-      rejected: loanEligibilityApplications.filter(
-        (item) => item.status === "rejected",
-      ).length,
+      progress: loanEligibilityApplications.filter((item) => item.status === "draft").length,
+      approved: loanEligibilityApplications.filter((item) => item.status === "approved").length,
+      rejected: loanEligibilityApplications.filter((item) => item.status === "rejected").length,
       all: loanEligibilityApplications.length,
     };
 
@@ -2109,8 +2107,7 @@ function AdminDashboard() {
             <h1>Full Loan Applications</h1>
             <p className="admin-subtitle">
               Review each member's identity verification, compare it with their
-              cooperative record, then approve or reject before they can request
-              a loan.
+              cooperative record, then approve or reject before they can request a loan.
             </p>
           </div>
           {counts.review > 0 && (
@@ -2145,9 +2142,7 @@ function AdminDashboard() {
                   ? "Nothing waiting for review"
                   : "No applications here"}
               </strong>
-              <span>
-                Completed member verifications will appear here automatically.
-              </span>
+              <span>Completed member verifications will appear here automatically.</span>
             </div>
           ) : (
             <div className="admin-table-wrap full-loan-table-wrap">
@@ -2165,33 +2160,24 @@ function AdminDashboard() {
                 </thead>
                 <tbody>
                   {visible.map((application) => {
-                    const finished =
-                      application.providerVerificationStatus === "completed";
-                    const matched =
-                      application.identityMatchStatus === "matched";
-                    const mismatch =
-                      application.identityMatchStatus === "mismatch";
+                    const finished = application.providerVerificationStatus === "completed";
+                    const matched = application.identityMatchStatus === "matched";
+                    const mismatch = application.identityMatchStatus === "mismatch";
 
                     return (
                       <tr key={application._id}>
                         <td>
                           <strong>{application.user?.fullName || "—"}</strong>
                           <br />
-                          <span className="muted">
-                            {application.user?.email || "—"}
-                          </span>
+                          <span className="muted">{application.user?.email || "—"}</span>
                         </td>
                         <td>
-                          <span
-                            className={`verification-mini ${finished ? "verified" : "pending"}`}
-                          >
+                          <span className={`verification-mini ${finished ? "verified" : "pending"}`}>
                             {finished ? "Completed" : "In progress"}
                           </span>
                           <br />
                           <span className="muted">
-                            {statusLabel(
-                              application.providerVerificationStatus,
-                            )}
+                            {statusLabel(application.providerVerificationStatus)}
                           </span>
                         </td>
                         <td>
@@ -2204,16 +2190,12 @@ function AdminDashboard() {
                                   : "verification-text-pending"
                             }
                           >
-                            {mismatch
-                              ? "Needs checking"
-                              : statusLabel(application.identityMatchStatus)}
+                            {mismatch ? "Needs checking" : statusLabel(application.identityMatchStatus)}
                           </span>
                           {application.bvnLast4 && (
                             <>
                               <br />
-                              <span className="muted">
-                                BVN •••••••{application.bvnLast4}
-                              </span>
+                              <span className="muted">BVN •••••••{application.bvnLast4}</span>
                             </>
                           )}
                         </td>
@@ -2229,35 +2211,21 @@ function AdminDashboard() {
                           </span>
                         </td>
                         <td>
-                          <span
-                            className={`status-badge ${application.status}`}
-                          >
-                            {application.status === "draft"
-                              ? "In progress"
-                              : application.status}
+                          <span className={`status-badge ${application.status}`}>
+                            {application.status === "draft" ? "In progress" : application.status}
                           </span>
                         </td>
                         <td>
                           {application.submittedDate
-                            ? new Date(
-                                application.submittedDate,
-                              ).toLocaleDateString()
+                            ? new Date(application.submittedDate).toLocaleDateString()
                             : "—"}
                         </td>
                         <td className="actions-cell full-loan-actions-cell">
                           <button
-                            className={
-                              application.status === "pending"
-                                ? "approve-btn"
-                                : "view-btn"
-                            }
-                            onClick={() =>
-                              setReviewEligibilityId(application._id)
-                            }
+                            className={application.status === "pending" ? "approve-btn" : "view-btn"}
+                            onClick={() => setReviewEligibilityId(application._id)}
                           >
-                            {application.status === "pending"
-                              ? "Review"
-                              : "View"}
+                            {application.status === "pending" ? "Review" : "View"}
                           </button>
                         </td>
                       </tr>

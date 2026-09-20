@@ -178,7 +178,9 @@ function FullLoanApplication() {
       }
     } catch (err) {
       setWidgetNotice(
-        "We couldn't confirm the verification yet. If you have just completed the steps, wait a moment and tap the button again."
+        `We couldn't confirm the verification yet. If you have just completed the steps, wait a moment and tap the button again.${
+          err?.message ? ` (${err.message})` : ""
+        }`
       );
     } finally {
       setKycLoading(false);

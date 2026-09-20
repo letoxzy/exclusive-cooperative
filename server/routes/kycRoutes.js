@@ -265,6 +265,13 @@ router.post("/widget-result", protect, requireApprovedMember, async (req, res) =
       verification: safeApplication(application),
     });
   } catch (err) {
+    // Shows up in the Render logs so a failing Dojah call is easy to diagnose.
+    // Only the status and message are logged, never keys or headers.
+    console.error(
+      "[kyc] widget-result failed:",
+      err.status || "no-status",
+      err.providerData?.message || err.providerData?.error || err.message
+    );
     const { code, body } = providerError(err, "Identity verification could not be confirmed");
     res.status(code).json(body);
   }

@@ -78,7 +78,7 @@ router.get(
       const application = await LoanEligibility.findOne({
         user: req.user._id,
       })
-        .select("-bvn")
+        .select("-verificationSnapshot -reviewedBy -approvedWithMismatch")
         .sort("-createdAt");
 
       res.json(application);
@@ -89,114 +89,14 @@ router.get(
 );
 
 /*
-  POST /api/loans/eligibility-application
-
-  Member submits their Full Loan Application: BVN + bio-data pulled
-  from their approved membership record. This does NOT request a
-  loan amount — it's reviewed by an admin, and only once approved
-  does the member become loan eligible and able to apply for an
-  actual loan.
-
-  Body:
-  {
-    bvn: "12345678901"
-  }
+  Members no longer submit a Full Loan Application through a separate
+  endpoint. The flow is:
+    POST /api/kyc/start          -> server issues a Dojah reference
+    (member completes the Dojah widget)
+    POST /api/kyc/widget-result  -> backend confirms with Dojah and puts the
+                                    application in the administrator's queue
+    PATCH /api/admin/loan-eligibility-applications/:id -> approve / reject
 */
-router.post(
-  "/eligibility-application",
-  protect,
-  requireApprovedMember,
-  async (req, res) => {
-    try {
-      // BVN verification is handled by /api/kyc/bvn/verify. This endpoint
-      // creates the application only after the member has a verified BVN.
-      // Raw BVNs are never accepted or stored here.
-
-      // A member who is already loan eligible, or who has a pending
-      // application, doesn't need to submit another one.
-      if (req.user.isLoanEligible) {
-        return res.status(400).json({
-          message: "You're already approved for loan eligibility.",
-        });
-      }
-
-      const pendingApplication = await LoanEligibility.findOne({
-        user: req.user._id,
-        status: "pending",
-      });
-
-      if (pendingApplication) {
-        return res.status(400).json({
-          message:
-            "You already have a full loan application awaiting review.",
-        });
-      }
-
-      const membership = await Membership.findOne({
-        user: req.user._id,
-        status: "approved",
-      });
-
-      if (!membership) {
-        return res.status(400).json({
-          message:
-            "We couldn't find an approved membership record for you. Please complete your membership application first.",
-        });
-      }
-
-      const existingVerified = await LoanEligibility.findOne({
-        user: req.user._id,
-        bvnVerificationStatus: "verified",
-      }).sort("-createdAt");
-
-      if (!existingVerified) {
-        return res.status(400).json({
-          message: "Please complete BVN verification before submitting your Full Loan Application.",
-        });
-      }
-
-      const application = existingVerified;
-
-      application.applicantDetails = {
-          fullName: membership.fullName || "",
-          phone: membership.phone || "",
-          email: membership.email || "",
-          address: membership.address || "",
-          dob: membership.dob || "",
-          gender: membership.gender || "",
-          maritalStatus: membership.maritalStatus || "",
-          occupation: membership.occupation || "",
-          employmentStatus: membership.employmentStatus || "",
-          stateOfOrigin: membership.stateOfOrigin || "",
-          lga: membership.lga || "",
-          kinName: membership.kinName || "",
-          kinPhone: membership.kinPhone || "",
-          kinRelationship: membership.kinRelationship || "",
-          kinAddress: membership.kinAddress || "",
-        };
-
-      application.status = "pending";
-      application.submittedDate = application.submittedDate || new Date();
-      await application.save();
-
-      const safeApplication = await LoanEligibility.findById(application._id).select(
-        "-bvnHash"
-      );
-
-      await createNotificationAndPush({
-        user: req.user._id,
-        type: "loan-eligibility",
-        title: "Full Loan Application Submitted",
-        message:
-          "Your Full Loan Application has been submitted successfully and is now awaiting administrator review. You will be notified once a decision is made.",
-      });
-
-      res.status(201).json(safeApplication);
-    } catch (err) {
-      res.status(500).json({ message: err.message });
-    }
-  }
-);
 
 /*
   GET /api/loans/eligibility-application/verification-status
@@ -293,7 +193,9 @@ router.get("/eligibility", protect, requireApprovedMember, async (req, res) => {
 
     const eligibilityApplication = await LoanEligibility.findOne({
       user: req.user._id,
-    }).sort("-createdAt");
+    })
+      .select("-verificationSnapshot -reviewedBy -approvedWithMismatch")
+      .sort("-createdAt");
 
     res.json({
       isApprovedMember: req.user.isApprovedMember,

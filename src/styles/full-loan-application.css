@@ -464,3 +464,39 @@
     width: 100%;
   }
 }
+
+
+/* Consent checkbox shown before identity verification starts */
+.kyc-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 18px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--light);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.kyc-consent input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--navy);
+}
+
+.kyc-widget-notice {
+  margin: 0 16px 10px;
+  padding: 10px 12px;
+  border: 1px solid #f1d98a;
+  border-radius: 8px;
+  background: #fff8e1;
+  color: #7a5b00;
+  font-size: 13px;
+  line-height: 1.45;
+}

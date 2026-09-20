@@ -10,13 +10,6 @@ const statusLabel = (value) =>
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-const makeReferenceId = () => {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return `member-${crypto.randomUUID()}`;
-  }
-  return `member-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-};
-
 function FullLoanApplication() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -30,6 +23,8 @@ function FullLoanApplication() {
   const [showKycWidget, setShowKycWidget] = useState(false);
   const [verificationReference, setVerificationReference] = useState("");
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
+  const [consent, setConsent] = useState(false);
+  const [widgetNotice, setWidgetNotice] = useState("");
 
   const DOJAH_WIDGET_URL = import.meta.env.VITE_DOJAH_WIDGET_URL || "";
 
@@ -102,7 +97,7 @@ function FullLoanApplication() {
     application?.identityMatchStatus === "matched" &&
     application?.faceVerificationStatus === "verified";
 
-  const startKycWidget = () => {
+  const startKycWidget = async () => {
     setPageError("");
     setNotice("");
 
@@ -113,9 +108,36 @@ function FullLoanApplication() {
       return;
     }
 
-    const referenceId = makeReferenceId();
-    setVerificationReference(referenceId);
-    setShowKycWidget(true);
+    if (!consent) {
+      setPageError("Please tick the consent box before you continue.");
+      return;
+    }
+
+    try {
+      setKycLoading(true);
+
+      // The server creates the reference and remembers it for this member,
+      // so a verification can only ever be claimed by the member who started it.
+      const started = await request("/kyc/start", {
+        method: "POST",
+        token: user.token,
+        body: { consent: true },
+      });
+
+      setVerificationReference(started.referenceId);
+      setShowKycWidget(true);
+    } catch (err) {
+      setPageError(
+        err?.message || "We couldn't start identity verification. Please try again."
+      );
+    } finally {
+      setKycLoading(false);
+    }
+  };
+
+  const closeWidget = () => {
+    setShowKycWidget(false);
+    setWidgetNotice("");
   };
 
   const confirmVerification = async () => {
@@ -125,6 +147,7 @@ function FullLoanApplication() {
       setKycLoading(true);
       setPageError("");
       setNotice("");
+      setWidgetNotice("");
 
       const result = await request("/kyc/widget-result", {
         method: "POST",
@@ -135,24 +158,26 @@ function FullLoanApplication() {
       const updated = result?.application || result?.verification || null;
       if (updated) setApplication(updated);
 
-      setShowKycWidget(false);
-      setVerificationReference("");
-
       if (result?.submitted) {
+        closeWidget();
+        setVerificationReference("");
         setSubmissionSuccess(true);
-        setNotice("");
       } else if (updated?.status === "rejected") {
+        closeWidget();
+        setVerificationReference("");
         setPageError(
           updated.rejectionReason ||
             "We could not confirm your identity verification. Please try again."
         );
       } else {
-        setNotice(
-          "Your verification status has been updated. If any step remains incomplete, you can continue the verification."
+        // Not finished yet: keep the verification open so the member can continue.
+        setWidgetNotice(
+          result?.message ||
+            "Your verification is not finished yet. Please complete all the steps, then tap the button again."
         );
       }
     } catch (err) {
-      setPageError(
+      setWidgetNotice(
         "We couldn't confirm the verification yet. If you have just completed the steps, wait a moment and tap the button again."
       );
     } finally {
@@ -393,11 +418,24 @@ function FullLoanApplication() {
             </span>
           </div>
 
+          <label className="kyc-consent">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(event) => setConsent(event.target.checked)}
+            />
+            <span>
+              I consent to Exclusive Cooperative verifying my identity through
+              Dojah using my BVN, government ID and a live selfie, so my loan
+              eligibility can be reviewed.
+            </span>
+          </label>
+
           <button
             type="button"
             className="btn-primary full-loan-main-action"
             onClick={startKycWidget}
-            disabled={kycLoading}
+            disabled={kycLoading || !consent}
           >
             {kycLoading ? "Opening verification..." : "Start identity verification"}
             {!kycLoading && <span>→</span>}
@@ -416,7 +454,7 @@ function FullLoanApplication() {
                 <h2>Secure identity verification</h2>
                 <p>Complete all the steps shown to finish your verification.</p>
               </div>
-              <button type="button" className="kyc-close" onClick={() => setShowKycWidget(false)}>Close</button>
+              <button type="button" className="kyc-close" onClick={closeWidget}>Close</button>
             </div>
             <iframe
               title="Identity verification"
@@ -424,8 +462,9 @@ function FullLoanApplication() {
               className="kyc-widget-frame"
               allow="camera; microphone; geolocation"
             />
+            {widgetNotice && <div className="kyc-widget-notice">{widgetNotice}</div>}
             <div className="kyc-widget-footer">
-              <button type="button" className="btn-secondary" onClick={() => setShowKycWidget(false)} disabled={kycLoading}>Return later</button>
+              <button type="button" className="btn-secondary" onClick={closeWidget} disabled={kycLoading}>Return later</button>
               <button type="button" className="btn-primary" onClick={confirmVerification} disabled={kycLoading}>
                 {kycLoading ? "Confirming..." : "I've completed verification"}
               </button>

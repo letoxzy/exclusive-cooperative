@@ -4,11 +4,23 @@ import LoanEligibility from "../models/LoanEligibility.js";
 import Membership from "../models/Membership.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
-import { compareBVNIdentity, getVerificationDetails, lookupBVN } from "../services/dojahService.js";
+import {
+  buildSnapshot,
+  compareIdentity,
+  getVerificationDetails,
+  last4,
+  parseVerification,
+} from "../services/dojahService.js";
+import {
+  buildApplicantDetails,
+  isVerificationComplete,
+  safeApplication,
+} from "../utils/kycHelpers.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
 
 const router = express.Router();
-const BVN_REGEX = /^\d{11}$/;
+
+const PROVIDER_STATUSES = ["ongoing", "pending", "completed", "failed", "abandoned"];
 
 function hashBVN(bvn) {
   return crypto
@@ -17,20 +29,25 @@ function hashBVN(bvn) {
     .digest("hex");
 }
 
-function safeApplication(application) {
-  if (!application) return null;
-  const value = application.toObject ? application.toObject() : { ...application };
-  delete value.bvn;
-  delete value.bvnHash;
-  return value;
+// The reference is created HERE, never by the browser, and is stored on the
+// member's application. That is what ties a Dojah verification to one member.
+function newReference() {
+  return `EC-${crypto.randomBytes(9).toString("hex").toUpperCase()}`;
+}
+
+function providerError(err, prefix) {
+  const status = err.status;
+  const message = err.providerData?.message || err.providerData?.error || err.message;
+  return {
+    code: status && status >= 400 && status < 500 ? 400 : 502,
+    body: { message: `${prefix}: ${message}` },
+  };
 }
 
 // GET /api/kyc/status
 router.get("/status", protect, requireApprovedMember, async (req, res) => {
   try {
-    const application = await LoanEligibility.findOne({ user: req.user._id })
-      .select("-bvnHash")
-      .sort("-createdAt");
+    const application = await LoanEligibility.findOne({ user: req.user._id }).sort("-createdAt");
 
     if (!application) {
       return res.json({
@@ -42,8 +59,68 @@ router.get("/status", protect, requireApprovedMember, async (req, res) => {
       });
     }
 
+    res.json({ exists: true, application: safeApplication(application) });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/kyc/start   { consent: true }
+// Creates (or restarts) the member's verification attempt and returns the
+// server-issued reference id that the Dojah widget must be opened with.
+router.post("/start", protect, requireApprovedMember, async (req, res) => {
+  try {
+    if (req.body?.consent !== true) {
+      return res.status(400).json({
+        message: "Please give your consent before starting identity verification.",
+      });
+    }
+
+    if (req.user.isLoanEligible) {
+      return res.status(400).json({ message: "Your account is already loan eligible." });
+    }
+
+    const membership = await Membership.findOne({ user: req.user._id, status: "approved" });
+    if (!membership) {
+      return res.status(400).json({
+        message: "You need an approved membership record before identity verification.",
+      });
+    }
+
+    let application = await LoanEligibility.findOne({ user: req.user._id }).sort("-createdAt");
+
+    if (application?.status === "approved") {
+      return res.status(400).json({ message: "Your Full Loan Application is already approved." });
+    }
+
+    if (application?.status === "pending" && isVerificationComplete(application)) {
+      return res.status(400).json({
+        message: "Your verification is complete and is already awaiting administrator review.",
+      });
+    }
+
+    // Reuse an unfinished attempt. After a rejection a brand-new attempt is
+    // created so the earlier decision stays on record.
+    const reusable = application && ["draft", "pending"].includes(application.status);
+    if (!reusable) application = new LoanEligibility({ user: req.user._id });
+
+    application.status = "draft";
+    application.verificationReference = newReference();
+    application.verificationProvider = "dojah";
+    application.providerVerificationStatus = "ongoing";
+    application.bvnVerificationStatus = "not_started";
+    application.identityMatchStatus = "not_started";
+    application.faceVerificationStatus = "not_started";
+    application.consentStatus = "granted";
+    application.consentGrantedAt = new Date();
+    application.kycStartedAt = new Date();
+    application.submittedDate = null;
+    application.rejectionReason = "";
+    application.applicantDetails = buildApplicantDetails(membership);
+    await application.save();
+
     res.json({
-      exists: true,
+      referenceId: application.verificationReference,
       application: safeApplication(application),
     });
   } catch (err) {
@@ -51,281 +128,145 @@ router.get("/status", protect, requireApprovedMember, async (req, res) => {
   }
 });
 
-// POST /api/kyc/bvn/verify
-// Performs the BVN lookup in Dojah Sandbox. The raw BVN never enters MongoDB.
-router.post("/bvn/verify", protect, requireApprovedMember, async (req, res) => {
+// POST /api/kyc/widget-result   { referenceId }
+// The browser only says "I'm done". The backend asks Dojah for the real
+// result of the reference it issued, then puts the application in the
+// administrator's queue. Nothing here approves a member.
+router.post("/widget-result", protect, requireApprovedMember, async (req, res) => {
   try {
-    const bvn = String(req.body?.bvn || "").trim();
-
-    if (!BVN_REGEX.test(bvn)) {
-      return res.status(400).json({ message: "Enter a valid 11-digit BVN." });
-    }
-
     if (req.user.isLoanEligible) {
       return res.status(400).json({ message: "Your account is already loan eligible." });
     }
 
-    const membership = await Membership.findOne({
-      user: req.user._id,
-      status: "approved",
-    });
+    const application = await LoanEligibility.findOne({ user: req.user._id }).sort("-createdAt");
 
-    if (!membership) {
+    if (!application?.verificationReference) {
       return res.status(400).json({
-        message: "You need an approved membership record before BVN verification.",
+        message: "Please start identity verification first.",
       });
     }
 
-    let application = await LoanEligibility.findOne({ user: req.user._id }).sort("-createdAt");
-
-    if (application?.status === "pending" && application.bvnVerificationStatus === "verified") {
-      return res.status(400).json({ message: "Your verified application is already awaiting review." });
+    if (application.status === "approved") {
+      return res.status(400).json({ message: "Your Full Loan Application is already approved." });
     }
 
-    const { entity } = await lookupBVN(bvn);
-    const comparison = compareBVNIdentity(entity, membership);
-    const sandboxMode = String(process.env.DOJAH_SANDBOX_MODE || "true").toLowerCase() === "true";
-
-    // Dojah Sandbox uses dummy identity data. In Sandbox only, allow the
-    // known test response to exercise the complete app flow without
-    // pretending the dummy person is a real member. Production must keep
-    // identity matching enabled.
-    const identityAccepted = sandboxMode ? true : comparison.matched;
-
-    if (!identityAccepted) {
-      if (!application) {
-        application = new LoanEligibility({ user: req.user._id });
-      }
-
-      application.bvnHash = hashBVN(bvn);
-      application.bvnLast4 = bvn.slice(-4);
-      application.bvnVerificationStatus = "failed";
-      application.identityMatchStatus = "mismatch";
-      application.faceVerificationStatus = application.faceVerificationStatus || "not_started";
-      application.status = "rejected";
-      application.rejectionReason =
-        "The BVN details could not be matched with your approved membership information. Please check your details and try again.";
-      application.applicantDetails = {
-        fullName: membership.fullName || "",
-        phone: membership.phone || "",
-        email: membership.email || "",
-        address: membership.address || "",
-        dob: membership.dob || "",
-        gender: membership.gender || "",
-        maritalStatus: membership.maritalStatus || "",
-        occupation: membership.occupation || "",
-        employmentStatus: membership.employmentStatus || "",
-        stateOfOrigin: membership.stateOfOrigin || "",
-        lga: membership.lga || "",
-        kinName: membership.kinName || "",
-        kinPhone: membership.kinPhone || "",
-        kinRelationship: membership.kinRelationship || "",
-        kinAddress: membership.kinAddress || "",
-      };
-      await application.save();
-
-      return res.status(422).json({
-        message: "BVN verification could not be completed because the returned identity details did not match your membership record.",
-        verification: {
-          bvnVerificationStatus: "failed",
-          identityMatchStatus: "mismatch",
-        },
-      });
-    }
-
-    if (!application) {
-      application = new LoanEligibility({ user: req.user._id });
-    }
-
-    application.bvnHash = hashBVN(bvn);
-    application.bvnLast4 = bvn.slice(-4);
-    application.bvnVerificationStatus = "verified";
-    application.identityMatchStatus = sandboxMode ? "matched" : "matched";
-    application.bvnVerifiedAt = new Date();
-    application.status = "pending";
-    application.rejectionReason = "";
-    application.applicantDetails = {
-      fullName: membership.fullName || "",
-      phone: membership.phone || "",
-      email: membership.email || "",
-      address: membership.address || "",
-      dob: membership.dob || "",
-      gender: membership.gender || "",
-      maritalStatus: membership.maritalStatus || "",
-      occupation: membership.occupation || "",
-      employmentStatus: membership.employmentStatus || "",
-      stateOfOrigin: membership.stateOfOrigin || "",
-      lga: membership.lga || "",
-      kinName: membership.kinName || "",
-      kinPhone: membership.kinPhone || "",
-      kinRelationship: membership.kinRelationship || "",
-      kinAddress: membership.kinAddress || "",
-    };
-    await application.save();
-
-    res.json({
-      message: "BVN verified successfully. Your Full Loan Application is now awaiting cooperative review.",
-      verification: {
-        bvnVerificationStatus: application.bvnVerificationStatus,
-        identityMatchStatus: application.identityMatchStatus,
-        bvnLast4: application.bvnLast4,
-      },
-      application: safeApplication(application),
-    });
-  } catch (err) {
-    const status = err.status;
-    const providerMessage =
-      err.providerData?.message ||
-      err.providerData?.error ||
-      err.message;
-
-    res.status(status && status >= 400 && status < 500 ? 400 : 502).json({
-      message: `BVN verification failed: ${providerMessage}`,
-    });
-  }
-});
-
-// POST /api/kyc/widget-result
-// The client only reports the Dojah reference. The backend fetches the
-// authoritative verification record from Dojah before changing KYC status.
-router.post("/widget-result", protect, requireApprovedMember, async (req, res) => {
-  try {
-    const referenceId = String(req.body?.referenceId || "").trim();
-
-    if (!referenceId) {
+    const sentReference = String(req.body?.referenceId || "").trim();
+    if (sentReference && sentReference !== application.verificationReference) {
       return res.status(400).json({
-        message: "The identity verification reference is missing.",
+        message: "This verification session is no longer valid. Please start again.",
       });
     }
 
-    const membership = await Membership.findOne({
-      user: req.user._id,
-      status: "approved",
-    });
+    if (application.status === "rejected") {
+      return res.status(400).json({
+        message: "This verification attempt was closed. Please start a new verification.",
+      });
+    }
 
+    // Already submitted: answer again without calling Dojah or notifying twice.
+    if (application.status === "pending" && isVerificationComplete(application)) {
+      return res.json({
+        message:
+          "Your Full Loan Application has been submitted and is awaiting administrator review.",
+        submitted: true,
+        application: safeApplication(application),
+        verification: safeApplication(application),
+      });
+    }
+
+    const membership = await Membership.findOne({ user: req.user._id, status: "approved" });
     if (!membership) {
       return res.status(400).json({
         message: "You need an approved membership record before identity verification.",
       });
     }
 
-    const verification = await getVerificationDetails(referenceId);
-    const providerStatus = String(verification?.verification_status || "")
-      .trim()
-      .toLowerCase();
+    const raw = await getVerificationDetails(application.verificationReference);
+    const details = parseVerification(raw);
+    const comparison = compareIdentity(details, membership);
 
-    let application = await LoanEligibility.findOne({ user: req.user._id }).sort("-createdAt");
-    if (!application) application = new LoanEligibility({ user: req.user._id });
+    const providerStatus = PROVIDER_STATUSES.includes(details.status) ? details.status : "pending";
+    const finished = ["completed", "failed", "abandoned"].includes(providerStatus);
 
-    // Keep track of whether this verification has already been submitted
-    // for administrator review. This prevents repeated taps on
-    // "I've completed verification" from creating duplicate notifications.
-    const wasAlreadySubmitted = application.status === "pending" &&
-      application.providerVerificationStatus === "completed" &&
-      application.bvnVerificationStatus === "verified" &&
-      application.identityMatchStatus === "matched" &&
-      application.faceVerificationStatus === "verified";
+    application.providerVerificationStatus = providerStatus;
+    application.bvnVerificationStatus = details.bvn.passed ? "verified" : finished ? "failed" : "pending";
+    application.faceVerificationStatus = details.selfie.passed ? "verified" : finished ? "failed" : "pending";
+    application.identityMatchStatus = details.bvn.passed
+      ? comparison.autoMatched
+        ? "matched"
+        : "mismatch"
+      : finished
+        ? "failed"
+        : "pending";
+    application.applicantDetails = buildApplicantDetails(membership);
 
-    application.verificationReference = referenceId;
-    application.verificationProvider = "dojah";
-    application.providerVerificationStatus = providerStatus || "pending";
-    application.consentStatus = "granted";
-    application.consentGrantedAt = application.consentGrantedAt || new Date();
+    const checksPassed = providerStatus === "completed" && details.bvn.passed && details.selfie.passed;
+    let justSubmitted = false;
 
-    const verificationData = verification?.data || verification;
-    const bvnResult = verificationData?.government_data?.data?.bvn;
-    const bvnEntity = bvnResult?.entity || null;
-    const bvnPassed = bvnResult?.status === true && !!bvnEntity;
-    const identityComparison = bvnEntity
-      ? compareBVNIdentity(bvnEntity, membership)
-      : { matched: false };
-    const sandboxMode = String(process.env.DOJAH_SANDBOX_MODE || "true").toLowerCase() === "true";
-    const identityAccepted = sandboxMode ? bvnPassed : identityComparison.matched;
+    if (checksPassed) {
+      // Detect the same BVN being used on another member's application.
+      let duplicateBvn = false;
+      if (details.bvn.number) {
+        const hash = hashBVN(details.bvn.number);
+        application.bvnHash = hash;
+        application.bvnLast4 = last4(details.bvn.number);
 
-    application.bvnVerificationStatus = bvnPassed ? "verified" : "failed";
-    application.identityMatchStatus = identityAccepted ? "matched" : "mismatch";
+        const other = await LoanEligibility.findOne({
+          bvnHash: hash,
+          user: { $ne: req.user._id },
+          status: { $in: ["pending", "approved"] },
+        }).select("_id");
+        duplicateBvn = Boolean(other);
+      }
 
-    const selfiePassed = verificationData?.selfie?.status === true;
-    application.faceVerificationStatus = selfiePassed ? "verified" : "failed";
-
-    const verificationPassed =
-      providerStatus === "completed" &&
-      bvnPassed &&
-      identityAccepted &&
-      selfiePassed;
-
-    if (verificationPassed) {
+      const now = new Date();
       application.status = "pending";
-      application.submittedDate = new Date();
-      application.verifiedAt = new Date();
-      application.providerVerificationCompletedAt = new Date();
+      application.submittedDate = now;
+      application.verifiedAt = now;
+      application.bvnVerifiedAt = now;
+      application.providerVerificationCompletedAt = now;
       application.rejectionReason = "";
-    } else if (["failed", "abandoned"].includes(providerStatus)) {
+      application.verificationSnapshot = buildSnapshot(details, comparison, { duplicateBvn });
+      justSubmitted = true;
+    } else if (finished) {
       application.status = "rejected";
       application.rejectionReason =
-        "Identity verification was not completed successfully. Please start the verification again.";
+        providerStatus === "completed"
+          ? "Your BVN or selfie could not be verified. Please start again and make sure your details and photo are clear."
+          : "Identity verification was not completed. Please start again.";
     } else {
-      application.status = "pending";
+      // Still ongoing at Dojah: the member has not finished the steps yet.
+      application.status = "draft";
     }
-
-    application.applicantDetails = {
-      fullName: membership.fullName || "",
-      phone: membership.phone || "",
-      email: membership.email || "",
-      address: membership.address || "",
-      dob: membership.dob || "",
-      gender: membership.gender || "",
-      maritalStatus: membership.maritalStatus || "",
-      occupation: membership.occupation || "",
-      employmentStatus: membership.employmentStatus || "",
-      stateOfOrigin: membership.stateOfOrigin || "",
-      lga: membership.lga || "",
-      kinName: membership.kinName || "",
-      kinPhone: membership.kinPhone || "",
-      kinRelationship: membership.kinRelationship || "",
-      kinAddress: membership.kinAddress || "",
-    };
 
     await application.save();
 
-    const submittedForReview = verificationPassed;
-
-    if (submittedForReview && !wasAlreadySubmitted) {
+    if (justSubmitted) {
       await createNotificationAndPush({
         user: req.user._id,
         type: "loan-eligibility",
         title: "Full Loan Application Submitted",
         message:
           "Your Full Loan Application has been submitted successfully and is now awaiting administrator review. You will be notified once a decision is made.",
-        data: {
-          applicationId: application._id.toString(),
-          status: "pending",
-        },
+        data: { applicationId: application._id.toString(), status: "pending" },
       });
     }
 
-    const message = submittedForReview
+    const message = justSubmitted
       ? "Your Full Loan Application has been submitted successfully and is now awaiting administrator review."
-      : providerStatus === "completed"
-        ? "Identity verification was completed, but the returned identity details could not be matched to your membership record. Please contact the cooperative."
-        : "Your verification status has been recorded. Please complete any remaining verification steps.";
+      : application.status === "rejected"
+        ? application.rejectionReason
+        : "Your verification is not finished yet. Please complete all the steps, then tap the button again.";
 
     res.json({
       message,
-      submitted: submittedForReview,
-      verification: safeApplication(application),
+      submitted: justSubmitted,
       application: safeApplication(application),
+      verification: safeApplication(application),
     });
   } catch (err) {
-    const status = err.status;
-    const providerMessage =
-      err.providerData?.message ||
-      err.providerData?.error ||
-      err.message;
-
-    res.status(status && status >= 400 && status < 500 ? 400 : 502).json({
-      message: `Identity verification could not be confirmed: ${providerMessage}`,
-    });
+    const { code, body } = providerError(err, "Identity verification could not be confirmed");
+    res.status(code).json(body);
   }
 });
 

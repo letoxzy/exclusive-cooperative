@@ -103,6 +103,40 @@ const loanEligibilitySchema = new mongoose.Schema(
       default: null,
     },
 
+    kycStartedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // What Dojah returned, kept as an audit trail so the administrator can
+    // still see the comparison if Dojah is unreachable later. Photos are NOT
+    // stored here (Dojah media links expire after about an hour and the BVN
+    // photo is fetched live), and the full BVN / ID numbers are never stored.
+    verificationSnapshot: {
+      capturedAt: { type: Date, default: null },
+      sandbox: { type: Boolean, default: false },
+      duplicateBvn: { type: Boolean, default: false },
+      bvn: {
+        fullName: { type: String, default: "" },
+        dob: { type: String, default: "" },
+        gender: { type: String, default: "" },
+        phoneLast4: { type: String, default: "" },
+      },
+      id: {
+        fullName: { type: String, default: "" },
+        documentType: { type: String, default: "" },
+        documentLast4: { type: String, default: "" },
+      },
+      comparison: {
+        nameMatched: { type: Boolean, default: null },
+        dobMatched: { type: Boolean, default: null },
+        phoneMatched: { type: Boolean, default: null },
+        genderMatched: { type: Boolean, default: null },
+        idNameMatched: { type: Boolean, default: null },
+        autoMatched: { type: Boolean, default: null },
+      },
+    },
+
     // Snapshot of the member's bio-data at the time of submission,
     // pulled from their approved Membership record.
     applicantDetails: {
@@ -123,10 +157,14 @@ const loanEligibilitySchema = new mongoose.Schema(
       kinAddress: { type: String, default: "" },
     },
 
+    // draft    = member has started verification but has not finished it
+    // pending  = verification finished, waiting for an administrator decision
+    // approved = administrator approved (User.isLoanEligible is set true)
+    // rejected = administrator rejected, or the identity checks failed
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      enum: ["draft", "pending", "approved", "rejected"],
+      default: "draft",
     },
 
     rejectionReason: {
@@ -136,18 +174,43 @@ const loanEligibilitySchema = new mongoose.Schema(
       default: "",
     },
 
+    // Set when the verification finishes and the application enters the
+    // administrator's review queue.
     submittedDate: {
       type: Date,
-      default: Date.now,
+      default: null,
     },
 
     reviewedDate: {
       type: Date,
       default: null,
     },
+
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    // True when an administrator approved even though the automatic identity
+    // comparison flagged a difference (or a duplicate BVN). Kept for audit.
+    approvedWithMismatch: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
+  }
+);
+
+// One Dojah verification reference can only ever belong to one application.
+// The partial filter ignores the empty-string default.
+loanEligibilitySchema.index(
+  { verificationReference: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { verificationReference: { $gt: "" } },
   }
 );
 

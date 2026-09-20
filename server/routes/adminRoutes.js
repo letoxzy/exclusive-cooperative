@@ -20,6 +20,13 @@ import { adminOnly } from "../middleware/adminMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
+import {
+  compareIdentity,
+  getVerificationDetails,
+  isSandbox,
+  maskValue,
+  parseVerification,
+} from "../services/dojahService.js";
 
 const router = express.Router();
 
@@ -766,9 +773,11 @@ router.patch(
 /*
   ============================
   LOAN ELIGIBILITY APPLICATIONS
+  (Full Loan Application: identity verification review)
   ============================
 */
 
+// GET /api/admin/loan-eligibility-applications?status=pending
 router.get(
   "/loan-eligibility-applications",
   async (req, res) => {
@@ -783,6 +792,7 @@ router.get(
             "user",
             "fullName email savingsBalance isApprovedMember"
           )
+          .populate("reviewedBy", "fullName")
           .sort("-createdAt");
 
       res.json(applications);
@@ -794,6 +804,132 @@ router.get(
   }
 );
 
+// GET /api/admin/loan-eligibility-applications/:id/verification
+// Everything the administrator needs to compare: the member's cooperative
+// record next to what Dojah returned (BVN record, ID document, live selfie).
+// Photos are fetched live from Dojah and are never stored in MongoDB.
+router.get(
+  "/loan-eligibility-applications/:id/verification",
+  async (req, res) => {
+    try {
+      const application = await LoanEligibility.findById(req.params.id)
+        .populate("user", "fullName email savingsBalance")
+        .populate("reviewedBy", "fullName");
+
+      if (!application) {
+        return res.status(404).json({
+          message: "Loan eligibility application not found",
+        });
+      }
+
+      const membership = application.user?._id
+        ? await Membership.findOne({
+            user: application.user._id,
+            status: "approved",
+          })
+        : null;
+
+      const details =
+        typeof application.applicantDetails?.toObject === "function"
+          ? application.applicantDetails.toObject()
+          : { ...(application.applicantDetails || {}) };
+
+      const member = {
+        ...details,
+        passportPhotoUrl: membership?.passportPhotoUrl || "",
+        membershipType: membership?.membershipType || "",
+        savingsBalance: application.user?.savingsBalance || 0,
+      };
+
+      let live = null;
+      let liveError = "";
+
+      if (application.verificationReference) {
+        try {
+          const raw = await getVerificationDetails(
+            application.verificationReference
+          );
+          live = parseVerification(raw);
+        } catch (err) {
+          liveError =
+            err.providerData?.message ||
+            err.providerData?.error ||
+            err.message ||
+            "Dojah could not be reached.";
+        }
+      }
+
+      const snapshot = application.verificationSnapshot
+        ? application.verificationSnapshot.toObject()
+        : null;
+
+      // Prefer a fresh comparison from live Dojah data; fall back to the
+      // comparison saved at submission time.
+      const comparison = live
+        ? compareIdentity(live, member)
+        : snapshot?.comparison || null;
+
+      res.json({
+        application: {
+          _id: application._id,
+          status: application.status,
+          providerVerificationStatus: application.providerVerificationStatus,
+          bvnVerificationStatus: application.bvnVerificationStatus,
+          identityMatchStatus: application.identityMatchStatus,
+          faceVerificationStatus: application.faceVerificationStatus,
+          verificationReference: application.verificationReference,
+          bvnLast4: application.bvnLast4,
+          submittedDate: application.submittedDate,
+          reviewedDate: application.reviewedDate,
+          reviewedBy: application.reviewedBy?.fullName || "",
+          rejectionReason: application.rejectionReason,
+          approvedWithMismatch: application.approvedWithMismatch,
+          user: {
+            fullName: application.user?.fullName || "",
+            email: application.user?.email || "",
+          },
+        },
+        member,
+        snapshot,
+        comparison,
+        sandbox: isSandbox(),
+        liveError,
+        live: live
+          ? {
+              status: live.status,
+              bvn: {
+                passed: live.bvn.passed,
+                fullName: live.bvn.fullName,
+                dob: live.bvn.dob,
+                gender: live.bvn.gender,
+                phone: live.bvn.phone,
+                photo: live.bvn.photo,
+              },
+              id: {
+                passed: live.id.passed,
+                fullName: live.id.fullName,
+                documentType: live.id.documentType,
+                documentNumber: maskValue(live.id.documentNumber),
+                url: live.id.url,
+                backUrl: live.id.backUrl,
+              },
+              selfie: live.selfie,
+              location: live.location,
+              reportUrl: live.reportUrl,
+              dashboardUrl: live.dashboardUrl,
+            }
+          : null,
+      });
+    } catch (err) {
+      res.status(500).json({
+        message: err.message,
+      });
+    }
+  }
+);
+
+// PATCH /api/admin/loan-eligibility-applications/:id
+// { action: "approve" | "reject", rejectionReason?, confirmMismatch? }
 router.patch(
   "/loan-eligibility-applications/:id",
   async (req, res) => {
@@ -801,6 +937,7 @@ router.patch(
       const {
         action,
         rejectionReason,
+        confirmMismatch,
       } = req.body;
 
       const application =
@@ -815,6 +952,13 @@ router.patch(
         });
       }
 
+      if (application.status === "draft") {
+        return res.status(400).json({
+          message:
+            "The member has not finished identity verification yet.",
+        });
+      }
+
       if (application.status !== "pending") {
         return res.status(400).json({
           message:
@@ -823,10 +967,19 @@ router.patch(
       }
 
       if (action === "reject") {
+        const reason = String(rejectionReason || "").trim();
+
+        if (reason.length < 3) {
+          return res.status(400).json({
+            message:
+              "Please give the member a reason for the rejection.",
+          });
+        }
+
         application.status = "rejected";
-        application.rejectionReason =
-          rejectionReason?.trim() || "";
+        application.rejectionReason = reason;
         application.reviewedDate = new Date();
+        application.reviewedBy = req.user._id;
 
         await application.save();
 
@@ -835,10 +988,7 @@ router.patch(
           type: "loan-eligibility",
           title:
             "Full Loan Application Update",
-          message:
-            application.rejectionReason
-              ? `Your Full Loan Application was not approved. Reason: ${application.rejectionReason}`
-              : "Your Full Loan Application was not approved.",
+          message: `Your Full Loan Application was not approved. Reason: ${application.rejectionReason}`,
         });
 
         const populated =
@@ -853,15 +1003,16 @@ router.patch(
       }
 
       if (action === "approve") {
+        // Hard requirements: these come from Dojah and cannot be overridden.
         if (application.providerVerificationStatus !== "completed") {
           return res.status(400).json({
             message: "This application cannot be approved until the member's identity verification has been completed.",
           });
         }
 
-        if (application.bvnVerificationStatus !== "verified" || application.identityMatchStatus !== "matched") {
+        if (application.bvnVerificationStatus !== "verified") {
           return res.status(400).json({
-            message: "This application cannot be approved until the member's BVN and identity details have been successfully verified.",
+            message: "This application cannot be approved until the member's BVN has been successfully verified.",
           });
         }
 
@@ -871,8 +1022,26 @@ router.patch(
           });
         }
 
+        // Soft requirement: if the automatic comparison flagged a difference
+        // (or the same BVN appears on another account) the administrator must
+        // explicitly confirm they reviewed it.
+        const mismatch = application.identityMatchStatus !== "matched";
+        const duplicateBvn = Boolean(
+          application.verificationSnapshot?.duplicateBvn
+        );
+
+        if ((mismatch || duplicateBvn) && confirmMismatch !== true) {
+          return res.status(409).json({
+            code: "CONFIRMATION_REQUIRED",
+            message:
+              "The member's details do not fully match the verified identity. Review the comparison and confirm to approve anyway.",
+          });
+        }
+
         application.status = "approved";
         application.reviewedDate = new Date();
+        application.reviewedBy = req.user._id;
+        application.approvedWithMismatch = mismatch || duplicateBvn;
 
         await application.save();
 

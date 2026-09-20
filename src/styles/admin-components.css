@@ -1529,3 +1529,36 @@ button.loan-type-badge.full-application-badge {
     width: 100%;
   }
 }
+
+
+/* ================================
+   ADMIN NOTICE MODAL
+================================ */
+.admin-notice-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(10, 24, 20, .62);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.admin-notice-modal {
+  position: relative;
+  width: min(430px, 100%);
+  padding: 30px 26px 24px;
+  border-radius: 22px;
+  background: var(--white);
+  box-shadow: 0 24px 70px rgba(0,0,0,.25);
+  text-align: center;
+}
+.admin-notice-close { position:absolute; top:12px; right:12px; width:34px; height:34px; border:0; border-radius:50%; background:var(--light); color:var(--muted); cursor:pointer; display:grid; place-items:center; }
+.admin-notice-icon { width:58px; height:58px; margin:0 auto 16px; border-radius:50%; display:grid; place-items:center; font-size:22px; }
+.admin-notice-icon.success { background:#e7f6ef; color:#087443; }
+.admin-notice-icon.error { background:#fce8e8; color:#c62828; }
+.admin-notice-modal h3 { margin:0; color:var(--navy); font-size:20px; }
+.admin-notice-modal p { margin:10px 0 0; color:var(--muted); font-size:13px; line-height:1.6; }
+.admin-notice-button { width:100%; min-height:48px; margin-top:22px; border:0; border-radius:12px; background:var(--navy); color:var(--white); font-weight:800; cursor:pointer; }

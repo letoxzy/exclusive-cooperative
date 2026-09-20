@@ -1,21 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import "../styles/loan-application.css";
 import "../styles/full-loan-application.css";
-
-const statusLabel = (value) =>
-  String(value || "not_started")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-
-const makeReferenceId = () => {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return `member-${crypto.randomUUID()}`;
-  }
-  return `member-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-};
 
 function FullLoanApplication() {
   const { user } = useAuth();
@@ -25,160 +13,100 @@ function FullLoanApplication() {
   const [application, setApplication] = useState(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [kycLoading, setKycLoading] = useState(false);
-  const [showKycWidget, setShowKycWidget] = useState(false);
-  const [verificationReference, setVerificationReference] = useState("");
 
-  const DOJAH_WIDGET_URL = import.meta.env.VITE_DOJAH_WIDGET_URL || "";
+  const [bvn, setBvn] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const load = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      setPageLoading(true);
-      setPageError("");
-
-      const [membershipData, applicationData, kycData] = await Promise.all([
-        request("/membership/me", { token: user.token }),
-        request("/loans/eligibility-application/me", { token: user.token }),
-        request("/kyc/status", { token: user.token }),
-      ]);
-
-      if (!membershipData || membershipData.status !== "approved") {
-        setPageError(
-          "You need an approved membership application before you can complete identity verification."
-        );
-        return;
-      }
-
-      setMembership(membershipData);
-      setApplication(applicationData || kycData?.application || null);
-    } catch (err) {
-      setPageError(
-        err?.message || "We couldn't load your loan application details."
-      );
-    } finally {
-      setPageLoading(false);
-    }
-  }, [user]);
-
+  // Savings/contributions are a separate concern — this only loads
+  // the member's bio-data (membership) and their existing Full Loan
+  // Application status, if any.
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  const savings = Number(user?.savingsBalance || 0);
-  const potentialLoanLimit = savings * 2;
-
-  const verificationSteps = useMemo(
-    () => [
-      {
-        label: "BVN verification",
-        value: application?.bvnVerificationStatus,
-      },
-      {
-        label: "Identity match",
-        value: application?.identityMatchStatus,
-      },
-      {
-        label: "Government ID",
-        value:
-          application?.providerVerificationStatus === "completed"
-            ? "verified"
-            : "pending",
-      },
-      {
-        label: "Face & liveness",
-        value: application?.faceVerificationStatus,
-      },
-    ],
-    [application]
-  );
-
-  const verificationComplete =
-    application?.providerVerificationStatus === "completed" &&
-    application?.bvnVerificationStatus === "verified" &&
-    application?.identityMatchStatus === "matched" &&
-    application?.faceVerificationStatus === "verified";
-
-  const startKycWidget = () => {
-    setPageError("");
-    setNotice("");
-
-    if (!DOJAH_WIDGET_URL) {
-      setPageError(
-        "Identity verification is temporarily unavailable. Please try again later."
-      );
+    if (!user) {
+      setPageLoading(false);
       return;
     }
 
-    const referenceId = makeReferenceId();
-    setVerificationReference(referenceId);
-    setShowKycWidget(true);
-  };
+    let cancelled = false;
 
-  const confirmVerification = async () => {
-    if (!verificationReference) return;
+    (async () => {
+      try {
+        setPageLoading(true);
+
+        const [membershipData, applicationData] = await Promise.all([
+          request("/membership/me", { token: user.token }),
+          request("/loans/eligibility-application/me", {
+            token: user.token,
+          }),
+        ]);
+
+        if (cancelled) return;
+
+        if (!membershipData || membershipData.status !== "approved") {
+          setPageError(
+            "You need an approved membership application before you can submit a full loan application."
+          );
+        } else {
+          setMembership(membershipData);
+        }
+
+        setApplication(applicationData);
+      } catch (err) {
+        if (!cancelled) setPageError(err.message);
+      } finally {
+        if (!cancelled) setPageLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    setFormError("");
+    setSuccess("");
+
+    if (!/^\d{11}$/.test(bvn.trim())) {
+      setFormError("Please enter a valid 11-digit BVN.");
+      return;
+    }
 
     try {
-      setKycLoading(true);
-      setPageError("");
-      setNotice("");
+      setSubmitting(true);
 
-      const result = await request("/kyc/widget-result", {
+      const created = await request("/loans/eligibility-application", {
         method: "POST",
         token: user.token,
-        body: { referenceId: verificationReference },
+        body: { bvn: bvn.trim() },
       });
 
-      const updated = result?.application || result?.verification || null;
-      if (updated) setApplication(updated);
-
-      setShowKycWidget(false);
-      setVerificationReference("");
-
-      if (updated?.status === "pending" && updated?.bvnVerificationStatus === "verified") {
-        setNotice(
-          "Your identity verification is complete. Your Full Loan Application has been sent to the cooperative for review."
-        );
-      } else if (updated?.status === "rejected") {
-        setPageError(
-          updated.rejectionReason ||
-            "We could not confirm your identity verification. Please try again."
-        );
-      } else {
-        setNotice(
-          "Your verification status has been updated. If any step remains incomplete, you can continue the verification."
-        );
-      }
-    } catch (err) {
-      setPageError(
-        "We couldn't confirm the verification yet. If you have just completed the steps, wait a moment and tap the button again."
+      setApplication(created);
+      setSuccess(
+        "Your full loan application has been submitted. An admin will review your details before you're eligible to apply for a loan."
       );
+      setBvn("");
+    } catch (err) {
+      setFormError(err.message);
     } finally {
-      setKycLoading(false);
+      setSubmitting(false);
     }
   };
-
-  const widgetUrl = useMemo(() => {
-    if (!DOJAH_WIDGET_URL || !verificationReference) return DOJAH_WIDGET_URL;
-
-    try {
-      const url = new URL(DOJAH_WIDGET_URL);
-      url.searchParams.set("reference_id", verificationReference);
-      return url.toString();
-    } catch {
-      return DOJAH_WIDGET_URL;
-    }
-  }, [DOJAH_WIDGET_URL, verificationReference]);
 
   if (!user) {
     return (
       <div className="loan-application-page">
         <div className="loan-application-card">
           <h1>Full Loan Application</h1>
-          <p>Please log in to continue.</p>
-          <Link to="/login" className="btn-primary">Log In</Link>
+
+          <p>Please log in to submit a full loan application.</p>
+
+          <Link to="/login" className="btn-primary">
+            Log In
+          </Link>
         </div>
       </div>
     );
@@ -187,85 +115,86 @@ function FullLoanApplication() {
   if (pageLoading) {
     return (
       <div className="loan-application-page">
-        <div className="loan-application-card loan-loading-card">
-          <div className="loan-loading-spinner" />
-          <p>Loading your application...</p>
+        <div className="loan-application-card">
+          <p className="loan-loading-text">Loading your details...</p>
         </div>
       </div>
     );
   }
 
-  if (pageError && !membership) {
+  if (pageError) {
     return (
       <div className="loan-application-page">
         <div className="loan-application-card">
-          <div className="full-loan-error-icon">!</div>
           <div className="loan-application-header">
             <p className="eyebrow">Full Loan Application</p>
-            <h1>We couldn't continue</h1>
+            <h1>Full Loan Application</h1>
           </div>
+
           <div className="loan-form-message error">{pageError}</div>
-          <Link to="/loans" className="btn-secondary">Back to Loans</Link>
+
+          <Link to="/loans" className="btn-secondary">
+            Back to Loans
+          </Link>
         </div>
       </div>
     );
   }
 
+  // Already approved — nothing more to do here.
   if (application?.status === "approved") {
     return (
       <div className="loan-application-page">
-        <div className="loan-application-card full-loan-success-card">
-          <div className="full-loan-status-icon success">✓</div>
-          <p className="eyebrow">Full Loan Application</p>
-          <h1>You're loan eligible</h1>
-          <p className="full-loan-lead">
-            Your identity verification and eligibility review have been approved.
-            You can now continue to the actual loan request.
-          </p>
-          <div className="full-loan-limit-card">
-            <span>Current savings</span>
-            <strong>₦{savings.toLocaleString()}</strong>
-            <small>Potential loan limit: ₦{potentialLoanLimit.toLocaleString()}</small>
+        <div className="loan-application-card">
+          <div className="loan-application-header">
+            <p className="eyebrow">Full Loan Application</p>
+            <h1>You're Loan Eligible</h1>
           </div>
-          <button type="button" className="btn-primary full-loan-main-action" onClick={() => navigate("/loans/apply")}>
-            Apply for a loan <span>→</span>
-          </button>
-          <Link to="/loans" className="full-loan-back-link">Back to Loans</Link>
+
+          <div className="loan-form-message success">
+            <strong>Application approved</strong>
+            <p>
+              Your full loan application has been approved. You can now
+              apply for a loan.
+            </p>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => navigate("/loans/apply")}
+            >
+              Apply for Loan
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (verificationComplete && application?.status === "pending") {
+  // Awaiting admin review.
+  if (application?.status === "pending") {
     return (
       <div className="loan-application-page">
-        <div className="loan-application-card full-loan-review-card">
-          <div className="full-loan-status-icon pending">✓</div>
-          <p className="eyebrow">Full Loan Application</p>
-          <h1>Application under review</h1>
-          <p className="full-loan-lead">
-            Your identity verification is complete. The cooperative administrator
-            will review your application before you can request a loan.
-          </p>
-
-          <div className="full-loan-review-banner">
-            <strong>You're all set.</strong>
-            <span>No further action is required from you right now.</span>
+        <div className="loan-application-card">
+          <div className="loan-application-header">
+            <p className="eyebrow">Full Loan Application</p>
+            <h1>Application Under Review</h1>
           </div>
 
-          <div className="verification-grid compact">
-            {verificationSteps.map((step) => (
-              <div className="verification-step verified" key={step.label}>
-                <span className="verification-step-icon">✓</span>
-                <div>
-                  <strong>{step.label}</strong>
-                  <small>Verified</small>
-                </div>
-              </div>
-            ))}
+          <div className="loan-form-message pending-message">
+            <strong>Awaiting review</strong>
+            <p>
+              Your full loan application (submitted{" "}
+              {application.submittedDate
+                ? new Date(application.submittedDate).toLocaleDateString()
+                : "recently"}
+              ) is awaiting review by the cooperative administrator. You'll
+              be able to apply for a loan once it's approved.
+            </p>
           </div>
 
-          <Link to="/loans" className="btn-secondary full-width-button">Back to Loans</Link>
+          <Link to="/loans" className="btn-secondary">
+            Back to Loans
+          </Link>
         </div>
       </div>
     );
@@ -273,136 +202,149 @@ function FullLoanApplication() {
 
   return (
     <div className="loan-application-page">
-      <div className="loan-application-card full-loan-modern-card">
-        <div className="full-loan-hero">
-          <div className="full-loan-hero-icon">✓</div>
-          <div>
-            <p className="eyebrow">Full Loan Application</p>
-            <h1>Complete your verification</h1>
-            <p>
-              Before requesting a loan, we need to verify your identity and review
-              your application. This is a secure verification step — it is not a loan request.
-            </p>
-          </div>
+      <div className="loan-application-card">
+        <div className="loan-application-header">
+          <p className="eyebrow">Full Loan Application</p>
+
+          <h1>Full Loan Application</h1>
+
+          <p>
+            Before you can apply for a loan, submit your full loan
+            application for review. Your personal details below were
+            pulled from your approved membership record — review them,
+            then add your BVN to submit.
+          </p>
         </div>
 
         {application?.status === "rejected" && (
           <div className="loan-form-message error">
-            <strong>Verification needs attention</strong>
+            <strong>Previous application rejected</strong>
             <p>
               {application.rejectionReason ||
-                "Your previous verification was not completed successfully."}
+                "Your last full loan application was not approved."}{" "}
+              You can submit a new one below.
             </p>
           </div>
         )}
 
-        {pageError && <div className="loan-form-message error">{pageError}</div>}
-        {notice && <div className="loan-form-message success">{notice}</div>}
+        {formError && (
+          <div className="loan-form-message error">{formError}</div>
+        )}
 
-        <div className="full-loan-summary-grid">
-          <div className="full-loan-summary-card">
-            <span>Membership</span>
-            <strong>{membership?.fullName || "Member"}</strong>
-            <small>{membership?.membershipType === "interest-free" ? "Interest-Free Member" : "Interest-Bearing Member"}</small>
+        {success && (
+          <div className="loan-form-message success">
+            <strong>Application submitted</strong>
+            <p>{success}</p>
           </div>
-          <div className="full-loan-summary-card">
-            <span>Current savings</span>
-            <strong>₦{savings.toLocaleString()}</strong>
-            <small>Potential loan limit: ₦{potentialLoanLimit.toLocaleString()}</small>
-          </div>
-        </div>
+        )}
 
-        <div className="applicant-details-summary modern">
-          <div className="section-heading-row">
-            <div>
-              <span className="section-kicker">Your details</span>
-              <strong>Information from your approved membership</strong>
+        {!success && membership && (
+          <>
+            <div className="applicant-details-summary">
+              <strong>Applicant Details (from your membership record)</strong>
+
+              <dl>
+                <dt>Full Name</dt>
+                <dd>{membership.fullName || "—"}</dd>
+
+                <dt>Date of Birth</dt>
+                <dd>{membership.dob || "—"}</dd>
+
+                <dt>Gender</dt>
+                <dd>{membership.gender || "—"}</dd>
+
+                <dt>Phone</dt>
+                <dd>{membership.phone || "—"}</dd>
+
+                <dt>Email</dt>
+                <dd>{membership.email || "—"}</dd>
+
+                <dt>Address</dt>
+                <dd>{membership.address || "—"}</dd>
+
+                <dt>Occupation</dt>
+                <dd>{membership.occupation || "—"}</dd>
+
+                <dt>Employment Status</dt>
+                <dd>{membership.employmentStatus || "—"}</dd>
+
+                <dt>State of Origin</dt>
+                <dd>{membership.stateOfOrigin || "—"}</dd>
+
+                <dt>Next of Kin</dt>
+                <dd>
+                  {membership.kinName || "—"}
+                  {membership.kinPhone ? ` (${membership.kinPhone})` : ""}
+                </dd>
+              </dl>
+
+              <small>
+                Need to update any of this? Update it on your{" "}
+                <Link to="/profile">profile</Link> first, then come back to
+                apply.
+              </small>
             </div>
-            <Link to="/profile">Edit profile</Link>
-          </div>
-          <dl>
-            <dt>Full name</dt><dd>{membership?.fullName || "—"}</dd>
-            <dt>Date of birth</dt><dd>{membership?.dob || "—"}</dd>
-            <dt>Phone</dt><dd>{membership?.phone || "—"}</dd>
-            <dt>Email</dt><dd>{membership?.email || "—"}</dd>
-            <dt>Address</dt><dd>{membership?.address || "—"}</dd>
-            <dt>Occupation</dt><dd>{membership?.occupation || "—"}</dd>
-            <dt>Next of kin</dt><dd>{membership?.kinName || "—"}</dd>
-          </dl>
-        </div>
 
-        <div className="full-loan-verification-card">
-          <div className="section-heading-row">
-            <div>
-              <span className="section-kicker">Secure verification</span>
-              <h2>Identity verification</h2>
-              <p>Complete the verification once. Your BVN is handled inside the secure verification flow.</p>
+            <div className="loan-eligibility-summary">
+              <strong>Current Savings</strong>
+              <p>₦{Number(user.savingsBalance || 0).toLocaleString()}</p>
+              <small>
+                Your savings balance is used by the cooperative to determine
+                your maximum loan eligibility after approval.
+              </small>
             </div>
-            <span className="secure-pill">Secure</span>
-          </div>
 
-          <div className="verification-grid">
-            {verificationSteps.map((step) => {
-              const verified = step.value === "verified" || step.value === "matched";
-              return (
-                <div className={`verification-step ${verified ? "verified" : ""}`} key={step.label}>
-                  <span className="verification-step-icon">{verified ? "✓" : "•"}</span>
-                  <div>
-                    <strong>{step.label}</strong>
-                    <small>{verified ? "Verified" : statusLabel(step.value)}</small>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+            <form className="loan-application-form" onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label htmlFor="bvn">Bank Verification Number (BVN)</label>
 
-          <div className="full-loan-security-note">
-            <strong>Your BVN stays protected</strong>
-            <span>
-              We do not display or store your full BVN in this application. Only the verification result and limited reference information are retained for your cooperative record.
-            </span>
-          </div>
+                <input
+                  id="bvn"
+                  name="bvn"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength="11"
+                  placeholder="e.g. 22112233445"
+                  value={bvn}
+                  onChange={(e) => setBvn(e.target.value)}
+                  required
+                />
 
-          <button
-            type="button"
-            className="btn-primary full-loan-main-action"
-            onClick={startKycWidget}
-            disabled={kycLoading}
-          >
-            {kycLoading ? "Opening verification..." : "Start identity verification"}
-            {!kycLoading && <span>→</span>}
-          </button>
-
-          <Link to="/loans" className="full-loan-cancel">Cancel and return to Loans</Link>
-        </div>
-      </div>
-
-      {showKycWidget && (
-        <div className="kyc-widget-overlay" role="dialog" aria-modal="true" aria-label="Identity verification">
-          <div className="kyc-widget-card">
-            <div className="kyc-widget-header">
-              <div>
-                <p className="eyebrow">Exclusive Cooperative</p>
-                <h2>Secure identity verification</h2>
-                <p>Complete all the steps shown to finish your verification.</p>
+                <small>
+                  Enter your 11-digit BVN. Your BVN will be used for identity
+                  verification as part of the eligibility review.
+                </small>
               </div>
-              <button type="button" className="kyc-close" onClick={() => setShowKycWidget(false)}>Close</button>
-            </div>
-            <iframe
-              title="Identity verification"
-              src={widgetUrl}
-              className="kyc-widget-frame"
-              allow="camera; microphone; geolocation"
-            />
-            <div className="kyc-widget-footer">
-              <button type="button" className="btn-secondary" onClick={() => setShowKycWidget(false)} disabled={kycLoading}>Return later</button>
-              <button type="button" className="btn-primary" onClick={confirmVerification} disabled={kycLoading}>
-                {kycLoading ? "Confirming..." : "I've completed verification"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+              <div className="loan-form-notice">
+                <strong>Important</strong>
+
+                <p>
+                  This is not a loan request — it's the eligibility review
+                  step. Your membership information is already on file, so you
+                  only need to provide your BVN here. Once approved, you'll be
+                  able to apply for an actual loan (amount, term, and purpose)
+                  separately.
+                </p>
+              </div>
+
+              <div className="loan-form-actions">
+                <Link to="/loans" className="btn-secondary">
+                  Cancel
+                </Link>
+
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={submitting}
+                >
+                  {submitting ? "Submitting..." : "Submit for Review"}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
     </div>
   );
 }

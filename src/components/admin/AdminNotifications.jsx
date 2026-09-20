@@ -98,10 +98,10 @@ function AdminNotifications({
         .map((item) => ({
           id: `loan-eligibility-${item._id}`,
           type: "loan-eligibility",
-          title: "Full Loan Application Ready",
+          title: "New Full Loan Application",
           message: `${
             item.user?.fullName || "A member"
-          } has completed identity verification and is waiting for your review.`,
+          } has completed the required identity verification and submitted a Full Loan Application for your review.`,
           date: item.submittedDate || item.createdAt,
           section: "loan-eligibility",
         })),

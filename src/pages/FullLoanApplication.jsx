@@ -29,6 +29,7 @@ function FullLoanApplication() {
   const [kycLoading, setKycLoading] = useState(false);
   const [showKycWidget, setShowKycWidget] = useState(false);
   const [verificationReference, setVerificationReference] = useState("");
+  const [submissionSuccess, setSubmissionSuccess] = useState(false);
 
   const DOJAH_WIDGET_URL = import.meta.env.VITE_DOJAH_WIDGET_URL || "";
 
@@ -137,10 +138,9 @@ function FullLoanApplication() {
       setShowKycWidget(false);
       setVerificationReference("");
 
-      if (updated?.status === "pending" && updated?.bvnVerificationStatus === "verified") {
-        setNotice(
-          "Your identity verification is complete. Your Full Loan Application has been sent to the cooperative for review."
-        );
+      if (result?.submitted) {
+        setSubmissionSuccess(true);
+        setNotice("");
       } else if (updated?.status === "rejected") {
         setPageError(
           updated.rejectionReason ||
@@ -231,6 +231,36 @@ function FullLoanApplication() {
             Apply for a loan <span>→</span>
           </button>
           <Link to="/loans" className="full-loan-back-link">Back to Loans</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (submissionSuccess && verificationComplete && application?.status === "pending") {
+    return (
+      <div className="loan-application-page">
+        <div className="loan-application-card full-loan-submitted-card">
+          <div className="full-loan-status-icon success">✓</div>
+          <p className="eyebrow">Full Loan Application</p>
+          <h1>Application submitted successfully</h1>
+          <p className="full-loan-lead">
+            Your Full Loan Application and identity verification have been submitted successfully to Exclusive Cooperative.
+          </p>
+
+          <div className="full-loan-submission-status">
+            <span className="submission-status-dot" aria-hidden="true" />
+            <div>
+              <strong>Status: Pending Administrator Review</strong>
+              <span>Your application is now with the Cooperative Administrator for review and approval.</span>
+            </div>
+          </div>
+
+          <div className="full-loan-next-step">
+            <strong>What happens next?</strong>
+            <span>You don't need to submit anything else right now. We'll notify you when the administrator makes a decision on your application.</span>
+          </div>
+
+          <Link to="/loans" className="btn-primary full-width-button">Back to Loans</Link>
         </div>
       </div>
     );

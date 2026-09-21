@@ -482,14 +482,14 @@ function FullLoanApplication() {
             {!kycLoading && <span>→</span>}
           </button>
 
-          {application?.status === "draft" && application?.verificationReference && (
+          {application?.canRecheck && (
             <button
               type="button"
               className="btn-secondary full-loan-check-status"
               onClick={checkSavedVerification}
               disabled={kycLoading}
             >
-              I already finished the steps — check my verification
+              I already finished the steps — check my verification again
             </button>
           )}
 

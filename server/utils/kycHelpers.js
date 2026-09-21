@@ -36,6 +36,14 @@ export function isVerificationComplete(application) {
 export function safeApplication(application) {
   if (!application) return null;
   const value = application.toObject ? application.toObject() : { ...application };
+
+  // A member may ask the server to re-read Dojah's result while the attempt is
+  // unfinished, or was closed automatically (not by an administrator).
+  value.canRecheck = Boolean(
+    value.verificationReference &&
+      (value.status === "draft" || (value.status === "rejected" && !value.reviewedBy))
+  );
+
   delete value.bvn;
   delete value.bvnHash;
   delete value.verificationSnapshot;

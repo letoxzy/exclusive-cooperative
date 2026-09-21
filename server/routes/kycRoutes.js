@@ -7,6 +7,7 @@ import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import {
   buildSnapshot,
   compareIdentity,
+  describeShape,
   getVerificationDetails,
   last4,
   parseVerification,
@@ -170,7 +171,10 @@ router.post("/widget-result", protect, requireApprovedMember, async (req, res) =
       });
     }
 
-    if (application.status === "rejected") {
+    // An administrator's rejection is final for this attempt. An attempt that the
+    // system closed automatically can be re-read from Dojah (for example after a
+    // timing hiccup), so a member is not forced to repeat every step.
+    if (application.status === "rejected" && application.reviewedBy) {
       return res.status(400).json({
         message: "This verification attempt was closed. Please start a new verification.",
       });
@@ -263,6 +267,12 @@ router.post("/widget-result", protect, requireApprovedMember, async (req, res) =
     } else {
       // Still ongoing at Dojah: the member has not finished the steps yet.
       application.status = "draft";
+    }
+
+    if (finished && !checksPassed) {
+      console.warn(
+        `[kyc] Dojah finished but checks did not pass. bvn=${details.bvn.passed} selfie=${details.selfie.passed} shape=${describeShape(raw).slice(0, 1500)}`
+      );
     }
 
     await application.save();

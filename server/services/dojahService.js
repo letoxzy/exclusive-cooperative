@@ -181,6 +181,11 @@ const phoneKey = (value) => text(value).replace(/\D/g, "").slice(-10);
    Parsing Dojah's "Get verification" response
 ---------------------------------------------------------------- */
 
+const TRUE_WORDS = ["true", "success", "successful", "completed", "verified", "passed"];
+const FALSE_WORDS = ["false", "failed", "fail", "declined", "rejected"];
+const isTrue = (value) => value === true || TRUE_WORDS.includes(text(value).toLowerCase());
+const isFalse = (value) => value === false || FALSE_WORDS.includes(text(value).toLowerCase());
+
 function pickBvnEntity(bvnResult) {
   if (!bvnResult || typeof bvnResult !== "object") return null;
   if (bvnResult.entity && typeof bvnResult.entity === "object") return bvnResult.entity;
@@ -211,9 +216,13 @@ export function parseVerification(raw) {
   const status = text(root.verification_status || root.verificationStatus).toLowerCase();
 
   // ---- BVN (government data) ----
-  const bvnResult = checks.government_data?.data?.bvn;
+  const govData = checks.government_data?.data;
+  const bvnResult =
+    govData?.bvn ?? (govData && (govData.entity || govData.first_name) ? govData : undefined);
   const entity = pickBvnEntity(bvnResult);
-  const bvnPassed = bvnResult?.status === true && !!entity;
+  // Passed when Dojah found the BVN record and did not mark the check as failed.
+  const bvnPassed =
+    (!!entity || isTrue(bvnResult?.status)) && !isFalse(bvnResult?.status);
 
   const bvnFullName = entity
     ? [
@@ -236,6 +245,7 @@ export function parseVerification(raw) {
 
   // ---- Selfie / liveness ----
   const selfieBlock = checks.selfie || {};
+  const selfieUrl = text(selfieBlock.data?.selfie_url || root.selfie_url);
 
   return {
     referenceId: text(root.reference_id),
@@ -256,7 +266,7 @@ export function parseVerification(raw) {
     },
 
     id: {
-      passed: idBlock.status === true,
+      passed: isTrue(idBlock.status),
       fullName: idFullName,
       documentType: text(idData.document_type),
       documentNumber: text(idData.document_number),
@@ -265,8 +275,9 @@ export function parseVerification(raw) {
     },
 
     selfie: {
-      passed: selfieBlock.status === true,
-      url: text(selfieBlock.data?.selfie_url || root.selfie_url),
+      // Passed when Dojah says so, or a selfie was captured and not marked failed.
+      passed: !isFalse(selfieBlock.status) && (isTrue(selfieBlock.status) || !!selfieUrl),
+      url: selfieUrl,
     },
 
     location: {
@@ -338,4 +349,21 @@ export function buildSnapshot(details, comparison, { duplicateBvn = false } = {}
     },
     comparison,
   };
+}
+
+/*
+  Describes the SHAPE of a Dojah response (field names and types, plus the
+  values of true/false flags) without any personal data, so it is safe to put
+  in a server log when a result cannot be understood.
+*/
+export function describeShape(value, depth = 0) {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return `[${value.length ? describeShape(value[0], depth + 1) : ""}]`;
+  if (typeof value === "boolean") return String(value);
+  if (typeof value !== "object") return typeof value === "string" ? "str" : typeof value;
+  if (depth >= 7) return "{…}";
+  return `{${Object.entries(value)
+    .slice(0, 20)
+    .map(([key, inner]) => `${key}:${describeShape(inner, depth + 1)}`)
+    .join(",")}}`;
 }

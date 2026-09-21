@@ -91,10 +91,11 @@ function FullLoanApplication() {
     [application]
   );
 
+  // The identity match is only a hint for the administrator, so it does not
+  // decide whether the member has finished. A difference goes to the admin.
   const verificationComplete =
     application?.providerVerificationStatus === "completed" &&
     application?.bvnVerificationStatus === "verified" &&
-    application?.identityMatchStatus === "matched" &&
     application?.faceVerificationStatus === "verified";
 
   const startKycWidget = async () => {

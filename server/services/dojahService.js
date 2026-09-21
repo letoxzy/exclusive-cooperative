@@ -199,7 +199,13 @@ function toImageDataUrl(value) {
 }
 
 export function parseVerification(raw) {
-  const root = raw && typeof raw === "object" ? raw : {};
+  let root = raw && typeof raw === "object" ? raw : {};
+
+  // Some Dojah endpoints wrap the payload in "entity".
+  if (root.entity && typeof root.entity === "object" && !root.verification_status && !root.data) {
+    root = root.entity;
+  }
+
   const checks = root.data && typeof root.data === "object" ? root.data : {};
 
   const status = text(root.verification_status || root.verificationStatus).toLowerCase();
@@ -233,6 +239,8 @@ export function parseVerification(raw) {
 
   return {
     referenceId: text(root.reference_id),
+    // Field names only (never values), so the server log can show the shape.
+    topLevelKeys: Object.keys(root).slice(0, 25),
     status,
     message: text(root.message),
 

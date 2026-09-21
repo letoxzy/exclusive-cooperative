@@ -198,13 +198,20 @@ router.post("/widget-result", protect, requireApprovedMember, async (req, res) =
     const details = parseVerification(raw);
     const comparison = compareIdentity(details, membership);
 
-    const providerStatus = mapProviderStatus(details.status);
+    // If Dojah sent no status word at all, fall back on the checks themselves:
+    // BVN and selfie both passed means the member finished the flow.
+    const providerStatus = details.status
+      ? mapProviderStatus(details.status)
+      : details.bvn.passed && details.selfie.passed
+        ? "completed"
+        : "pending";
     const finished = ["completed", "failed", "abandoned"].includes(providerStatus);
 
     // Diagnostic line for the Render logs: no personal data, no keys.
     console.log(
       `[kyc] widget-result ref=${application.verificationReference} dojahStatus="${details.status}" ` +
-        `bvn=${details.bvn.passed} selfie=${details.selfie.passed} id=${details.id.passed}`
+        `bvn=${details.bvn.passed} selfie=${details.selfie.passed} id=${details.id.passed}` +
+        (details.status ? "" : ` keys=[${details.topLevelKeys.join(",")}]`)
     );
 
     application.providerVerificationStatus = providerStatus;

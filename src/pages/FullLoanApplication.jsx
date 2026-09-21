@@ -187,6 +187,45 @@ function FullLoanApplication() {
     }
   };
 
+  // For a member who finished the Dojah steps but closed or refreshed the page
+  // before confirming: the server already knows their reference.
+  const checkSavedVerification = async () => {
+    try {
+      setKycLoading(true);
+      setPageError("");
+      setNotice("");
+
+      const result = await request("/kyc/widget-result", {
+        method: "POST",
+        token: user.token,
+        body: {},
+      });
+
+      const updated = result?.application || result?.verification || null;
+      if (updated) setApplication(updated);
+
+      if (result?.submitted) {
+        setSubmissionSuccess(true);
+      } else if (updated?.status === "rejected") {
+        setPageError(
+          updated.rejectionReason ||
+            "We could not confirm your identity verification. Please try again."
+        );
+      } else {
+        setNotice(
+          result?.message ||
+            "Your verification is not finished yet. Please complete all the steps first."
+        );
+      }
+    } catch (err) {
+      setPageError(
+        err?.message || "We couldn't check your verification right now. Please try again."
+      );
+    } finally {
+      setKycLoading(false);
+    }
+  };
+
   const widgetUrl = useMemo(() => {
     if (!DOJAH_WIDGET_URL || !verificationReference) return DOJAH_WIDGET_URL;
 
@@ -442,6 +481,17 @@ function FullLoanApplication() {
             {kycLoading ? "Opening verification..." : "Start identity verification"}
             {!kycLoading && <span>→</span>}
           </button>
+
+          {application?.status === "draft" && application?.verificationReference && (
+            <button
+              type="button"
+              className="btn-secondary full-loan-check-status"
+              onClick={checkSavedVerification}
+              disabled={kycLoading}
+            >
+              I already finished the steps — check my verification
+            </button>
+          )}
 
           <Link to="/loans" className="full-loan-cancel">Cancel and return to Loans</Link>
         </div>

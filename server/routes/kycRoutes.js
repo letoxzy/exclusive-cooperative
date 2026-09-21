@@ -20,7 +20,20 @@ import { createNotificationAndPush } from "../utils/createNotification.js";
 
 const router = express.Router();
 
-const PROVIDER_STATUSES = ["ongoing", "pending", "completed", "failed", "abandoned"];
+// Dojah's dashboard says "Successful" / "Failed" while its API documents
+// "Completed" / "Failed". Accept either wording so a successful verification is
+// never mistaken for an unfinished one.
+export function mapProviderStatus(raw) {
+  const value = String(raw || "").toLowerCase().trim().replace(/[\s_-]+/g, " ");
+
+  if (["completed", "complete", "successful", "success", "approved", "verified"].includes(value)) {
+    return "completed";
+  }
+  if (["failed", "fail", "declined", "rejected"].includes(value)) return "failed";
+  if (value === "abandoned") return "abandoned";
+  if (["ongoing", "in progress"].includes(value)) return "ongoing";
+  return "pending";
+}
 
 function hashBVN(bvn) {
   return crypto
@@ -185,8 +198,14 @@ router.post("/widget-result", protect, requireApprovedMember, async (req, res) =
     const details = parseVerification(raw);
     const comparison = compareIdentity(details, membership);
 
-    const providerStatus = PROVIDER_STATUSES.includes(details.status) ? details.status : "pending";
+    const providerStatus = mapProviderStatus(details.status);
     const finished = ["completed", "failed", "abandoned"].includes(providerStatus);
+
+    // Diagnostic line for the Render logs: no personal data, no keys.
+    console.log(
+      `[kyc] widget-result ref=${application.verificationReference} dojahStatus="${details.status}" ` +
+        `bvn=${details.bvn.passed} selfie=${details.selfie.passed} id=${details.id.passed}`
+    );
 
     application.providerVerificationStatus = providerStatus;
     application.bvnVerificationStatus = details.bvn.passed ? "verified" : finished ? "failed" : "pending";

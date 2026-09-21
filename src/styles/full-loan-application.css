@@ -500,3 +500,8 @@
   font-size: 13px;
   line-height: 1.45;
 }
+
+.full-loan-check-status {
+  width: 100%;
+  margin-top: 10px;
+}

@@ -4,6 +4,7 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import "../styles/dashboard.css";
+import "../styles/dashboard-refresh.css";
 
 function Dashboard() {
   const { user, logout, refreshUser } = useAuth();
@@ -113,53 +114,59 @@ function Dashboard() {
    * LOAD TRANSACTIONS
    * ================================
    */
-  const loadTransactions = useCallback(async (silent = false) => {
-    if (!user?.token) {
-      setTransactionsLoading(false);
-      return;
-    }
+  const loadTransactions = useCallback(
+    async (silent = false) => {
+      if (!user?.token) {
+        setTransactionsLoading(false);
+        return;
+      }
 
-    try {
-      if (!silent) setTransactionsLoading(true);
-      setTransactionsError("");
+      try {
+        if (!silent) setTransactionsLoading(true);
+        setTransactionsError("");
 
-      const data = await request("/users/me/transactions", {
-        token: user.token,
-      });
+        const data = await request("/users/me/transactions", {
+          token: user.token,
+        });
 
-      setTransactions(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setTransactionsError(err.message);
-      setTransactions([]);
-    } finally {
-      if (!silent) setTransactionsLoading(false);
-    }
-  }, [user?.token]);
+        setTransactions(Array.isArray(data) ? data : []);
+      } catch (err) {
+        setTransactionsError(err.message);
+        setTransactions([]);
+      } finally {
+        if (!silent) setTransactionsLoading(false);
+      }
+    },
+    [user?.token],
+  );
 
-  const loadLoans = useCallback(async (silent = false) => {
-    if (!user?.token) {
-      setLoanLoading(false);
-      return;
-    }
+  const loadLoans = useCallback(
+    async (silent = false) => {
+      if (!user?.token) {
+        setLoanLoading(false);
+        return;
+      }
 
-    try {
-      if (!silent) setLoanLoading(true);
+      try {
+        if (!silent) setLoanLoading(true);
 
-      const data = await request("/loans/my-loans", {
-        token: user.token,
-      });
+        const data = await request("/loans/my-loans", {
+          token: user.token,
+        });
 
-      console.log("MEMBER LOANS:", data);
+        console.log("MEMBER LOANS:", data);
 
-      setLoans(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("LOAD LOANS ERROR:", err);
-      setError(err.message);
-      setLoans([]);
-    } finally {
-      if (!silent) setLoanLoading(false);
-    }
-  }, [user?.token]);
+        setLoans(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("LOAD LOANS ERROR:", err);
+        setError(err.message);
+        setLoans([]);
+      } finally {
+        if (!silent) setLoanLoading(false);
+      }
+    },
+    [user?.token],
+  );
 
   /*
    * ================================
@@ -239,7 +246,9 @@ function Dashboard() {
   }, [user?.token, loadLoans, loadTransactions]);
 
   useEffect(() => {
-    const modalOpen = Boolean(selectedTransaction || showAllTransactions || showAllRequests);
+    const modalOpen = Boolean(
+      selectedTransaction || showAllTransactions || showAllRequests,
+    );
     if (!modalOpen) return;
 
     const handleKeyDown = (event) => {
@@ -256,7 +265,9 @@ function Dashboard() {
   // Keep the page underneath a transaction/history modal from scrolling.
   // This also prevents the dashboard from visibly jumping when a modal opens.
   useEffect(() => {
-    const modalOpen = Boolean(selectedTransaction || showAllTransactions || showAllRequests);
+    const modalOpen = Boolean(
+      selectedTransaction || showAllTransactions || showAllRequests,
+    );
     if (!modalOpen) return;
 
     const previousOverflow = document.body.style.overflow;
@@ -440,6 +451,22 @@ function Dashboard() {
 
   const currentLoan = activeLoan || approvedLoan;
 
+  // How much of the total repayable amount has been paid, for the progress bar.
+  const loanRepaidPercent =
+    currentLoan && Number(currentLoan.totalRepayment) > 0
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            Math.round(
+              (Number(currentLoan.amountPaid || 0) /
+                Number(currentLoan.totalRepayment)) *
+                100,
+            ),
+          ),
+        )
+      : 0;
+
   const outstandingLoanAmount = activeLoan
     ? Math.max(0, Number(activeLoan.outstandingBalance || 0))
     : 0;
@@ -454,7 +481,7 @@ function Dashboard() {
   );
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page dashboard-refresh">
       {/* =====================================
           DASHBOARD HEADER
       ====================================== */}
@@ -550,695 +577,752 @@ function Dashboard() {
       </section>
 
       {/* =====================================
-          LOAN SECTION
+          PAGE LAYOUT
+          Side column: savings actions. Main column: loan, history,
+          transactions, deposit requests. On phones the actions come first.
       ====================================== */}
 
-      {loanLoading ? (
-        <section className="loan-card">
-          <div className="loan-card-header">
-            <p className="loan-card-eyebrow">Your Loan</p>
-
-            <h2 className="loan-card-title">Loading loan information...</h2>
-          </div>
-        </section>
-      ) : currentLoan ? (
-        /*
-         * =====================================
-         * ACTIVE / APPROVED LOAN
-         * =====================================
-         */
-        <section className="loan-card">
-          <div className="loan-card-header">
-            <p className="loan-card-eyebrow">Your Loan</p>
-
-            <h2 className="loan-card-title">
-              {currentLoan.status === "active"
-                ? "Active Loan"
-                : "Approved Loan"}
-            </h2>
-
-            <span className={`loan-status ${currentLoan.status}`}>
-              {currentLoan.status}
-            </span>
-          </div>
-
-          {/* LOAN SUMMARY */}
-
-          <div className="loan-summary">
-            <div className="loan-summary-item">
-              <span className="loan-summary-label">Original Loan</span>
-
-              <span className="loan-summary-value">
-                {money(currentLoan.amount)}
-              </span>
-            </div>
-
-            <div className="loan-summary-item">
-              <span className="loan-summary-label">Total Repayable</span>
-
-              <span className="loan-summary-value">
-                {money(currentLoan.totalRepayment)}
-              </span>
-            </div>
-
-            <div className="loan-summary-item">
-              <span className="loan-summary-label">Amount Paid</span>
-
-              <span className="loan-summary-value paid">
-                {money(currentLoan.amountPaid)}
-              </span>
-            </div>
-
-            <div className="loan-summary-item">
-              <span className="loan-summary-label">Amount Owing</span>
-
-              <span className="loan-summary-value owing">
-                {money(currentLoan.outstandingBalance)}
-              </span>
-            </div>
-          </div>
-
-          {/* LOAN DETAILS */}
-
-          <div className="loan-details">
-            <div className="loan-detail">
-              <span className="loan-detail-label">Loan Type</span>
-
-              <span className="loan-detail-value">
-                {currentLoan.loanType
-                  ? currentLoan.loanType.charAt(0).toUpperCase() +
-                    currentLoan.loanType.slice(1)
-                  : "-"}
-              </span>
-            </div>
-
-            <div className="loan-detail">
-              <span className="loan-detail-label">Term</span>
-
-              <span className="loan-detail-value">
-                {currentLoan.termMonths
-                  ? `${currentLoan.termMonths} months`
-                  : "-"}
-              </span>
-            </div>
-
-            <div className="loan-detail">
-              <span className="loan-detail-label">Interest Rate</span>
-
-              <span className="loan-detail-value">
-                {Number(currentLoan.interestRate || 0)}%
-              </span>
-            </div>
-
-            <div className="loan-detail">
-              <span className="loan-detail-label">Application Date</span>
-
-              <span className="loan-detail-value">
-                {currentLoan.applicationDate
-                  ? new Date(currentLoan.applicationDate).toLocaleDateString()
-                  : "-"}
-              </span>
-            </div>
-
-            {currentLoan.approvedDate && (
-              <div className="loan-detail">
-                <span className="loan-detail-label">Approved Date</span>
-
-                <span className="loan-detail-value">
-                  {new Date(currentLoan.approvedDate).toLocaleDateString()}
-                </span>
-              </div>
-            )}
-
-            {currentLoan.disbursedDate && (
-              <div className="loan-detail">
-                <span className="loan-detail-label">Disbursed Date</span>
-
-                <span className="loan-detail-value">
-                  {new Date(currentLoan.disbursedDate).toLocaleDateString()}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* LOAN NOTICE */}
-
-          <div className="loan-notice">
-            {Number(currentLoan.outstandingBalance || 0) > 0 ? (
-              <>
-                You currently owe{" "}
-                <strong>{money(currentLoan.outstandingBalance)}</strong>
-                .
-                <br />
-                Please keep up with your repayment schedule.
-              </>
-            ) : (
-              <>
-                <strong>Your loan has been fully repaid.</strong>
-                <br />
-                Thank you for completing your repayment.
-              </>
-            )}
-          </div>
-
-          {currentLoan.status === "active" &&
-            currentLoan.outstandingBalance > 0 && (
-              <div className="repayment-section">
-                <div className="repayment-heading">
-                  <div>
-                    <p className="repayment-eyebrow">Loan repayment</p>
-                    <h3>Make a repayment</h3>
-                    <p className="dash-note">
-                      Transfer your repayment to the cooperative account, then
-                      upload the transfer receipt for admin confirmation.
-                    </p>
-                  </div>
-                  <div className="repayment-outstanding">
-                    <span>Outstanding</span>
-                    <strong>{money(currentLoan.outstandingBalance)}</strong>
-                  </div>
-                </div>
-
-                <div className="repayment-bank-card">
-                  <div className="repayment-bank-icon">▥</div>
-                  <div className="repayment-bank-content">
-                    <p className="repayment-bank-label">
-                      Transfer repayment to
-                    </p>
-                    <strong>
-                      Exclusive Cooperative Multipurpose Society Limited
-                    </strong>
-                    <div className="repayment-bank-row">
-                      <span>Bank</span>
-                      <b>UBA</b>
-                    </div>
-                    <div className="repayment-bank-row repayment-account-row">
-                      <span>Account number</span>
-                      <div>
-                        <b>0123456789</b>
-                        <button
-                          type="button"
-                          className="copy-account-btn"
-                          onClick={copyRepaymentAccount}
-                          aria-label="Copy repayment account number"
-                        >
-                          {copyAccountMessage || "Copy"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <form
-                  className="repayment-form-new"
-                  onSubmit={(e) => handleRepaymentSubmit(e, currentLoan._id)}
-                >
-                  <label
-                    className="repayment-field-label"
-                    htmlFor="repayment-amount"
-                  >
-                    Repayment amount
-                  </label>
-                  <div className="repayment-amount-input-wrap">
-                    <span>₦</span>
-                    <input
-                      id="repayment-amount"
-                      type="number"
-                      min="1"
-                      max={currentLoan.outstandingBalance}
-                      step="1"
-                      placeholder="0.00"
-                      value={repaymentAmount}
-                      onChange={(e) => setRepaymentAmount(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="repayment-field-label receipt-label">
-                    Transfer receipt
-                  </div>
-                  <div
-                    className={`repayment-upload-card ${repaymentReceipt ? "has-receipt" : ""}`}
-                  >
-                    {repaymentReceiptPreview ? (
-                      <div className="receipt-preview-wrap">
-                        <img
-                          src={repaymentReceiptPreview}
-                          alt="Transfer receipt preview"
-                          className="receipt-preview"
-                        />
-                        <div className="receipt-file-name">
-                          {repaymentReceipt.name}
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="repayment-upload-icon">▤</div>
-                        <strong>Upload your transfer receipt</strong>
-                        <p>
-                          Use a clear screenshot or photo showing the payment
-                          details.
-                        </p>
-                      </>
-                    )}
-
-                    <div className="repayment-upload-actions">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          repaymentGalleryInputRef.current?.click()
-                        }
-                      >
-                        Gallery
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => repaymentCameraInputRef.current?.click()}
-                      >
-                        Camera
-                      </button>
-                    </div>
-                    <input
-                      ref={repaymentGalleryInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleRepaymentReceiptChange}
-                      hidden
-                    />
-                    <input
-                      ref={repaymentCameraInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleRepaymentReceiptChange}
-                      hidden
-                    />
-                  </div>
-
-                  {repaymentError && (
-                    <p className="form-error">{repaymentError}</p>
-                  )}
-                  {repaymentSuccess && (
-                    <p className="form-success">{repaymentSuccess}</p>
-                  )}
-
-                  <button
-                    className="repayment-submit-btn"
-                    type="submit"
-                    disabled={repaymentLoading}
-                  >
-                    {repaymentLoading ? "Submitting..." : "Submit Repayment"}
-                  </button>
-                </form>
-
-                {repayments.length > 0 && (
-                  <div className="repayment-history-block">
-                    <h4>Repayment history</h4>
-                    <ul className="requests-ul repayment-history">
-                      {repayments.map((r) => (
-                        <li key={r._id}>
-                          <span>{money(r.amount)}</span>
-                          <span className={`status-badge ${r.status}`}>
-                            {r.status}
-                          </span>
-                          <span className="req-date">
-                            {new Date(r.createdAt).toLocaleDateString()}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-        </section>
-      ) : pendingLoan ? (
-        /*
-         * =====================================
-         * PENDING LOAN APPLICATION
-         * =====================================
-         */
-        <section className="loan-card">
-          <div className="loan-card-header">
-            <p className="loan-card-eyebrow">Your Loan</p>
-
-            <h2 className="loan-card-title">Loan Application</h2>
-
-            <span className="loan-status pending">Pending</span>
-          </div>
-
-          <div className="loan-summary">
-            <div className="loan-summary-item">
-              <span className="loan-summary-label">Amount Requested</span>
-
-              <span className="loan-summary-value">
-                {money(pendingLoan.amount)}
-              </span>
-            </div>
-
-            <div className="loan-summary-item">
-              <span className="loan-summary-label">Eligible Amount</span>
-
-              <span className="loan-summary-value">
-                {money(pendingLoan.eligibleAmount)}
-              </span>
-            </div>
-
-            <div className="loan-summary-item">
-              <span className="loan-summary-label">Term</span>
-
-              <span className="loan-summary-value">
-                {pendingLoan.termMonths
-                  ? `${pendingLoan.termMonths} months`
-                  : "-"}
-              </span>
-            </div>
-
-            <div className="loan-summary-item">
-              <span className="loan-summary-label">Status</span>
-
-              <span className="loan-summary-value">Awaiting Review</span>
-            </div>
-          </div>
-
-          <div className="loan-details">
-            <div className="loan-detail">
-              <span className="loan-detail-label">Loan Type</span>
-
-              <span className="loan-detail-value">
-                {pendingLoan.loanType
-                  ? pendingLoan.loanType.charAt(0).toUpperCase() +
-                    pendingLoan.loanType.slice(1)
-                  : "-"}
-              </span>
-            </div>
-
-            <div className="loan-detail">
-              <span className="loan-detail-label">Application Date</span>
-
-              <span className="loan-detail-value">
-                {pendingLoan.applicationDate
-                  ? new Date(pendingLoan.applicationDate).toLocaleDateString()
-                  : "-"}
-              </span>
-            </div>
-          </div>
-
-          <div className="loan-notice">
-            Your loan application is currently waiting for admin review. You
-            will be notified once a decision has been made.
-          </div>
-        </section>
-      ) : (
-        /*
-         * =====================================
-         * NO CURRENT LOAN
-         * =====================================
-         */
-        <section className="loan-card">
-          <div className="loan-card-header">
-            <p className="loan-card-eyebrow">Your Loan</p>
-
-            <h2 className="loan-card-title">No Active Loan</h2>
-          </div>
-
-          <div className="loan-notice">
-            You currently do not have an active or pending loan.
-          </div>
-        </section>
-      )}
-
-      {/* =====================================
-          LOAN HISTORY
-      ====================================== */}
-
-      {!loanLoading && loanHistory.length > 0 && (
-        <section className="dash-form-card requests-list">
-          <h2>Loan History</h2>
-
-          <ul className="requests-ul">
-            {loanHistory.map((loan) => (
-              <li key={loan._id}>
-                <span>
-                  {money(loan.amount)}
-
-                  <span className="method-tag">{loan.loanType}</span>
-                </span>
-
-                <span className={`status-badge ${loan.status}`}>
-                  {loan.status}
-                </span>
-
-                <span className="req-date">
-                  {loan.applicationDate
-                    ? new Date(loan.applicationDate).toLocaleDateString()
-                    : "-"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* =====================================
+      <div className="dashboard-layout">
+        <aside className="dashboard-side" aria-label="Savings actions">
+          {/* =====================================
           TOP UP SAVINGS
       ====================================== */}
 
-      <section className="dash-form-card topup-card">
-        <h2>Top Up Savings</h2>
+          <section className="dash-form-card topup-card">
+            <h2>Top Up Savings</h2>
 
-        {!isApproved ? (
-          <p className="locked-notice">
-            Deposits unlock once your membership application is approved by an
-            admin.
-          </p>
-        ) : (
-          <>
-            <p className="dash-note">
-              Add money to your savings instantly — your balance updates as soon
-              as payment is confirmed.
-            </p>
+            {!isApproved ? (
+              <p className="locked-notice">
+                Deposits unlock once your membership application is approved by
+                an admin.
+              </p>
+            ) : (
+              <>
+                <p className="dash-note">
+                  Add money to your savings instantly — your balance updates as
+                  soon as payment is confirmed.
+                </p>
 
-            <div className="quick-amounts">
-              {[5000, 10000, 20000, 50000].map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  className={`quick-amount-chip ${
-                    Number(amount) === preset ? "active" : ""
-                  }`}
-                  onClick={() => setAmount(String(preset))}
+                <div className="quick-amounts">
+                  {[5000, 10000, 20000, 50000].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className={`quick-amount-chip ${
+                        Number(amount) === preset ? "active" : ""
+                      }`}
+                      onClick={() => setAmount(String(preset))}
+                    >
+                      ₦{preset.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+
+                <form
+                  onSubmit={(e) => e.preventDefault()}
+                  className="topup-form"
                 >
-                  ₦{preset.toLocaleString()}
-                </button>
-              ))}
-            </div>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Amount in ₦"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
 
-            <form onSubmit={(e) => e.preventDefault()} className="topup-form">
-              <input
-                type="number"
-                min="0"
-                placeholder="Amount in ₦"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
+                  <button
+                    type="button"
+                    className="topup-btn"
+                    onClick={handlePaystackPay}
+                    disabled={payLoading}
+                  >
+                    {payLoading ? "Redirecting..." : "Top Up Now"}
+                  </button>
+                </form>
 
-              <button
-                type="button"
-                className="topup-btn"
-                onClick={handlePaystackPay}
-                disabled={payLoading}
-              >
-                {payLoading ? "Redirecting..." : "Top Up Now"}
-              </button>
-            </form>
+                {error && <p className="form-error">{error}</p>}
+                {success && <p className="form-success">{success}</p>}
+              </>
+            )}
+          </section>
 
-            {error && <p className="form-error">{error}</p>}
-            {success && <p className="form-success">{success}</p>}
-          </>
-        )}
-      </section>
-
-      {/* =====================================
+          {/* =====================================
           WITHDRAWALS
       ====================================== */}
 
-      <section className="dash-form-card withdrawal-dashboard-card">
-        <div className="withdrawal-dashboard-copy">
-          <div>
-            <p className="eyebrow">Savings</p>
-            <h2>Withdraw your savings</h2>
-            <p className="dash-note">
-              Withdraw up to 60% of your total savings once each year.
-              Withdrawals are unavailable while you have an outstanding loan,
-              and your bank account is verified before payment.
-            </p>
-          </div>
-          <Link to="/withdrawals" className="withdraw-dashboard-btn">
-            Withdraw Funds
-          </Link>
-        </div>
-      </section>
+          <section className="dash-form-card withdrawal-dashboard-card">
+            <div className="withdrawal-dashboard-copy">
+              <div>
+                <p className="eyebrow">Savings</p>
+                <h2>Withdraw your savings</h2>
+                <p className="dash-note">
+                  Withdraw up to 60% of your total savings once each year.
+                  Withdrawals are unavailable while you have an outstanding
+                  loan, and your bank account is verified before payment.
+                </p>
+              </div>
+              <Link to="/withdrawals" className="withdraw-dashboard-btn">
+                Withdraw Funds
+              </Link>
+            </div>
+          </section>
+        </aside>
 
-      {/* =====================================
+        <div className="dashboard-main">
+          {/* =====================================
+          LOAN SECTION
+      ====================================== */}
+
+          {loanLoading ? (
+            <section className="loan-card">
+              <div className="loan-card-header">
+                <p className="loan-card-eyebrow">Your Loan</p>
+
+                <h2 className="loan-card-title">Loading loan information...</h2>
+              </div>
+            </section>
+          ) : currentLoan ? (
+            /*
+             * =====================================
+             * ACTIVE / APPROVED LOAN
+             * =====================================
+             */
+            <section className="loan-card">
+              <div className="loan-card-header">
+                <p className="loan-card-eyebrow">Your Loan</p>
+
+                <h2 className="loan-card-title">
+                  {currentLoan.status === "active"
+                    ? "Active Loan"
+                    : "Approved Loan"}
+                </h2>
+
+                <span className={`loan-status ${currentLoan.status}`}>
+                  {currentLoan.status}
+                </span>
+              </div>
+
+              {/* LOAN SUMMARY */}
+
+              <div className="loan-summary">
+                <div className="loan-summary-item">
+                  <span className="loan-summary-label">Original Loan</span>
+
+                  <span className="loan-summary-value">
+                    {money(currentLoan.amount)}
+                  </span>
+                </div>
+
+                <div className="loan-summary-item">
+                  <span className="loan-summary-label">Total Repayable</span>
+
+                  <span className="loan-summary-value">
+                    {money(currentLoan.totalRepayment)}
+                  </span>
+                </div>
+
+                <div className="loan-summary-item">
+                  <span className="loan-summary-label">Amount Paid</span>
+
+                  <span className="loan-summary-value paid">
+                    {money(currentLoan.amountPaid)}
+                  </span>
+                </div>
+
+                <div className="loan-summary-item">
+                  <span className="loan-summary-label">Amount Owing</span>
+
+                  <span className="loan-summary-value owing">
+                    {money(currentLoan.outstandingBalance)}
+                  </span>
+                </div>
+              </div>
+
+              {/* REPAYMENT PROGRESS */}
+
+              {currentLoan.status === "active" &&
+                Number(currentLoan.totalRepayment) > 0 && (
+                  <div
+                    className="loan-progress"
+                    role="progressbar"
+                    aria-label="Loan repaid"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={loanRepaidPercent}
+                  >
+                    <div className="loan-progress-track">
+                      <span style={{ width: `${loanRepaidPercent}%` }} />
+                    </div>
+
+                    <div className="loan-progress-meta">
+                      <strong>{loanRepaidPercent}% repaid</strong>
+                      <span>
+                        {money(currentLoan.outstandingBalance)} left to pay
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+              {/* LOAN DETAILS */}
+
+              <div className="loan-details">
+                <div className="loan-detail">
+                  <span className="loan-detail-label">Loan Type</span>
+
+                  <span className="loan-detail-value">
+                    {currentLoan.loanType
+                      ? currentLoan.loanType.charAt(0).toUpperCase() +
+                        currentLoan.loanType.slice(1)
+                      : "-"}
+                  </span>
+                </div>
+
+                <div className="loan-detail">
+                  <span className="loan-detail-label">Term</span>
+
+                  <span className="loan-detail-value">
+                    {currentLoan.termMonths
+                      ? `${currentLoan.termMonths} months`
+                      : "-"}
+                  </span>
+                </div>
+
+                <div className="loan-detail">
+                  <span className="loan-detail-label">Interest Rate</span>
+
+                  <span className="loan-detail-value">
+                    {Number(currentLoan.interestRate || 0)}%
+                  </span>
+                </div>
+
+                <div className="loan-detail">
+                  <span className="loan-detail-label">Application Date</span>
+
+                  <span className="loan-detail-value">
+                    {currentLoan.applicationDate
+                      ? new Date(
+                          currentLoan.applicationDate,
+                        ).toLocaleDateString()
+                      : "-"}
+                  </span>
+                </div>
+
+                {currentLoan.approvedDate && (
+                  <div className="loan-detail">
+                    <span className="loan-detail-label">Approved Date</span>
+
+                    <span className="loan-detail-value">
+                      {new Date(currentLoan.approvedDate).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
+
+                {currentLoan.disbursedDate && (
+                  <div className="loan-detail">
+                    <span className="loan-detail-label">Disbursed Date</span>
+
+                    <span className="loan-detail-value">
+                      {new Date(currentLoan.disbursedDate).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* LOAN NOTICE */}
+
+              <div className="loan-notice">
+                {Number(currentLoan.outstandingBalance || 0) > 0 ? (
+                  <>
+                    You currently owe{" "}
+                    <strong>{money(currentLoan.outstandingBalance)}</strong>
+                    .
+                    <br />
+                    Please keep up with your repayment schedule.
+                  </>
+                ) : (
+                  <>
+                    <strong>Your loan has been fully repaid.</strong>
+                    <br />
+                    Thank you for completing your repayment.
+                  </>
+                )}
+              </div>
+
+              {currentLoan.status === "active" &&
+                currentLoan.outstandingBalance > 0 && (
+                  <div className="repayment-section">
+                    <div className="repayment-heading">
+                      <div>
+                        <p className="repayment-eyebrow">Loan repayment</p>
+                        <h3>Make a repayment</h3>
+                        <p className="dash-note">
+                          Transfer your repayment to the cooperative account,
+                          then upload the transfer receipt for admin
+                          confirmation.
+                        </p>
+                      </div>
+                      <div className="repayment-outstanding">
+                        <span>Outstanding</span>
+                        <strong>{money(currentLoan.outstandingBalance)}</strong>
+                      </div>
+                    </div>
+
+                    <div className="repayment-bank-card">
+                      <div className="repayment-bank-icon">▥</div>
+                      <div className="repayment-bank-content">
+                        <p className="repayment-bank-label">
+                          Transfer repayment to
+                        </p>
+                        <strong>
+                          Exclusive Cooperative Multipurpose Society Limited
+                        </strong>
+                        <div className="repayment-bank-row">
+                          <span>Bank</span>
+                          <b>UBA</b>
+                        </div>
+                        <div className="repayment-bank-row repayment-account-row">
+                          <span>Account number</span>
+                          <div>
+                            <b>0123456789</b>
+                            <button
+                              type="button"
+                              className="copy-account-btn"
+                              onClick={copyRepaymentAccount}
+                              aria-label="Copy repayment account number"
+                            >
+                              {copyAccountMessage || "Copy"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <form
+                      className="repayment-form-new"
+                      onSubmit={(e) =>
+                        handleRepaymentSubmit(e, currentLoan._id)
+                      }
+                    >
+                      <label
+                        className="repayment-field-label"
+                        htmlFor="repayment-amount"
+                      >
+                        Repayment amount
+                      </label>
+                      <div className="repayment-amount-input-wrap">
+                        <span>₦</span>
+                        <input
+                          id="repayment-amount"
+                          type="number"
+                          min="1"
+                          max={currentLoan.outstandingBalance}
+                          step="1"
+                          placeholder="0.00"
+                          value={repaymentAmount}
+                          onChange={(e) => setRepaymentAmount(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="repayment-field-label receipt-label">
+                        Transfer receipt
+                      </div>
+                      <div
+                        className={`repayment-upload-card ${repaymentReceipt ? "has-receipt" : ""}`}
+                      >
+                        {repaymentReceiptPreview ? (
+                          <div className="receipt-preview-wrap">
+                            <img
+                              src={repaymentReceiptPreview}
+                              alt="Transfer receipt preview"
+                              className="receipt-preview"
+                            />
+                            <div className="receipt-file-name">
+                              {repaymentReceipt.name}
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="repayment-upload-icon">▤</div>
+                            <strong>Upload your transfer receipt</strong>
+                            <p>
+                              Use a clear screenshot or photo showing the
+                              payment details.
+                            </p>
+                          </>
+                        )}
+
+                        <div className="repayment-upload-actions">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              repaymentGalleryInputRef.current?.click()
+                            }
+                          >
+                            Gallery
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              repaymentCameraInputRef.current?.click()
+                            }
+                          >
+                            Camera
+                          </button>
+                        </div>
+                        <input
+                          ref={repaymentGalleryInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleRepaymentReceiptChange}
+                          hidden
+                        />
+                        <input
+                          ref={repaymentCameraInputRef}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleRepaymentReceiptChange}
+                          hidden
+                        />
+                      </div>
+
+                      {repaymentError && (
+                        <p className="form-error">{repaymentError}</p>
+                      )}
+                      {repaymentSuccess && (
+                        <p className="form-success">{repaymentSuccess}</p>
+                      )}
+
+                      <button
+                        className="repayment-submit-btn"
+                        type="submit"
+                        disabled={repaymentLoading}
+                      >
+                        {repaymentLoading
+                          ? "Submitting..."
+                          : "Submit Repayment"}
+                      </button>
+                    </form>
+
+                    {repayments.length > 0 && (
+                      <div className="repayment-history-block">
+                        <h4>Repayment history</h4>
+                        <ul className="requests-ul repayment-history">
+                          {repayments.map((r) => (
+                            <li key={r._id}>
+                              <span>{money(r.amount)}</span>
+                              <span className={`status-badge ${r.status}`}>
+                                {r.status}
+                              </span>
+                              <span className="req-date">
+                                {new Date(r.createdAt).toLocaleDateString()}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+            </section>
+          ) : pendingLoan ? (
+            /*
+             * =====================================
+             * PENDING LOAN APPLICATION
+             * =====================================
+             */
+            <section className="loan-card">
+              <div className="loan-card-header">
+                <p className="loan-card-eyebrow">Your Loan</p>
+
+                <h2 className="loan-card-title">Loan Application</h2>
+
+                <span className="loan-status pending">Pending</span>
+              </div>
+
+              <div className="loan-summary">
+                <div className="loan-summary-item">
+                  <span className="loan-summary-label">Amount Requested</span>
+
+                  <span className="loan-summary-value">
+                    {money(pendingLoan.amount)}
+                  </span>
+                </div>
+
+                <div className="loan-summary-item">
+                  <span className="loan-summary-label">Eligible Amount</span>
+
+                  <span className="loan-summary-value">
+                    {money(pendingLoan.eligibleAmount)}
+                  </span>
+                </div>
+
+                <div className="loan-summary-item">
+                  <span className="loan-summary-label">Term</span>
+
+                  <span className="loan-summary-value">
+                    {pendingLoan.termMonths
+                      ? `${pendingLoan.termMonths} months`
+                      : "-"}
+                  </span>
+                </div>
+
+                <div className="loan-summary-item">
+                  <span className="loan-summary-label">Status</span>
+
+                  <span className="loan-summary-value">Awaiting Review</span>
+                </div>
+              </div>
+
+              <div className="loan-details">
+                <div className="loan-detail">
+                  <span className="loan-detail-label">Loan Type</span>
+
+                  <span className="loan-detail-value">
+                    {pendingLoan.loanType
+                      ? pendingLoan.loanType.charAt(0).toUpperCase() +
+                        pendingLoan.loanType.slice(1)
+                      : "-"}
+                  </span>
+                </div>
+
+                <div className="loan-detail">
+                  <span className="loan-detail-label">Application Date</span>
+
+                  <span className="loan-detail-value">
+                    {pendingLoan.applicationDate
+                      ? new Date(
+                          pendingLoan.applicationDate,
+                        ).toLocaleDateString()
+                      : "-"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="loan-notice">
+                Your loan application is currently waiting for admin review. You
+                will be notified once a decision has been made.
+              </div>
+            </section>
+          ) : (
+            /*
+             * =====================================
+             * NO CURRENT LOAN
+             * =====================================
+             */
+            <section className="loan-card">
+              <div className="loan-card-header">
+                <p className="loan-card-eyebrow">Your Loan</p>
+
+                <h2 className="loan-card-title">No Active Loan</h2>
+              </div>
+
+              <div className="loan-notice">
+                You currently do not have an active or pending loan.
+              </div>
+            </section>
+          )}
+
+          {/* =====================================
+          LOAN HISTORY
+      ====================================== */}
+
+          {!loanLoading && loanHistory.length > 0 && (
+            <section className="dash-form-card requests-list">
+              <h2>Loan History</h2>
+
+              <ul className="requests-ul">
+                {loanHistory.map((loan) => (
+                  <li key={loan._id}>
+                    <span>
+                      {money(loan.amount)}
+
+                      <span className="method-tag">{loan.loanType}</span>
+                    </span>
+
+                    <span className={`status-badge ${loan.status}`}>
+                      {loan.status}
+                    </span>
+
+                    <span className="req-date">
+                      {loan.applicationDate
+                        ? new Date(loan.applicationDate).toLocaleDateString()
+                        : "-"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* =====================================
           TRANSACTIONS
       ====================================== */}
 
-      <section className="dash-form-card transactions-card">
-        <div className="transactions-header">
-          <div>
-            <h2>Transactions</h2>
-            <p className="dash-note">
-              Your recent savings, loans, repayments, withdrawals, and
-              dividends.
-            </p>
-          </div>
+          <section className="dash-form-card transactions-card">
+            <div className="transactions-header">
+              <div>
+                <h2>Transactions</h2>
+                <p className="dash-note">
+                  Your recent savings, loans, repayments, withdrawals, and
+                  dividends.
+                </p>
+              </div>
 
-          <div className="transactions-header-actions">
-            <button
-              type="button"
-              className="transaction-refresh-btn"
-              onClick={loadTransactions}
-              disabled={transactionsLoading}
-            >
-              {transactionsLoading ? "Refreshing..." : "Refresh"}
-            </button>
+              <div className="transactions-header-actions">
+                <button
+                  type="button"
+                  className="transaction-refresh-btn"
+                  onClick={loadTransactions}
+                  disabled={transactionsLoading}
+                >
+                  {transactionsLoading ? "Refreshing..." : "Refresh"}
+                </button>
+
+                {transactions.length > 5 && (
+                  <button
+                    type="button"
+                    className="transaction-view-all-btn"
+                    onClick={() => setShowAllTransactions(true)}
+                  >
+                    View All
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {transactionsError && (
+              <p className="form-error">{transactionsError}</p>
+            )}
+
+            {transactionsLoading ? (
+              <p className="dash-note">Loading your transactions...</p>
+            ) : transactions.length === 0 ? (
+              <p className="dash-note">No transactions recorded yet.</p>
+            ) : (
+              <div className="transactions-table-wrap">
+                <table className="transactions-table">
+                  <thead>
+                    <tr>
+                      <th>Date &amp; Time</th>
+                      <th>Description</th>
+                      <th>Status</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.slice(0, 5).map((transaction) => (
+                      <tr
+                        key={transaction.id}
+                        className="transaction-clickable-row"
+                        onClick={() => setSelectedTransaction(transaction)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedTransaction(transaction);
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`View ${transaction.type} transaction details`}
+                      >
+                        <td>
+                          <strong>{formatDate(transaction.date)}</strong>
+                          <span>{formatTime(transaction.date)}</span>
+                        </td>
+                        <td>
+                          <strong>{transaction.type}</strong>
+                          <span>{transaction.description}</span>
+                        </td>
+                        <td>
+                          <span
+                            className={`status-badge ${transaction.status}`}
+                          >
+                            {transaction.status}
+                          </span>
+                        </td>
+                        <td
+                          className={`transaction-amount ${transaction.direction}`}
+                        >
+                          {transaction.direction === "debit" ? "−" : "+"}
+                          {money(transaction.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {transactions.length > 5 && (
               <button
                 type="button"
-                className="transaction-view-all-btn"
+                className="dashboard-list-link"
                 onClick={() => setShowAllTransactions(true)}
               >
-                View All
+                View all transactions →
               </button>
             )}
-          </div>
-        </div>
+          </section>
 
-        {transactionsError && <p className="form-error">{transactionsError}</p>}
-
-        {transactionsLoading ? (
-          <p className="dash-note">Loading your transactions...</p>
-        ) : transactions.length === 0 ? (
-          <p className="dash-note">No transactions recorded yet.</p>
-        ) : (
-          <div className="transactions-table-wrap">
-            <table className="transactions-table">
-              <thead>
-                <tr>
-                  <th>Date &amp; Time</th>
-                  <th>Description</th>
-                  <th>Status</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.slice(0, 5).map((transaction) => (
-                  <tr
-                    key={transaction.id}
-                    className="transaction-clickable-row"
-                    onClick={() => setSelectedTransaction(transaction)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setSelectedTransaction(transaction);
-                      }
-                    }}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`View ${transaction.type} transaction details`}
-                  >
-                    <td>
-                      <strong>{formatDate(transaction.date)}</strong>
-                      <span>{formatTime(transaction.date)}</span>
-                    </td>
-                    <td>
-                      <strong>{transaction.type}</strong>
-                      <span>{transaction.description}</span>
-                    </td>
-                    <td>
-                      <span className={`status-badge ${transaction.status}`}>
-                        {transaction.status}
-                      </span>
-                    </td>
-                    <td
-                      className={`transaction-amount ${transaction.direction}`}
-                    >
-                      {transaction.direction === "debit" ? "−" : "+"}
-                      {money(transaction.amount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {transactions.length > 5 && (
-          <button
-            type="button"
-            className="dashboard-list-link"
-            onClick={() => setShowAllTransactions(true)}
-          >
-            View all transactions →
-          </button>
-        )}
-      </section>
-
-      {/* =====================================
+          {/* =====================================
           SAVINGS REQUESTS
       ====================================== */}
 
-      <section className="dash-form-card requests-list">
-        <div className="requests-header">
-          <div>
-            <h2>Your Deposit Requests</h2>
-            <p className="dash-note">Recent savings deposit activity.</p>
-          </div>
+          <section className="dash-form-card requests-list">
+            <div className="requests-header">
+              <div>
+                <h2>Your Deposit Requests</h2>
+                <p className="dash-note">Recent savings deposit activity.</p>
+              </div>
 
-          {requests.length > 5 && (
-            <button
-              type="button"
-              className="transaction-view-all-btn"
-              onClick={() => setShowAllRequests(true)}
-            >
-              View All
-            </button>
-          )}
+              {requests.length > 5 && (
+                <button
+                  type="button"
+                  className="transaction-view-all-btn"
+                  onClick={() => setShowAllRequests(true)}
+                >
+                  View All
+                </button>
+              )}
+            </div>
+
+            {requests.length === 0 ? (
+              <p className="dash-note">No requests yet.</p>
+            ) : (
+              <ul className="requests-ul">
+                {requests.slice(0, 5).map((r) => (
+                  <li key={r._id}>
+                    <div className="request-main-info">
+                      <strong>{money(r.amount)}</strong>
+                      <span className="request-type">Savings Deposit</span>
+                    </div>
+
+                    <span className={`status-badge ${r.status}`}>
+                      {r.status}
+                    </span>
+
+                    <span className="req-date">
+                      <strong>{formatDate(r.createdAt)}</strong>
+                      <span>{formatTime(r.createdAt)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {requests.length > 5 && (
+              <button
+                type="button"
+                className="dashboard-list-link"
+                onClick={() => setShowAllRequests(true)}
+              >
+                View all deposit requests →
+              </button>
+            )}
+          </section>
         </div>
-
-        {requests.length === 0 ? (
-          <p className="dash-note">No requests yet.</p>
-        ) : (
-          <ul className="requests-ul">
-            {requests.slice(0, 5).map((r) => (
-              <li key={r._id}>
-                <div className="request-main-info">
-                  <strong>{money(r.amount)}</strong>
-                  <span className="request-type">Savings Deposit</span>
-                </div>
-
-                <span className={`status-badge ${r.status}`}>{r.status}</span>
-
-                <span className="req-date">
-                  <strong>{formatDate(r.createdAt)}</strong>
-                  <span>{formatTime(r.createdAt)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {requests.length > 5 && (
-          <button
-            type="button"
-            className="dashboard-list-link"
-            onClick={() => setShowAllRequests(true)}
-          >
-            View all deposit requests →
-          </button>
-        )}
-      </section>
+      </div>
 
       {/* =====================================
           TRANSACTION DETAILS

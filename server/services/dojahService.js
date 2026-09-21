@@ -194,6 +194,25 @@ function pickBvnEntity(bvnResult) {
   return null;
 }
 
+// Looks through a government-data block for the person record, wherever Dojah
+// nested it (BVN, NIN or another government ID all look alike).
+function findPersonRecord(node, depth = 0) {
+  if (!node || typeof node !== "object" || depth > 5) return null;
+
+  if (!Array.isArray(node)) {
+    const hasFirst = node.first_name || node.firstName;
+    const hasLast = node.last_name || node.lastName;
+    if (hasFirst && hasLast) return node;
+    if (node.full_name || node.fullname) return node;
+  }
+
+  for (const value of Object.values(node)) {
+    const found = findPersonRecord(value, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
 function toImageDataUrl(value) {
   const raw = text(value);
   if (!raw) return "";
@@ -216,13 +235,19 @@ export function parseVerification(raw) {
   const status = text(root.verification_status || root.verificationStatus).toLowerCase();
 
   // ---- BVN (government data) ----
-  const govData = checks.government_data?.data;
+  const governmentBlock = checks.government_data;
+  const govData = governmentBlock?.data;
   const bvnResult =
     govData?.bvn ?? (govData && (govData.entity || govData.first_name) ? govData : undefined);
-  const entity = pickBvnEntity(bvnResult);
-  // Passed when Dojah found the BVN record and did not mark the check as failed.
+  // If the member used another government ID (for example a NIN), the person
+  // record is still found inside the government block.
+  const entity = pickBvnEntity(bvnResult) || findPersonRecord(govData);
+  // Passed when Dojah found the record (or marked the step as passed) and did
+  // not mark it as failed.
   const bvnPassed =
-    (!!entity || isTrue(bvnResult?.status)) && !isFalse(bvnResult?.status);
+    (!!entity || isTrue(bvnResult?.status) || isTrue(governmentBlock?.status)) &&
+    !isFalse(bvnResult?.status) &&
+    !isFalse(governmentBlock?.status);
 
   const bvnFullName = entity
     ? [
@@ -232,7 +257,7 @@ export function parseVerification(raw) {
       ]
         .map(text)
         .filter(Boolean)
-        .join(" ")
+        .join(" ") || text(entity.full_name || entity.fullname)
     : "";
 
   // ---- ID document ----
@@ -257,7 +282,7 @@ export function parseVerification(raw) {
     bvn: {
       passed: bvnPassed,
       // Full BVN is only used server-side to detect one BVN on two accounts.
-      number: text(entity?.bvn),
+      number: text(entity?.bvn || entity?.nin),
       fullName: bvnFullName,
       dob: text(entity?.dob || entity?.date_of_birth || entity?.dateOfBirth),
       gender: text(entity?.gender),

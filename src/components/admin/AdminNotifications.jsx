@@ -92,16 +92,21 @@ function AdminNotifications({
             item.status === "pending" &&
             item.providerVerificationStatus === "completed" &&
             item.bvnVerificationStatus === "verified" &&
-            item.identityMatchStatus === "matched" &&
             item.faceVerificationStatus === "verified",
         )
         .map((item) => ({
           id: `loan-eligibility-${item._id}`,
           type: "loan-eligibility",
           title: "New Full Loan Application",
+          // The automatic identity match is only a hint for the administrator, so an
+          // application is announced even when some details differ; the message says so.
           message: `${
             item.user?.fullName || "A member"
-          } has completed the required identity verification and submitted a Full Loan Application for your review.`,
+          } has completed the required identity verification and submitted a Full Loan Application for your review.${
+            item.identityMatchStatus === "mismatch"
+              ? " Some details differ from the member's record, so please compare them before deciding."
+              : ""
+          }`,
           date: item.submittedDate || item.createdAt,
           section: "loan-eligibility",
         })),

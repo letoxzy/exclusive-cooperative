@@ -207,9 +207,9 @@ router.get("/paystack/verify/:reference", protect, async (req, res) => {
       reference,
     });
 
-    // Only the 60% savings portion enters the member's locked savings
-    // balance. The 40% belongs to the current month's withdrawal pool.
-    req.user.savingsBalance += lockedAmount;
+    // Savings Balance represents the full amount the member has contributed.
+    // The 60/40 split is used only to calculate monthly withdrawal eligibility.
+    req.user.savingsBalance += amount;
     await req.user.save();
 
     // Create an in-app notification.
@@ -217,7 +217,7 @@ router.get("/paystack/verify/:reference", protect, async (req, res) => {
       user: req.user._id,
       type: "savings",
       title: "Savings Payment Successful",
-      message: `Your ₦${amount.toLocaleString()} contribution was successful. 60% has been added to your locked savings and 40% to your current monthly withdrawal pool.`,
+      message: `Your ₦${amount.toLocaleString()} contribution was successful. Your savings balance has been updated. Your monthly withdrawal amount is calculated separately.`,
       data: {
         reference,
         amount,
@@ -229,7 +229,7 @@ router.get("/paystack/verify/:reference", protect, async (req, res) => {
 
     await sendPushNotification(req.user, {
   title: "Contribution Successful",
-  body: `₦${amount.toLocaleString()} received. 60% is locked savings and 40% is in your monthly withdrawal pool.`,
+  body: `₦${amount.toLocaleString()} received. Your savings balance has been updated, and your monthly withdrawal amount is calculated separately.`,
   data: {
     type: "savings",
     reference,

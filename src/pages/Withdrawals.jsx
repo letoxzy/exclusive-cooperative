@@ -599,9 +599,9 @@ function Withdrawals() {
         </div>
 
         <div className="withdrawal-balance-card locked">
-          <span>60% Annual Savings Limit</span>
-          <strong>{loading ? "Loading..." : money(data.maxGrossDeduction)}</strong>
-          <small>Once per calendar year</small>
+          <span>Monthly Withdrawal</span>
+          <strong>{loading ? "Loading..." : money(savingsAvailable)}</strong>
+          <small>Available once per month</small>
         </div>
 
         <div className="withdrawal-balance-card loan-card-balance">
@@ -630,10 +630,10 @@ function Withdrawals() {
         <div className="withdrawal-rule">
           <strong>Choose your withdrawal source</strong>
           <span>
-            Savings contributions split 60% into locked savings and 40% into
-            the current month's withdrawal pool. Savings withdrawals are
+            Your full contribution amount remains in your Savings Balance.
+            Your eligible savings withdrawal is calculated separately and is
             available once per month. Loan withdrawals use only the unused
-            balance of your active loan and do not reduce your locked savings.
+            balance of your active loan.
           </span>
         </div>
 
@@ -645,7 +645,7 @@ function Withdrawals() {
             disabled={submitting}
           >
             <span className="source-option-title">Withdraw from Savings</span>
-            <span>Up to {money(savingsAvailable)} available under the annual savings rule.</span>
+            <span>You can withdraw up to {money(savingsAvailable)} from this month's contribution.</span>
           </button>
 
           <button
@@ -672,8 +672,6 @@ function Withdrawals() {
             <div className="source-panel-grid">
               <div><span>Current Savings</span><strong>{money(data.savingsBalance)}</strong></div>
               <div><span>This Month's Contributions</span><strong>{money(data.monthlyContributionTotal)}</strong></div>
-              <div><span>Locked Savings (60%)</span><strong>{money(data.monthlyLockedSavings)}</strong></div>
-              <div><span>Monthly Withdrawal Pool (40%)</span><strong>{money(data.monthlyWithdrawableAmount)}</strong></div>
               <div><span>Available to Withdraw</span><strong>{money(savingsAvailable)}</strong></div>
             </div>
 

@@ -8,9 +8,9 @@ const withdrawalSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Where the money comes from. Savings withdrawals are subject to the
-    // annual 60% rule; loan-fund withdrawals use the member's available
-    // balance from a specific active loan.
+    // Where the money comes from. Savings withdrawals are limited to 40%
+    // of the current month's approved contributions; loan-fund withdrawals
+    // use the member's available balance from a specific active loan.
     source: {
       type: String,
       enum: ["savings", "loan"],
@@ -82,6 +82,14 @@ const withdrawalSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Calendar month used to enforce one savings withdrawal per month.
+    // Loan withdrawals leave this empty.
+    withdrawalCycle: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+
     status: {
       type: String,
       enum: [
@@ -105,6 +113,18 @@ const withdrawalSchema = new mongoose.Schema(
     },
   },
   { timestamps: true }
+);
+
+withdrawalSchema.index(
+  { user: 1, source: 1, withdrawalCycle: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: {
+      source: "savings",
+      withdrawalCycle: { $type: "string" },
+    },
+  }
 );
 
 export default mongoose.model("Withdrawal", withdrawalSchema);

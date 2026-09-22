@@ -11,8 +11,8 @@ const DEFAULT_ADMINISTRATIVE_FEE = 0;
  * totalDeduction therefore equals amount for new ordinary withdrawals.
  *
  * success:
- *   - deducts totalDeduction from savingsBalance
- *   - releases the temporary withdrawal reservation
+ *   - leaves the locked savingsBalance untouched
+ *   - releases the temporary monthly withdrawal reservation
  *
  * failed/reversed/rejected:
  *   - releases the temporary withdrawal reservation
@@ -84,15 +84,16 @@ export async function settleWithdrawal(
         );
       }
     } else {
+      // Savings withdrawals come from the current month's 40% withdrawal
+      // pool. The 60% savings balance is locked and is never reduced by a
+      // savings withdrawal. Only the temporary reservation is released.
       const user = await User.findOneAndUpdate(
         {
           _id: withdrawal.user,
           withdrawalReserved: { $gte: totalDeduction },
-          savingsBalance: { $gte: totalDeduction },
         },
         {
           $inc: {
-            savingsBalance: -totalDeduction,
             withdrawalReserved: -totalDeduction,
           },
         },
@@ -101,7 +102,7 @@ export async function settleWithdrawal(
 
       if (!user) {
         throw new Error(
-          "Could not safely settle the withdrawal against the member balance."
+          "Could not safely settle the monthly savings withdrawal reservation."
         );
       }
     }

@@ -25,22 +25,22 @@ function Savings() {
         <h1>Build a savings habit that actually sticks</h1>
 
         <p className="page-hero-sub">
-          Every member commits to a minimum monthly contribution — the
-          foundation that unlocks loan eligibility and long-term financial
-          stability.
+          Members choose a Daily, Weekly, or Monthly contribution frequency,
+          with a minimum regular contribution of ₦10,000. Each contribution
+          is split between locked savings and the current month's withdrawal pool.
         </p>
       </header>
 
       <section className="savings-detail">
         <div className="detail-card featured">
-          <h3>Minimum Monthly Savings</h3>
+          <h3>Minimum Regular Contribution</h3>
 
           <p className="big-figure">₦10,000</p>
 
           <p>
-            The baseline every member contributes each month. Your savings
-            balance also determines your loan eligibility — members can borrow
-            up to 2x what they've saved.
+            The minimum regular contribution is ₦10,000. 60% of each approved
+            contribution is added to locked savings, while 40% contributes to
+            the current month's withdrawal pool.
           </p>
         </div>
 
@@ -53,7 +53,9 @@ function Savings() {
             <li>Monthly contributions</li>
           </ul>
 
-          <p>Pick whichever rhythm fits your income pattern best.</p>
+          <p>Choose the frequency that fits your income pattern. Regular contributions
+            are limited to once per selected period, while savings withdrawals
+            are available once per month for everyone.</p>
         </div>
 
         <div className="detail-card">

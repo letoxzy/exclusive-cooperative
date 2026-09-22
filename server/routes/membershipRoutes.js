@@ -118,6 +118,20 @@ router.post(
         });
       }
 
+      const allowedFrequencies = ["Daily", "Weekly", "Monthly"];
+      const frequency = String(req.body.frequency || "").trim();
+      const proposedAmount = Number(req.body.proposedAmount);
+
+      if (!allowedFrequencies.includes(frequency)) {
+        return res.status(400).json({ message: "Select a valid contribution frequency." });
+      }
+
+      if (!Number.isFinite(proposedAmount) || proposedAmount < 10000) {
+        return res.status(400).json({
+          message: "The minimum regular contribution is ₦10,000.",
+        });
+      }
+
       const passportFile = req.files?.passportPhoto?.[0];
       const signatureFile = req.files?.signature?.[0];
 

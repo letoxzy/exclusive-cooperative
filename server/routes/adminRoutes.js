@@ -20,6 +20,7 @@ import { adminOnly } from "../middleware/adminMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
+import { LOCKED_SAVINGS_PERCENTAGE, WITHDRAWABLE_PERCENTAGE } from "../utils/contributionRules.js";
 import {
   compareIdentity,
   getVerificationDetails,
@@ -562,10 +563,21 @@ router.patch(
           });
         }
 
-        user.savingsBalance += txn.amount;
+        const lockedAmount = Number(
+          txn.lockedAmount ||
+            Number(txn.amount || 0) * LOCKED_SAVINGS_PERCENTAGE
+        );
+        const withdrawalAmount = Number(
+          txn.withdrawalAmount ||
+            Number(txn.amount || 0) * WITHDRAWABLE_PERCENTAGE
+        );
+
+        user.savingsBalance += lockedAmount;
 
         await user.save();
 
+        txn.lockedAmount = Math.round(lockedAmount * 100) / 100;
+        txn.withdrawalAmount = Math.round(withdrawalAmount * 100) / 100;
         txn.status = "approved";
       } else if (action === "reject") {
         txn.status = "rejected";
@@ -581,9 +593,9 @@ router.patch(
         action === "approve"
           ? {
               title: "Savings Payment Approved",
-              message: `Your savings payment of ₦${Number(
+              message: `Your contribution of ₦${Number(
                 txn.amount || 0
-              ).toLocaleString()} has been approved and added to your savings balance.`,
+              ).toLocaleString()} has been approved. 60% has been added to your locked savings and 40% to your current monthly withdrawal pool.`,
             }
           : {
               title: "Savings Payment Rejected",
@@ -720,6 +732,9 @@ router.patch(
           userUpdates.membershipType =
             app.membershipType ||
             "interest-bearing";
+          userUpdates.contributionFrequency =
+            app.frequency ||
+            "Monthly";
         }
 
         await User.findByIdAndUpdate(

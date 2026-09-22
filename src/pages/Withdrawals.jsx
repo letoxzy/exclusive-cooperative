@@ -18,12 +18,16 @@ function Withdrawals() {
 
   const [data, setData] = useState({
     savingsBalance: 0,
-    withdrawalPercentage: 60,
+    withdrawalPercentage: 40,
     administrativeFee: 0,
     maxGrossDeduction: 0,
     availableAmount: 0,
     reservedAmount: 0,
     annualWithdrawalUsed: false,
+    monthlyWithdrawalUsed: false,
+    monthlyContributionTotal: 0,
+    monthlyLockedSavings: 0,
+    monthlyWithdrawableAmount: 0,
     hasOutstandingLoan: false,
     outstandingLoan: 0,
     loanFunds: {
@@ -254,9 +258,9 @@ function Withdrawals() {
         return;
       }
 
-      if (data.annualWithdrawalUsed) {
+      if (data.monthlyWithdrawalUsed) {
         setError(
-          "You have already made a savings withdrawal this year. You can make another one next year."
+          "You have already made a savings withdrawal this month. Your next savings withdrawal will be available next month."
         );
         return;
       }
@@ -626,9 +630,10 @@ function Withdrawals() {
         <div className="withdrawal-rule">
           <strong>Choose your withdrawal source</strong>
           <span>
-            Savings withdrawals follow the 60% annual rule. Loan withdrawals
-            use only the unused balance of your active loan and do not reduce
-            your savings or outstanding loan repayment amount.
+            Savings contributions split 60% into locked savings and 40% into
+            the current month's withdrawal pool. Savings withdrawals are
+            available once per month. Loan withdrawals use only the unused
+            balance of your active loan and do not reduce your locked savings.
           </span>
         </div>
 
@@ -666,8 +671,9 @@ function Withdrawals() {
 
             <div className="source-panel-grid">
               <div><span>Current Savings</span><strong>{money(data.savingsBalance)}</strong></div>
-              <div><span>60% Annual Limit</span><strong>{money(data.maxGrossDeduction)}</strong></div>
-              <div><span>Already Withdrawn This Year</span><strong>{data.annualWithdrawalUsed ? "Yes" : "No"}</strong></div>
+              <div><span>This Month's Contributions</span><strong>{money(data.monthlyContributionTotal)}</strong></div>
+              <div><span>Locked Savings (60%)</span><strong>{money(data.monthlyLockedSavings)}</strong></div>
+              <div><span>Monthly Withdrawal Pool (40%)</span><strong>{money(data.monthlyWithdrawableAmount)}</strong></div>
               <div><span>Available to Withdraw</span><strong>{money(savingsAvailable)}</strong></div>
             </div>
 
@@ -682,11 +688,11 @@ function Withdrawals() {
               </div>
             )}
 
-            {data.annualWithdrawalUsed && (
+            {data.monthlyWithdrawalUsed && (
               <div className="withdrawal-lock-notice">
                 <div>
-                  <strong>Annual savings withdrawal already used</strong>
-                  <p>Your next savings withdrawal becomes available next calendar year.</p>
+                  <strong>Monthly savings withdrawal already used</strong>
+                  <p>Your next savings withdrawal becomes available next month.</p>
                 </div>
               </div>
             )}
@@ -901,7 +907,7 @@ function Withdrawals() {
               submitting ||
               loading ||
               withdrawalInputMax <= 0 ||
-              (source === "savings" && (data.annualWithdrawalUsed || data.hasOutstandingLoan)) ||
+              (source === "savings" && (data.monthlyWithdrawalUsed || data.hasOutstandingLoan)) ||
               (source === "loan" && !data.loanFunds?.hasActiveLoan)
             }
           >

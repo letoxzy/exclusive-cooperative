@@ -32,6 +32,15 @@ const userSchema = new mongoose.Schema(
 
     savingsBalance: { type: Number, default: 0 },
 
+    // Member-selected regular contribution frequency from the approved
+    // membership application. This controls how often a regular top-up
+    // may be made; savings withdrawals remain monthly for everyone.
+    contributionFrequency: {
+      type: String,
+      enum: ["Daily", "Weekly", "Monthly"],
+      default: null,
+    },
+
     // Total value of the member's cooperative shares.
     // Managed by administrators and displayed on the member dashboard.
     shareholding: { type: Number, default: 0, min: 0 },

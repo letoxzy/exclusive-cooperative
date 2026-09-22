@@ -10,6 +10,10 @@ import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
+import {
+  WITHDRAWABLE_PERCENTAGE,
+  getCurrentMonthlyWithdrawalBalance,
+} from "../utils/contributionRules.js";
 
 
 const router = express.Router();
@@ -48,8 +52,9 @@ async function paystack(path, options = {}) {
   return payload.data;
 }
 
-// Withdrawal rules from the cooperative bye-law.
-const WITHDRAWAL_PERCENTAGE = 0.60;
+// Savings withdrawal pool: 40% of approved contributions made during
+// the current calendar month. Every member may withdraw once per month.
+const WITHDRAWAL_PERCENTAGE = WITHDRAWABLE_PERCENTAGE;
 // Section 15.8(iii) applies its N20,000 fee to membership withdrawal,
 // not ordinary savings or loan-funds withdrawal.
 const ADMINISTRATIVE_FEE = 0;
@@ -294,22 +299,11 @@ router.get(
 
       const savings = Math.max(0, Number(req.user.savingsBalance || 0));
       const reserved = Math.max(0, Number(req.user.withdrawalReserved || 0));
-
-      const yearStart = new Date(new Date().getFullYear(), 0, 1);
-      const yearEnd = new Date(new Date().getFullYear() + 1, 0, 1);
-
-      const annualWithdrawal = await Withdrawal.findOne({
-        user: req.user._id,
-        $or: [
-          { source: "savings" },
-          { source: { $exists: false } },
-        ],
-        createdAt: { $gte: yearStart, $lt: yearEnd },
-        status: { $in: ["processing", "success"] },
-      }).sort("createdAt");
-
-      const maxGrossDeduction = savings * WITHDRAWAL_PERCENTAGE;
-      const availableAmount = Math.max(0, maxGrossDeduction - reserved);
+      const monthlyWithdrawal = await getCurrentMonthlyWithdrawalBalance(req.user._id);
+      const maxGrossDeduction = monthlyWithdrawal.totalWithdrawable;
+      const availableAmount = monthlyWithdrawal.usedWithdrawal
+        ? 0
+        : Math.max(0, maxGrossDeduction - reserved);
 
       const activeLoan = await Loan.findOne({
         user: req.user._id,
@@ -343,10 +337,17 @@ router.get(
         withdrawalPercentage: WITHDRAWAL_PERCENTAGE * 100,
         administrativeFee: ADMINISTRATIVE_FEE,
         maxGrossDeduction,
-        availableAmount: annualWithdrawal ? 0 : availableAmount,
+        availableAmount,
         reservedAmount: reserved,
-        annualWithdrawalUsed: Boolean(annualWithdrawal),
-        annualWithdrawal: annualWithdrawal || null,
+        monthlyWithdrawalUsed: monthlyWithdrawal.usedWithdrawal,
+        monthlyWithdrawal: monthlyWithdrawal.withdrawal || null,
+        monthlyContributionTotal: monthlyWithdrawal.totalContribution,
+        monthlyLockedSavings: monthlyWithdrawal.totalLocked,
+        monthlyWithdrawableAmount: monthlyWithdrawal.totalWithdrawable,
+        // Kept as a compatibility alias for older clients. It now represents
+        // the monthly savings withdrawal state, not an annual rule.
+        annualWithdrawalUsed: monthlyWithdrawal.usedWithdrawal,
+        annualWithdrawal: monthlyWithdrawal.withdrawal || null,
         hasOutstandingLoan: outstandingLoan > 0,
         outstandingLoan,
         loanFunds: {
@@ -422,8 +423,8 @@ router.get("/:id/receipt", protect, requireApprovedMember, async (req, res) => {
 
 // POST /api/withdrawals
 //
-// source = "savings": ordinary savings withdrawal, subject to the 60%
-// once-per-calendar-year rule.
+// source = "savings": ordinary savings withdrawal from the current
+// calendar-month 40% contribution pool, once per month for everyone.
 // source = "loan": draw down unused funds from an active loan.
 // These two ledgers are kept completely separate.
 router.post(
@@ -499,7 +500,7 @@ router.post(
       }
 
       let loanForWithdrawal = null;
-      let annualWithdrawal = null;
+      let monthlyWithdrawal = null;
       let reservationCreated = false;
 
       if (source === "savings") {
@@ -514,29 +515,18 @@ router.post(
           });
         }
 
-        const yearStart = new Date(new Date().getFullYear(), 0, 1);
-        const yearEnd = new Date(new Date().getFullYear() + 1, 0, 1);
-        annualWithdrawal = await Withdrawal.findOne({
-          user: freshMember._id,
-          $or: [
-            { source: "savings" },
-            { source: { $exists: false } },
-          ],
-          createdAt: { $gte: yearStart, $lt: yearEnd },
-          status: { $in: ["processing", "success"] },
-        });
-        if (annualWithdrawal) {
+        monthlyWithdrawal = await getCurrentMonthlyWithdrawalBalance(freshMember._id);
+        if (monthlyWithdrawal.usedWithdrawal) {
           return res.status(400).json({
-            message: "You have already made a savings withdrawal this year. You can make another one next year.",
+            message: "You have already made your savings withdrawal for this month. Your next savings withdrawal will be available next month.",
           });
         }
 
-        const savings = Math.max(0, Number(freshMember.savingsBalance || 0));
         const reserved = Math.max(0, Number(freshMember.withdrawalReserved || 0));
-        const availableBeforeReservation = Math.max(0, savings * WITHDRAWAL_PERCENTAGE - reserved);
+        const availableBeforeReservation = Math.max(0, monthlyWithdrawal.totalWithdrawable - reserved);
         if (amount > availableBeforeReservation) {
           return res.status(400).json({
-            message: `You can withdraw up to ₦${availableBeforeReservation.toLocaleString()} from savings this year.`,
+            message: `You can withdraw up to ₦${availableBeforeReservation.toLocaleString()} from your current month's withdrawal pool.`,
           });
         }
 
@@ -544,9 +534,9 @@ router.post(
           {
             _id: freshMember._id,
             $expr: {
-              $gte: [
-                { $subtract: [{ $multiply: ["$savingsBalance", WITHDRAWAL_PERCENTAGE] }, "$withdrawalReserved"] },
-                amount,
+              $lte: [
+                "$withdrawalReserved",
+                Math.max(0, monthlyWithdrawal.totalWithdrawable - amount),
               ],
             },
           },
@@ -682,10 +672,9 @@ router.post(
           administrativeFee: 0,
           availableAmount:
             source === "savings"
-              ? withdrawal.status === "success" || withdrawal.status === "processing"
-                ? 0
-                : Math.max(0, Number(finalUser?.savingsBalance || 0) * WITHDRAWAL_PERCENTAGE - Number(finalUser?.withdrawalReserved || 0))
-              : Math.max(0, Number(finalUser?.savingsBalance || 0) * WITHDRAWAL_PERCENTAGE - Number(finalUser?.withdrawalReserved || 0)),
+              ? 0
+              : Math.max(0, Number(finalLoan?.amount || 0) - Number(finalLoan?.loanFundsWithdrawn || 0) - Number(finalLoan?.loanFundsReserved || 0)),
+          monthlyWithdrawalUsed: source === "savings" && (withdrawal.status === "success" || withdrawal.status === "processing"),
           annualWithdrawalUsed: source === "savings" && (withdrawal.status === "success" || withdrawal.status === "processing"),
           withdrawalReserved: Number(finalUser?.withdrawalReserved || 0),
           loanFunds: finalLoan

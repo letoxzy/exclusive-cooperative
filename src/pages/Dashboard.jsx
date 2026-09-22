@@ -12,6 +12,7 @@ function Dashboard() {
   const [amount, setAmount] = useState("");
   const [requests, setRequests] = useState([]);
   const [membershipApp, setMembershipApp] = useState(undefined);
+  const [contributionStatus, setContributionStatus] = useState(null);
   const [loans, setLoans] = useState([]);
 
   const [repaymentAmount, setRepaymentAmount] = useState("");
@@ -200,6 +201,10 @@ function Dashboard() {
       .catch(() => {
         setMembershipApp(null);
       });
+
+    request("/payments/contribution-status", { token: user.token })
+      .then((data) => setContributionStatus(data))
+      .catch(() => setContributionStatus(null));
 
     // Refresh the cached member record so savings balance
     // and loan eligibility always reflect MongoDB.
@@ -537,7 +542,7 @@ function Dashboard() {
       <section className="dashboard-grid">
         <div className="dash-card">
           <div className="dash-card-top">
-            <span className="dash-label">Savings Balance</span>
+            <span className="dash-label">Locked Savings</span>
             <button
               type="button"
               className="eye-toggle"
@@ -599,12 +604,13 @@ function Dashboard() {
             ) : (
               <>
                 <p className="dash-note">
-                  Add money to your savings instantly — your balance updates as
-                  soon as payment is confirmed.
+                  {contributionStatus?.frequency || "Monthly"} contribution plan.
+                  You can make one regular contribution per selected period,
+                  with a minimum of ₦10,000. Withdrawals are monthly for all members.
                 </p>
 
                 <div className="quick-amounts">
-                  {[5000, 10000, 20000, 50000].map((preset) => (
+                  {[10000, 20000, 50000, 100000].map((preset) => (
                     <button
                       key={preset}
                       type="button"
@@ -624,8 +630,8 @@ function Dashboard() {
                 >
                   <input
                     type="number"
-                    min="0"
-                    placeholder="Amount in ₦"
+                    min="10000"
+                    placeholder="Minimum ₦10,000"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                   />
@@ -634,13 +640,18 @@ function Dashboard() {
                     type="button"
                     className="topup-btn"
                     onClick={handlePaystackPay}
-                    disabled={payLoading}
+                    disabled={payLoading || contributionStatus?.canContribute === false}
                   >
                     {payLoading ? "Redirecting..." : "Top Up Now"}
                   </button>
                 </form>
 
                 {error && <p className="form-error">{error}</p>}
+                {contributionStatus?.canContribute === false && (
+                  <p className="form-error">
+                    Your {contributionStatus.frequency?.toLowerCase()} contribution for this period has already been made.
+                  </p>
+                )}
                 {success && <p className="form-success">{success}</p>}
               </>
             )}
@@ -656,9 +667,10 @@ function Dashboard() {
                 <p className="eyebrow">Savings</p>
                 <h2>Withdraw your savings</h2>
                 <p className="dash-note">
-                  Withdraw up to 60% of your total savings once each year.
-                  Withdrawals are unavailable while you have an outstanding
-                  loan, and your bank account is verified before payment.
+                  Each contribution places 60% into locked savings and 40% into
+                  the current month's withdrawal pool. Savings withdrawals are
+                  available once per month and are unavailable while you have
+                  an outstanding loan.
                 </p>
               </div>
               <Link to="/withdrawals" className="withdraw-dashboard-btn">

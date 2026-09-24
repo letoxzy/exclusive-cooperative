@@ -604,9 +604,10 @@ function Dashboard() {
             ) : (
               <>
                 <p className="dash-note">
-                  {contributionStatus?.frequency || "Monthly"} contribution plan.
-                  You can make one regular contribution per selected period,
-                  with a minimum of ₦10,000. Withdrawals are monthly for all members.
+                  {contributionStatus?.frequency || "Monthly"} contribution
+                  plan. You can make one regular contribution per selected
+                  period, with a minimum of ₦10,000. Withdrawals are monthly for
+                  all members.
                 </p>
 
                 <div className="quick-amounts">
@@ -640,7 +641,9 @@ function Dashboard() {
                     type="button"
                     className="topup-btn"
                     onClick={handlePaystackPay}
-                    disabled={payLoading || contributionStatus?.canContribute === false}
+                    disabled={
+                      payLoading || contributionStatus?.canContribute === false
+                    }
                   >
                     {payLoading ? "Redirecting..." : "Top Up Now"}
                   </button>
@@ -649,7 +652,8 @@ function Dashboard() {
                 {error && <p className="form-error">{error}</p>}
                 {contributionStatus?.canContribute === false && (
                   <p className="form-error">
-                    Your {contributionStatus.frequency?.toLowerCase()} contribution for this period has already been made.
+                    Your {contributionStatus.frequency?.toLowerCase()}{" "}
+                    contribution for this period has already been made.
                   </p>
                 )}
                 {success && <p className="form-success">{success}</p>}
@@ -669,8 +673,8 @@ function Dashboard() {
                 <p className="dash-note">
                   Each contribution places 60% into locked savings and 40% into
                   the current month's withdrawal pool. Savings withdrawals are
-                  available once per month and are unavailable while you have
-                  an outstanding loan.
+                  available once per month and are unavailable while you have an
+                  outstanding loan.
                 </p>
               </div>
               <Link to="/withdrawals" className="withdraw-dashboard-btn">

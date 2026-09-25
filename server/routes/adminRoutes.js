@@ -63,13 +63,15 @@ router.use(protect, adminOnly);
 router.get("/users", async (req, res) => {
   try {
     const users = await User.find()
-      .select("-password +securityLockedUntil +securityLockLevel +securityLockedPermanently")
+      .select("-password")
       .sort("-createdAt");
 
     res.json(users);
   } catch (err) {
+    console.error("Admin users fetch error:", err);
+
     res.status(500).json({
-      message: err.message,
+      message: "Failed to load members.",
     });
   }
 });

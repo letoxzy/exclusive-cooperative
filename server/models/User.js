@@ -79,6 +79,21 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false,
     },
+    // Consecutive failed app-PIN attempts. This persists across temporary
+    // lockouts so the lock duration increases until a successful PIN login.
+    appPinFailedAttempts: {
+      type: Number,
+      default: 0,
+      min: 0,
+      select: false,
+    },
+    // Server-authoritative lockout timestamp. PIN and biometric unlocks are
+    // both unavailable until this time has passed.
+    appPinLockedUntil: {
+      type: Date,
+      default: null,
+      select: false,
+    },
     autoLockSeconds: {
       type: Number,
       default: 300,

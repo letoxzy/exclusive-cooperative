@@ -66,9 +66,32 @@ router.get("/users", async (req, res) => {
       .select(
         "fullName email role membershipType savingsBalance contributionFrequency shareholding withdrawalReserved avatarUrl isApprovedMember isLoanEligible mustChangePassword isBlocked blockedAt blockedBy blockReason biometricEnabled autoLockSeconds securityFailedAttempts securityLockLevel securityLockedUntil securityLockedPermanently securityLockedAt securityLockReason createdAt updatedAt"
       )
-      .sort("-createdAt");
+      .sort("-createdAt")
+      .lean();
 
-    res.json(users);
+    // Phone numbers are stored on the Membership document rather than User.
+    // Merge the phone into the admin member list so the frontend can search it.
+    const userIds = users.map((member) => member._id);
+
+    const memberships = userIds.length
+      ? await Membership.find({ user: { $in: userIds } })
+          .select("user phone")
+          .lean()
+      : [];
+
+    const phoneByUserId = new Map(
+      memberships.map((membership) => [
+        String(membership.user),
+        membership.phone || "",
+      ])
+    );
+
+    const membersWithPhone = users.map((member) => ({
+      ...member,
+      phone: phoneByUserId.get(String(member._id)) || "",
+    }));
+
+    res.json(membersWithPhone);
   } catch (err) {
     console.error("Admin users fetch error:", err);
 

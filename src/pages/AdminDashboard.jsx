@@ -75,6 +75,12 @@ function AdminDashboard() {
   const [showAddExistingMember, setShowAddExistingMember] = useState(false);
   const [deletingMemberId, setDeletingMemberId] = useState(null);
   const [actionModal, setActionModal] = useState(null);
+
+  // Admin list search + filters
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberFilter, setMemberFilter] = useState("all");
+  const [applicationSearch, setApplicationSearch] = useState("");
+  const [applicationFilter, setApplicationFilter] = useState("all");
   const [actionModalLoading, setActionModalLoading] = useState(false);
 
   /* ================================
@@ -1824,6 +1830,69 @@ function AdminDashboard() {
      MEMBERS
   ================================= */
 
+  const getMemberAccountStatus = (member) => {
+    const temporaryLockActive =
+      member.securityLockedUntil &&
+      new Date(member.securityLockedUntil).getTime() > Date.now();
+
+    if (member.securityLockedPermanently) return "security-locked";
+    if (member.isBlocked) return "blocked";
+    if (temporaryLockActive) return "security-locked";
+    if (member.role === "admin") return "admin";
+    if (member.membershipType === "interest-bearing") return "interest-bearing";
+    if (member.membershipType === "interest-free") return "interest-free";
+    return "active";
+  };
+
+  const filteredMembers = members.filter((member) => {
+    const query = memberSearch.trim().toLowerCase();
+    const status = getMemberAccountStatus(member);
+
+    const matchesSearch =
+      !query ||
+      [
+        member.fullName,
+        member.email,
+        member.phone,
+        member.membershipType,
+        member.role,
+        status,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+
+    const matchesFilter =
+      memberFilter === "all" ||
+      memberFilter === status ||
+      (memberFilter === "active" && status === "active");
+
+    return matchesSearch && matchesFilter;
+  });
+
+  const filteredApplications = applications.filter((application) => {
+    const query = applicationSearch.trim().toLowerCase();
+
+    const matchesSearch =
+      !query ||
+      [
+        application.fullName,
+        application.email,
+        application.phone,
+        application.membershipCategory,
+        application.membershipType,
+        application.status,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+
+    const matchesFilter =
+      applicationFilter === "all" ||
+      applicationFilter === application.status ||
+      applicationFilter === application.membershipType;
+
+    return matchesSearch && matchesFilter;
+  });
+
   const renderMembers = () => {
     return (
       <>
@@ -1846,6 +1915,61 @@ function AdminDashboard() {
         </div>
 
         <section className="admin-card">
+          <div className="admin-list-toolbar">
+            <div className="admin-search-wrap">
+              <span className="admin-search-icon">⌕</span>
+              <input
+                type="search"
+                className="admin-search-input"
+                placeholder="Search name, email, phone, role..."
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+              />
+              {memberSearch && (
+                <button
+                  type="button"
+                  className="admin-search-clear"
+                  onClick={() => setMemberSearch("")}
+                  aria-label="Clear member search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            <div className="admin-filter-group" role="group" aria-label="Member filters">
+              {[
+                ["all", "All"],
+                ["active", "Active"],
+                ["blocked", "Blocked"],
+                ["security-locked", "Security Locked"],
+                ["admin", "Admin"],
+                ["interest-bearing", "Interest-Bearing"],
+                ["interest-free", "Interest-Free"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`admin-filter-btn ${memberFilter === value ? "active" : ""}`}
+                  onClick={() => setMemberFilter(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="admin-results-count">
+              Showing <strong>{filteredMembers.length}</strong> of{" "}
+              <strong>{members.length}</strong> members
+            </div>
+          </div>
+
+          {filteredMembers.length === 0 ? (
+            <div className="admin-empty-search">
+              <strong>No members found</strong>
+              <span>Try a different search term or filter.</span>
+            </div>
+          ) : (
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
@@ -1865,7 +1989,7 @@ function AdminDashboard() {
               </thead>
 
               <tbody>
-                {members.map((m) => (
+                {filteredMembers.map((m) => (
                   <tr key={m._id}>
                     <td>{m.fullName}</td>
                     <td>{m.email}</td>
@@ -1992,6 +2116,7 @@ function AdminDashboard() {
               </tbody>
             </table>
           </div>
+          )}
         </section>
       </>
     );
@@ -2015,8 +2140,59 @@ function AdminDashboard() {
         </div>
 
         <section className="admin-card">
-          {applications.length === 0 ? (
-            <p className="empty-state">No membership applications yet.</p>
+          <div className="admin-list-toolbar">
+            <div className="admin-search-wrap">
+              <span className="admin-search-icon">⌕</span>
+              <input
+                type="search"
+                className="admin-search-input"
+                placeholder="Search name, email, phone, category..."
+                value={applicationSearch}
+                onChange={(e) => setApplicationSearch(e.target.value)}
+              />
+              {applicationSearch && (
+                <button
+                  type="button"
+                  className="admin-search-clear"
+                  onClick={() => setApplicationSearch("")}
+                  aria-label="Clear application search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            <div className="admin-filter-group" role="group" aria-label="Application filters">
+              {[
+                ["all", "All"],
+                ["pending", "Pending"],
+                ["approved", "Approved"],
+                ["rejected", "Rejected"],
+                ["interest-bearing", "Interest-Bearing"],
+                ["interest-free", "Interest-Free"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`admin-filter-btn ${applicationFilter === value ? "active" : ""}`}
+                  onClick={() => setApplicationFilter(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="admin-results-count">
+              Showing <strong>{filteredApplications.length}</strong> of{" "}
+              <strong>{applications.length}</strong> applications
+            </div>
+          </div>
+
+          {filteredApplications.length === 0 ? (
+            <div className="admin-empty-search">
+              <strong>No applications found</strong>
+              <span>Try a different search term or filter.</span>
+            </div>
           ) : (
             <div className="admin-table-wrap">
               <table className="admin-table">
@@ -2033,7 +2209,7 @@ function AdminDashboard() {
                 </thead>
 
                 <tbody>
-                  {applications.map((a) => (
+                  {filteredApplications.map((a) => (
                     <tr key={a._id}>
                       <td>
                         {a.fullName}

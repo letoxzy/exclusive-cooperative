@@ -63,7 +63,9 @@ router.use(protect, adminOnly);
 router.get("/users", async (req, res) => {
   try {
     const users = await User.find()
-      .select("-password")
+      .select(
+        "fullName email role membershipType savingsBalance contributionFrequency shareholding withdrawalReserved avatarUrl isApprovedMember isLoanEligible mustChangePassword isBlocked blockedAt blockedBy blockReason biometricEnabled autoLockSeconds securityFailedAttempts securityLockLevel securityLockedUntil securityLockedPermanently securityLockedAt securityLockReason createdAt updatedAt"
+      )
       .sort("-createdAt");
 
     res.json(users);

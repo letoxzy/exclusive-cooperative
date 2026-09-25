@@ -29,6 +29,12 @@ function Dashboard() {
   const [repaymentReceipt, setRepaymentReceipt] = useState(null);
   const [repaymentReceiptPreview, setRepaymentReceiptPreview] = useState("");
   const [copyAccountMessage, setCopyAccountMessage] = useState("");
+  const [cooperativeSettings, setCooperativeSettings] = useState({
+    loanMultiplier: 2,
+    repaymentAccountName: "Exclusive Cooperative Multipurpose Society Limited",
+    repaymentBank: "UBA",
+    repaymentAccountNumber: "0123456789",
+  });
   const repaymentGalleryInputRef = useRef(null);
   const repaymentCameraInputRef = useRef(null);
 
@@ -40,7 +46,9 @@ function Dashboard() {
   const [payLoading, setPayLoading] = useState(false);
   const [loanLoading, setLoanLoading] = useState(true);
 
-  const eligibleLoan = Number(user?.savingsBalance || 0) * 2;
+  const eligibleLoan =
+    Number(user?.savingsBalance || 0) *
+    Number(cooperativeSettings.loanMultiplier || 2);
 
   // Prefer the freshly-fetched membership application status over
   // the cached `user.isApprovedMember` flag from AuthContext, which
@@ -206,6 +214,22 @@ function Dashboard() {
       .then((data) => setContributionStatus(data))
       .catch(() => setContributionStatus(null));
 
+    request("/loans/cooperative-config", { token: user.token })
+      .then((data) =>
+        setCooperativeSettings({
+          loanMultiplier: Number(data?.loanMultiplier ?? 2),
+          repaymentAccountName:
+            data?.repaymentAccountName ||
+            "Exclusive Cooperative Multipurpose Society Limited",
+          repaymentBank: data?.repaymentBank || "UBA",
+          repaymentAccountNumber:
+            data?.repaymentAccountNumber || "0123456789",
+        }),
+      )
+      .catch((err) => {
+        console.error("COOPERATIVE CONFIG LOAD ERROR:", err);
+      });
+
     // Refresh the cached member record so savings balance
     // and loan eligibility always reflect MongoDB.
     // Do not add refreshUser to this effect's dependency list:
@@ -329,7 +353,7 @@ function Dashboard() {
 
   const copyRepaymentAccount = async () => {
     try {
-      await navigator.clipboard.writeText("0123456789");
+      await navigator.clipboard.writeText(cooperativeSettings.repaymentAccountNumber);
       setCopyAccountMessage("Copied");
       window.setTimeout(() => setCopyAccountMessage(""), 1800);
     } catch {
@@ -921,17 +945,15 @@ function Dashboard() {
                         <p className="repayment-bank-label">
                           Transfer repayment to
                         </p>
-                        <strong>
-                          Exclusive Cooperative Multipurpose Society Limited
-                        </strong>
+                        <strong>{cooperativeSettings.repaymentAccountName}</strong>
                         <div className="repayment-bank-row">
                           <span>Bank</span>
-                          <b>UBA</b>
+                          <b>{cooperativeSettings.repaymentBank}</b>
                         </div>
                         <div className="repayment-bank-row repayment-account-row">
                           <span>Account number</span>
                           <div>
-                            <b>0123456789</b>
+                            <b>{cooperativeSettings.repaymentAccountNumber}</b>
                             <button
                               type="button"
                               className="copy-account-btn"

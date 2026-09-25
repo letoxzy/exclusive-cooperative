@@ -9,6 +9,7 @@ import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
+import CooperativeSetting from "../models/CooperativeSetting.js";
 
 const router = express.Router();
 
@@ -36,7 +37,20 @@ const uploadReceipt = multer({
   - Interest rate scales with term: 3mo = 5%, 6mo = 7%, 12mo = 10%.
 */
 
-const LOAN_MULTIPLIER = 2;
+const DEFAULT_COOPERATIVE_SETTINGS = {
+  loanMultiplier: 2,
+  repaymentAccountName: "Exclusive Cooperative Multipurpose Society Limited",
+  repaymentBank: "UBA",
+  repaymentAccountNumber: "0123456789",
+};
+
+async function getCooperativeSettings() {
+  let settings = await CooperativeSetting.findOne();
+  if (!settings) {
+    settings = await CooperativeSetting.create(DEFAULT_COOPERATIVE_SETTINGS);
+  }
+  return settings;
+}
 
 const ALLOWED_LOAN_TYPES = ["emergency", "business", "personal"];
 
@@ -62,6 +76,31 @@ function calculateLoanTerms(amount, months, membershipType) {
 
   return { interestRate, totalRepayment };
 }
+
+
+/*
+  GET /api/loans/cooperative-config
+
+  Returns the current cooperative configuration used by member-facing
+  loan/repayment screens. The repayment account details are intentionally
+  the cooperative's published payment destination.
+*/
+router.get("/cooperative-config", async (req, res) => {
+  try {
+    const settings = await getCooperativeSettings();
+
+    res.json({
+      loanMultiplier: Number(settings.loanMultiplier || 2),
+      repaymentAccountName: settings.repaymentAccountName,
+      repaymentBank: settings.repaymentBank,
+      repaymentAccountNumber: settings.repaymentAccountNumber,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message || "Failed to load cooperative configuration.",
+    });
+  }
+});
 
 /*
   GET /api/loans/eligibility-application/me
@@ -178,8 +217,10 @@ async function getEligibilityBlockers(userId, requestedAmount, eligibleAmount) {
 */
 router.get("/eligibility", protect, requireApprovedMember, async (req, res) => {
   try {
+    const settings = await getCooperativeSettings();
+    const loanMultiplier = Number(settings.loanMultiplier || 2);
     const savingsBalance = Number(req.user.savingsBalance || 0);
-    const eligibleAmount = savingsBalance * LOAN_MULTIPLIER;
+    const eligibleAmount = savingsBalance * loanMultiplier;
 
     const activeLoan = await Loan.findOne({
       user: req.user._id,
@@ -204,6 +245,7 @@ router.get("/eligibility", protect, requireApprovedMember, async (req, res) => {
       eligibilityApplication,
       savingsBalance,
       eligibleAmount,
+      loanMultiplier,
       hasActiveLoan: Boolean(activeLoan),
       activeLoan,
       hasPendingApplication: Boolean(pendingLoan),

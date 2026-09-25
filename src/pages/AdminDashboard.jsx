@@ -57,6 +57,16 @@ function AdminDashboard() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [cooperativeSettings, setCooperativeSettings] = useState({
+    loanMultiplier: 2,
+    repaymentAccountName: "Exclusive Cooperative Multipurpose Society Limited",
+    repaymentBank: "UBA",
+    repaymentAccountNumber: "0123456789",
+  });
+  const [savingCooperativeSettings, setSavingCooperativeSettings] =
+    useState(false);
+  const [cooperativeSettingsMessage, setCooperativeSettingsMessage] =
+    useState(null);
 
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -218,6 +228,92 @@ function AdminDashboard() {
 
     setWithdrawals(data);
   }, [user.token]);
+  const loadCooperativeSettings = useCallback(async () => {
+    const data = await request("/admin/cooperative-settings", {
+      token: user.token,
+    });
+
+    setCooperativeSettings({
+      loanMultiplier: Number(data?.loanMultiplier ?? 2),
+      repaymentAccountName:
+        data?.repaymentAccountName ||
+        "Exclusive Cooperative Multipurpose Society Limited",
+      repaymentBank: data?.repaymentBank || "UBA",
+      repaymentAccountNumber: data?.repaymentAccountNumber || "0123456789",
+    });
+  }, [user.token]);
+
+  const saveCooperativeSettings = async (event) => {
+    event.preventDefault();
+    setCooperativeSettingsMessage(null);
+
+    const multiplier = Number(cooperativeSettings.loanMultiplier);
+    const accountNumber = String(
+      cooperativeSettings.repaymentAccountNumber || "",
+    ).trim();
+
+    if (!Number.isFinite(multiplier) || multiplier <= 0 || multiplier > 2) {
+      setCooperativeSettingsMessage({
+        type: "error",
+        text: "Loan eligibility multiplier must be greater than 0 and cannot exceed 2×.",
+      });
+      return;
+    }
+
+    if (!/^[0-9]{10}$/.test(accountNumber)) {
+      setCooperativeSettingsMessage({
+        type: "error",
+        text: "Repayment account number must be exactly 10 digits.",
+      });
+      return;
+    }
+
+    if (
+      !String(cooperativeSettings.repaymentAccountName || "").trim() ||
+      !String(cooperativeSettings.repaymentBank || "").trim()
+    ) {
+      setCooperativeSettingsMessage({
+        type: "error",
+        text: "Repayment account name and bank are required.",
+      });
+      return;
+    }
+
+    setSavingCooperativeSettings(true);
+
+    try {
+      const saved = await request("/admin/cooperative-settings", {
+        method: "PUT",
+        token: user.token,
+        body: {
+          loanMultiplier: multiplier,
+          repaymentAccountName: cooperativeSettings.repaymentAccountName.trim(),
+          repaymentBank: cooperativeSettings.repaymentBank.trim(),
+          repaymentAccountNumber: accountNumber,
+        },
+      });
+
+      setCooperativeSettings({
+        loanMultiplier: Number(saved.loanMultiplier ?? multiplier),
+        repaymentAccountName: saved.repaymentAccountName,
+        repaymentBank: saved.repaymentBank,
+        repaymentAccountNumber: saved.repaymentAccountNumber,
+      });
+
+      setCooperativeSettingsMessage({
+        type: "success",
+        text: "Cooperative configuration updated successfully.",
+      });
+    } catch (err) {
+      setCooperativeSettingsMessage({
+        type: "error",
+        text: err.message,
+      });
+    } finally {
+      setSavingCooperativeSettings(false);
+    }
+  };
+
   /* ================================
      LOAD DATA WHEN SECTION CHANGES
   ================================= */
@@ -233,6 +329,7 @@ function AdminDashboard() {
         loadLoanRepayments(),
         loadWithdrawals(),
         loadSecurityAlerts(),
+        loadCooperativeSettings(),
       ]).catch((err) => {
         setError(err.message);
       });
@@ -263,6 +360,8 @@ function AdminDashboard() {
       loader = loadDividends;
     } else if (activeSection === "withdrawals") {
       loader = loadWithdrawals;
+    } else if (activeSection === "settings") {
+      loader = loadCooperativeSettings;
     }
 
     if (!loader) {
@@ -284,6 +383,7 @@ function AdminDashboard() {
     loadDividends,
     loadWithdrawals,
     loadSecurityAlerts,
+    loadCooperativeSettings,
   ]);
 
   /* ================================
@@ -3197,8 +3297,7 @@ function AdminDashboard() {
           </form>
         </section>
 
-        {/* COOPERATIVE INFORMATION — reference only; these values are fixed
-            in the app today rather than editable from here. */}
+        {/* COOPERATIVE CONFIGURATION */}
         <section className="admin-card">
           <div className="admin-card-header">
             <div>
@@ -3207,31 +3306,108 @@ function AdminDashboard() {
             </div>
           </div>
 
+          {cooperativeSettingsMessage && (
+            <div
+              className={
+                cooperativeSettingsMessage.type === "error"
+                  ? "form-error"
+                  : "form-success"
+              }
+            >
+              {cooperativeSettingsMessage.text}
+            </div>
+          )}
+
           <div className="admin-settings-note">
-            <strong>These values are fixed in the app for now</strong>
+            <strong>Manage the live cooperative settings</strong>
             <p>
-              They're shown here for reference. Changing them requires a
-              developer to update the code — there's no option to edit them from
-              this page yet.
+              These values are used by the loan eligibility and repayment
+              screens across the website and mobile app.
             </p>
           </div>
 
-          <div className="admin-mini-stat">
-            <span>Loan eligibility multiplier</span>
-            <strong>2× current savings balance</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Repayment account name</span>
-            <strong>Exclusive Cooperative Multipurpose Society Limited</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Repayment bank</span>
-            <strong>UBA</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Repayment account number</span>
-            <strong>0123456789</strong>
-          </div>
+          <form
+            className="admin-settings-form"
+            onSubmit={saveCooperativeSettings}
+          >
+            <div className="admin-form-grid">
+              <label>
+                Loan eligibility multiplier
+                <input
+                  type="number"
+                  min="0.01"
+                  max="2"
+                  step="0.01"
+                  value={cooperativeSettings.loanMultiplier}
+                  onChange={(e) =>
+                    setCooperativeSettings((prev) => ({
+                      ...prev,
+                      loanMultiplier: e.target.value,
+                    }))
+                  }
+                  disabled={savingCooperativeSettings}
+                />
+                <span className="admin-settings-footnote">
+                  Maximum allowed: 2× current savings balance.
+                </span>
+              </label>
+
+              <label>
+                Repayment account name
+                <input
+                  type="text"
+                  value={cooperativeSettings.repaymentAccountName}
+                  onChange={(e) =>
+                    setCooperativeSettings((prev) => ({
+                      ...prev,
+                      repaymentAccountName: e.target.value,
+                    }))
+                  }
+                  disabled={savingCooperativeSettings}
+                />
+              </label>
+
+              <label>
+                Repayment bank
+                <input
+                  type="text"
+                  value={cooperativeSettings.repaymentBank}
+                  onChange={(e) =>
+                    setCooperativeSettings((prev) => ({
+                      ...prev,
+                      repaymentBank: e.target.value,
+                    }))
+                  }
+                  disabled={savingCooperativeSettings}
+                />
+              </label>
+
+              <label>
+                Repayment account number
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={cooperativeSettings.repaymentAccountNumber}
+                  onChange={(e) =>
+                    setCooperativeSettings((prev) => ({
+                      ...prev,
+                      repaymentAccountNumber: e.target.value.replace(/\D/g, ""),
+                    }))
+                  }
+                  disabled={savingCooperativeSettings}
+                />
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              className="update-btn"
+              disabled={savingCooperativeSettings}
+            >
+              {savingCooperativeSettings ? "Saving…" : "Save configuration"}
+            </button>
+          </form>
         </section>
       </>
     );

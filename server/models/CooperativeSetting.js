@@ -6,7 +6,18 @@ const cooperativeSettingSchema = new mongoose.Schema(
     officialEmail: { type: String, default: "", trim: true, lowercase: true },
     phone: { type: String, default: "", trim: true },
     address: { type: String, default: "", trim: true },
-    loanMultiplier: { type: Number, default: 2, min: 0 },
+    loanMultiplier: { type: Number, default: 2, min: 0, max: 2 },
+    repaymentAccountName: {
+      type: String,
+      default: "Exclusive Cooperative Multipurpose Society Limited",
+      trim: true,
+    },
+    repaymentBank: { type: String, default: "UBA", trim: true },
+    repaymentAccountNumber: {
+      type: String,
+      default: "0123456789",
+      trim: true,
+    },
   },
   { timestamps: true },
 );

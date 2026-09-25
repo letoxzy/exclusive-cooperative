@@ -97,7 +97,7 @@ function Loans() {
           <h2>Check Your Loan Eligibility</h2>
 
           <p className="calc-rule">
-            Members can borrow up to <strong>2x</strong> their total savings
+            Members can borrow up to <strong>{Number(eligibility?.loanMultiplier || 2)}x</strong> their total savings
             with the cooperative.
           </p>
 
@@ -236,7 +236,7 @@ function Loans() {
                   <p>
                     Your full loan application has been approved, but you need
                     savings with the cooperative to determine your loan amount
-                    (up to 2x your savings balance).
+                    (up to {Number(eligibility?.loanMultiplier || 2)}x your savings balance).
                   </p>
                 </div>
               )}
@@ -268,7 +268,7 @@ function Loans() {
 
           <li>Consistent savings history with the cooperative</li>
 
-          <li>Loan amount is capped at 2x your total savings balance</li>
+          <li>Loan amount is capped at the configured savings multiplier</li>
 
           <li>
             Members cannot have another active or pending loan application

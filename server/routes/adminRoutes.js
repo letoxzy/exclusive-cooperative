@@ -10,6 +10,7 @@ import LoanRepayment from "../models/LoanRepayment.js";
 import Withdrawal from "../models/Withdrawal.js";
 import LoanEligibility from "../models/LoanEligibility.js";
 import Notification from "../models/Notification.js";
+import CooperativeSetting from "../models/CooperativeSetting.js";
 import {
   DividendDistribution,
   DividendEntry,
@@ -52,6 +53,101 @@ const upload = multer({
 
 // Every route below requires a logged-in admin
 router.use(protect, adminOnly);
+
+/*
+  ============================
+  COOPERATIVE CONFIGURATION
+  ============================
+*/
+
+const DEFAULT_COOPERATIVE_SETTINGS = {
+  loanMultiplier: 2,
+  repaymentAccountName: "Exclusive Cooperative Multipurpose Society Limited",
+  repaymentBank: "UBA",
+  repaymentAccountNumber: "0123456789",
+};
+
+async function getCooperativeSettings() {
+  let settings = await CooperativeSetting.findOne();
+  if (!settings) {
+    settings = await CooperativeSetting.create(DEFAULT_COOPERATIVE_SETTINGS);
+  }
+  return settings;
+}
+
+// GET /api/admin/cooperative-settings
+router.get("/cooperative-settings", async (req, res) => {
+  try {
+    const settings = await getCooperativeSettings();
+    res.json(settings);
+  } catch (err) {
+    console.error("Load cooperative settings error:", err);
+    res.status(500).json({
+      message: err.message || "Failed to load cooperative settings.",
+    });
+  }
+});
+
+// PUT /api/admin/cooperative-settings
+router.put("/cooperative-settings", async (req, res) => {
+  try {
+    const {
+      loanMultiplier,
+      repaymentAccountName,
+      repaymentBank,
+      repaymentAccountNumber,
+    } = req.body;
+
+    const multiplier = Number(loanMultiplier);
+
+    if (!Number.isFinite(multiplier) || multiplier <= 0 || multiplier > 2) {
+      return res.status(400).json({
+        message: "Loan eligibility multiplier must be greater than 0 and cannot exceed 2×.",
+      });
+    }
+
+    const accountName = String(repaymentAccountName || "").trim();
+    const bank = String(repaymentBank || "").trim();
+    const accountNumber = String(repaymentAccountNumber || "").trim();
+
+    if (!accountName || !bank || !accountNumber) {
+      return res.status(400).json({
+        message: "Repayment account name, bank and account number are required.",
+      });
+    }
+
+    if (!/^[0-9]{10}$/.test(accountNumber)) {
+      return res.status(400).json({
+        message: "Repayment account number must be exactly 10 digits.",
+      });
+    }
+
+    const settings = await CooperativeSetting.findOneAndUpdate(
+      {},
+      {
+        $set: {
+          loanMultiplier: Math.round(multiplier * 100) / 100,
+          repaymentAccountName: accountName,
+          repaymentBank: bank,
+          repaymentAccountNumber: accountNumber,
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+      },
+    );
+
+    res.json(settings);
+  } catch (err) {
+    console.error("Save cooperative settings error:", err);
+    res.status(500).json({
+      message: err.message || "Failed to save cooperative settings.",
+    });
+  }
+});
+
 
 /*
   ============================

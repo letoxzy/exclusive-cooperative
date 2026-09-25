@@ -159,7 +159,7 @@ async function getEligibilityBlockers(userId, requestedAmount, eligibleAmount) {
 
   const activeLoan = await Loan.findOne({
     user: userId,
-    status: { $in: ["approved", "active"] },
+    status: { $in: ["approved", "active", "overdue"] },
   });
 
   if (activeLoan) {
@@ -183,7 +183,7 @@ router.get("/eligibility", protect, requireApprovedMember, async (req, res) => {
 
     const activeLoan = await Loan.findOne({
       user: req.user._id,
-      status: { $in: ["approved", "active"] },
+      status: { $in: ["approved", "active", "overdue"] },
     }).select("_id amount outstandingBalance status");
 
     const pendingLoan = await Loan.findOne({
@@ -444,7 +444,7 @@ router.post("/:id/repayments", protect, uploadReceipt.single("receipt"), async (
       return res.status(404).json({ message: "Loan not found." });
     }
 
-    if (loan.status !== "active") {
+    if (!['active', 'overdue'].includes(loan.status)) {
       return res.status(400).json({
         message: "Repayments can only be recorded against an active loan.",
       });

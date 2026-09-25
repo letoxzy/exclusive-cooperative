@@ -13,9 +13,12 @@ import kycRoutes from "./routes/kycRoutes.js";
 import withdrawalRoutes from "./routes/withdrawalRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import galleryRoutes from "./routes/galleryRoutes.js";
+import { startLoanOverdueScheduler } from "./services/loanOverdueService.js";
 
 
-connectDB();
+connectDB().then(() => {
+  startLoanOverdueScheduler();
+});
 
 const app = express();
 

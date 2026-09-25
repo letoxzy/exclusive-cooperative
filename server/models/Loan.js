@@ -130,6 +130,31 @@ const loanSchema = new mongoose.Schema(
       default: 0,
     },
 
+    // Accumulated overdue increases. This is separate from the original
+    // loan interest and increases the amount the member must repay.
+    overdueChargeTotal: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    // Date the loan first became overdue (after its final repayment deadline).
+    overdueAt: {
+      type: Date,
+      default: null,
+    },
+
+    // The next date on which another overdue increase can be applied.
+    nextOverdueChargeAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Prevent duplicate 3-day / 1-day / due-date reminders.
+    repaymentReminder3SentAt: { type: Date, default: null },
+    repaymentReminder1SentAt: { type: Date, default: null },
+    repaymentDueTodaySentAt: { type: Date, default: null },
+
     // Loan lifecycle
     status: {
       type: String,
@@ -138,6 +163,7 @@ const loanSchema = new mongoose.Schema(
         "approved",
         "rejected",
         "active",
+        "overdue",
         "completed",
         "defaulted",
         "cancelled",

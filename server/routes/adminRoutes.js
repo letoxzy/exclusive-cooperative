@@ -1261,6 +1261,7 @@ router.patch(
               $in: [
                 "approved",
                 "active",
+                "overdue",
               ],
             },
           });
@@ -1443,6 +1444,12 @@ router.patch(
       loan.amountPaid = 0;
       loan.outstandingBalance =
         loan.totalRepayment;
+      loan.overdueChargeTotal = 0;
+      loan.overdueAt = null;
+      loan.nextOverdueChargeAt = null;
+      loan.repaymentReminder3SentAt = null;
+      loan.repaymentReminder1SentAt = null;
+      loan.repaymentDueTodaySentAt = null;
 
       // The approved loan becomes available as a separate loan-funds balance.
       // This is NOT added to savingsBalance and is reduced only when the
@@ -1663,6 +1670,11 @@ router.patch(
 
         loan.completedDate =
           new Date();
+        loan.nextOverdueChargeAt = null;
+      } else if (loan.status === "overdue") {
+        // A partial repayment does not erase overdue history. Keep the loan
+        // overdue and preserve the next 7-day charge date.
+        loan.status = "overdue";
       }
 
       await loan.save();

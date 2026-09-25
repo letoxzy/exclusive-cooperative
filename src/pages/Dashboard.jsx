@@ -448,7 +448,9 @@ function Dashboard() {
    * 3. Pending
    * ================================
    */
-  const activeLoan = loans.find((loan) => loan.status === "active");
+  const activeLoan = loans.find((loan) =>
+    ["active", "overdue"].includes(loan.status),
+  );
 
   const approvedLoan = loans.find((loan) => loan.status === "approved");
 
@@ -811,6 +813,30 @@ function Dashboard() {
                   </span>
                 </div>
 
+                {Number(currentLoan.overdueChargeTotal || 0) > 0 && (
+                  <div className="loan-detail">
+                    <span className="loan-detail-label">Overdue increases</span>
+                    <span className="loan-detail-value">
+                      {money(currentLoan.overdueChargeTotal)}
+                    </span>
+                  </div>
+                )}
+
+                {currentLoan.repaymentSchedule?.length > 0 && (
+                  <div className="loan-detail">
+                    <span className="loan-detail-label">
+                      Final repayment date
+                    </span>
+                    <span className="loan-detail-value">
+                      {new Date(
+                        currentLoan.repaymentSchedule[
+                          currentLoan.repaymentSchedule.length - 1
+                        ].dueDate,
+                      ).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
+
                 <div className="loan-detail">
                   <span className="loan-detail-label">Application Date</span>
 
@@ -847,6 +873,12 @@ function Dashboard() {
               {/* LOAN NOTICE */}
 
               <div className="loan-notice">
+                {currentLoan.status === "overdue" && (
+                  <strong>
+                    Loan overdue — an additional 2% is added every 7 days while
+                    the balance remains unpaid.
+                  </strong>
+                )}
                 {Number(currentLoan.outstandingBalance || 0) > 0 ? (
                   <>
                     You currently owe{" "}

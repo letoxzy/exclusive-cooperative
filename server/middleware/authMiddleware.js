@@ -35,6 +35,13 @@ export const protect = async (req, res, next) => {
       });
     }
 
+    if (req.user.role !== "admin" && req.user.securityLockedPermanently) {
+      return res.status(403).json({
+        code: "ACCOUNT_SECURITY_LOCKED",
+        message: "Your account has been locked for security after repeated failed sign-in attempts. Please contact the cooperative to unlock your account.",
+      });
+    }
+
     next();
   } catch (err) {
     console.error("Authentication error:", err);

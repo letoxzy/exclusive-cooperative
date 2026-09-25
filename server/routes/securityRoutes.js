@@ -2,21 +2,26 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import { protect } from "../middleware/authMiddleware.js";
+import {
+  getSecurityState,
+  recordSecurityFailure,
+  recordSecuritySuccess,
+  notifyPermanentSecurityLock,
+} from "../utils/accountSecurity.js";
 
 const router = express.Router();
 
 // GET /api/security
 router.get("/", protect, async (req, res) => {
-  const user = await User.findById(req.user._id).select(
-    "+appPinHash +appPinFailedAttempts +appPinLockedUntil",
-  );
+  const user = await User.findById(req.user._id).select("+appPinHash");
 
   res.json({
     hasPin: Boolean(user?.appPinHash),
     autoLockSeconds: Number(user?.autoLockSeconds ?? 300),
     biometricEnabled: Boolean(user?.biometricEnabled),
-    pinLockedUntil: user?.appPinLockedUntil || null,
-    pinFailedAttempts: Number(user?.appPinFailedAttempts || 0),
+    securityLockLevel: Number(user?.securityLockLevel ?? 0),
+    securityLockedUntil: user?.securityLockedUntil || null,
+    securityLockedPermanently: Boolean(user?.securityLockedPermanently),
   });
 });
 
@@ -55,9 +60,7 @@ router.put("/biometric", protect, async (req, res) => {
 router.post("/pin", protect, async (req, res) => {
   const { currentPin, pin, confirmPin } = req.body || {};
 
-  const member = await User.findById(req.user._id).select(
-    "+appPinHash +appPinFailedAttempts +appPinLockedUntil",
-  );
+  const member = await User.findById(req.user._id).select("+appPinHash");
 
   if (!member) {
     return res.status(404).json({ message: "Account not found." });
@@ -98,8 +101,6 @@ router.post("/pin", protect, async (req, res) => {
   }
 
   member.appPinHash = await bcrypt.hash(String(pin), 12);
-  member.appPinFailedAttempts = 0;
-  member.appPinLockedUntil = null;
   await member.save();
 
   res.json({
@@ -108,81 +109,84 @@ router.post("/pin", protect, async (req, res) => {
 });
 
 // POST /api/security/pin/verify
-// The server is the source of truth for consecutive failed attempts and lockouts.
-// Biometric unlock uses the same lock timestamp and therefore cannot bypass it.
+// App PIN failures use the same account-level escalation as website password
+// failures: 5 failures -> 10 minutes, next 5 -> 30 minutes, next 5 ->
+// permanent security lock requiring an administrator to unlock the account.
 router.post("/pin/verify", protect, async (req, res) => {
-  const { pin } = req.body || {};
-  const member = await User.findById(req.user._id).select(
-    "+appPinHash +appPinFailedAttempts +appPinLockedUntil",
-  );
+  try {
+    const { pin } = req.body || {};
 
-  if (!member?.appPinHash) {
-    return res.status(400).json({
-      code: "PIN_NOT_SET",
-      message: "No app PIN has been set for this account.",
-    });
-  }
+    const member = await User.findById(req.user._id).select(
+      "+appPinHash +securityFailedAttempts +securityLockLevel +securityLockedUntil"
+    );
 
-  if (!/^\d{6}$/.test(String(pin || ""))) {
-    return res.status(400).json({
-      code: "INVALID_PIN",
-      message: "PIN must be exactly 6 digits.",
-    });
-  }
-
-  const now = new Date();
-  if (member.appPinLockedUntil && member.appPinLockedUntil > now) {
-    return res.status(429).json({
-      code: "PIN_LOCKED",
-      message: "Your account has been temporarily locked for security.",
-      lockedUntil: member.appPinLockedUntil,
-    });
-  }
-
-  // A lock has expired. Keep the failed-attempt count so the next group of
-  // failures moves to the next lock duration.
-  if (member.appPinLockedUntil && member.appPinLockedUntil <= now) {
-    member.appPinLockedUntil = null;
-  }
-
-  const matches = await bcrypt.compare(String(pin), member.appPinHash);
-
-  if (!matches) {
-    const failed = Number(member.appPinFailedAttempts || 0) + 1;
-    member.appPinFailedAttempts = failed;
-
-    let lockMinutes = 0;
-    if (failed % 5 === 0) {
-      if (failed >= 20) lockMinutes = 24 * 60;
-      else if (failed >= 15) lockMinutes = 60;
-      else if (failed >= 10) lockMinutes = 30;
-      else lockMinutes = 10;
-      member.appPinLockedUntil = new Date(Date.now() + lockMinutes * 60 * 1000);
-    } else {
-      member.appPinLockedUntil = null;
+    if (!member?.appPinHash) {
+      return res.status(400).json({
+        code: "PIN_NOT_SET",
+        message: "No app PIN has been set for this account.",
+      });
     }
 
-    const remainingInGroup = 5 - ((failed - 1) % 5);
-    await member.save();
-    return res.status(401).json({
-      code: "INCORRECT_PIN",
-      message:
-        failed >= 20
-          ? "Too many incorrect PIN attempts. Your account is locked for 24 hours."
-          : lockMinutes > 0
-            ? `Too many incorrect PIN attempts. Your account is temporarily locked for ${lockMinutes >= 60 ? `${lockMinutes / 60} hour${lockMinutes === 60 ? "" : "s"}` : `${lockMinutes} minutes`}.`
-            : `Incorrect PIN. ${remainingInGroup} attempt${remainingInGroup === 1 ? "" : "s"} remaining before the next security lock.`,
-      lockedUntil: member.appPinLockedUntil,
-      failedAttempts: failed,
-      lockMinutes,
-    });
+    if (!/^\d{6}$/.test(String(pin || ""))) {
+      return res.status(400).json({
+        message: "PIN must be exactly 6 digits.",
+      });
+    }
+
+    const securityState = getSecurityState(member);
+
+    if (securityState.permanent) {
+      return res.status(403).json({
+        code: "ACCOUNT_SECURITY_LOCKED",
+        message: "Your account has been locked for security after repeated failed PIN or password attempts. Please contact the cooperative to unlock your account.",
+      });
+    }
+
+    if (securityState.locked) {
+      return res.status(429).json({
+        code: "ACCOUNT_TEMPORARILY_LOCKED",
+        message: `Too many incorrect attempts. Please try again in ${Math.ceil((new Date(securityState.lockedUntil).getTime() - Date.now()) / 60000)} minutes.`,
+        lockedUntil: securityState.lockedUntil,
+        securityLockLevel: securityState.level,
+      });
+    }
+
+    const matches = await bcrypt.compare(String(pin), member.appPinHash);
+
+    if (!matches) {
+      const result = await recordSecurityFailure(member);
+
+      if (result.permanent) {
+        await notifyPermanentSecurityLock(member);
+        return res.status(403).json({
+          code: "ACCOUNT_SECURITY_LOCKED",
+          message: "Your account has been locked for security after repeated failed PIN or password attempts. Please contact the cooperative to unlock your account.",
+        });
+      }
+
+      if (result.locked) {
+        return res.status(429).json({
+          code: "ACCOUNT_TEMPORARILY_LOCKED",
+          message: `Too many incorrect attempts. Your account is locked for ${result.lockMinutes} minutes.`,
+          lockedUntil: result.lockedUntil,
+          securityLockLevel: result.level,
+        });
+      }
+
+      return res.status(401).json({
+        code: "INCORRECT_PIN",
+        message: `Incorrect PIN. ${result.remainingAttempts} attempt${result.remainingAttempts === 1 ? "" : "s"} remaining before a temporary lock.`,
+        remainingAttempts: result.remainingAttempts,
+      });
+    }
+
+    await recordSecuritySuccess(member);
+
+    res.json({ valid: true });
+  } catch (err) {
+    console.error("App PIN verification error:", err);
+    res.status(500).json({ message: "Unable to verify your PIN" });
   }
-
-  member.appPinFailedAttempts = 0;
-  member.appPinLockedUntil = null;
-  await member.save();
-
-  res.json({ valid: true });
 });
 
 export default router;

@@ -12,13 +12,16 @@ import { DividendEntry } from "../models/Dividend.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { validatePassword } from "../utils/passwordPolicy.js";
+import {
+  getSecurityState,
+  recordSecurityFailure,
+  recordSecuritySuccess,
+  notifyPermanentSecurityLock,
+} from "../utils/accountSecurity.js";
 
 const router = express.Router();
 
 const APP_AUTO_LOCK_OPTIONS = new Set([0, 60, 300, 600, 900, 1800, 3600]);
-const APP_PIN_MAX_ATTEMPTS = 5;
-const APP_PIN_LOCK_MINUTES = 15;
-
 
 const uploadAvatar = multer({
   storage: multer.memoryStorage(),
@@ -102,7 +105,8 @@ router.patch("/me/security/pin", protect, async (req, res) => {
 });
 
 // POST /api/users/me/security/pin/verify
-// Verifies the app PIN without ever returning the stored hash.
+// Kept aligned with /api/security/pin/verify for clients using the older
+// user-security route. Both endpoints share the same account-level policy.
 router.post("/me/security/pin/verify", protect, async (req, res) => {
   try {
     const pin = String(req.body?.pin || "");
@@ -112,7 +116,7 @@ router.post("/me/security/pin/verify", protect, async (req, res) => {
     }
 
     const user = await User.findById(req.user._id).select(
-      "+appPinHash +appPinFailedAttempts +appPinLockedUntil"
+      "+appPinHash +securityFailedAttempts +securityLockLevel +securityLockedUntil"
     );
 
     if (!user) return res.status(404).json({ message: "User no longer exists" });
@@ -120,43 +124,52 @@ router.post("/me/security/pin/verify", protect, async (req, res) => {
       return res.status(409).json({ message: "No app PIN has been configured." });
     }
 
-    if (user.appPinLockedUntil && user.appPinLockedUntil > new Date()) {
+    const securityState = getSecurityState(user);
+    if (securityState.permanent) {
+      return res.status(403).json({
+        code: "ACCOUNT_SECURITY_LOCKED",
+        message: "Your account has been locked for security after repeated failed PIN or password attempts. Please contact the cooperative to unlock your account.",
+      });
+    }
+    if (securityState.locked) {
       return res.status(429).json({
-        message: "Too many incorrect PIN attempts. Please try again later.",
-        lockedUntil: user.appPinLockedUntil,
+        code: "ACCOUNT_TEMPORARILY_LOCKED",
+        message: `Too many incorrect attempts. Please try again in ${Math.ceil((new Date(securityState.lockedUntil).getTime() - Date.now()) / 60000)} minutes.`,
+        lockedUntil: securityState.lockedUntil,
+        securityLockLevel: securityState.level,
       });
     }
 
     const matches = await bcrypt.compare(pin, user.appPinHash);
-
     if (!matches) {
-      user.appPinFailedAttempts = Number(user.appPinFailedAttempts || 0) + 1;
-
-      if (user.appPinFailedAttempts >= APP_PIN_MAX_ATTEMPTS) {
-        user.appPinFailedAttempts = 0;
-        user.appPinLockedUntil = new Date(
-          Date.now() + APP_PIN_LOCK_MINUTES * 60 * 1000
-        );
+      const result = await recordSecurityFailure(user);
+      if (result.permanent) {
+        await notifyPermanentSecurityLock(user);
+        return res.status(403).json({
+          code: "ACCOUNT_SECURITY_LOCKED",
+          message: "Your account has been locked for security after repeated failed PIN or password attempts. Please contact the cooperative to unlock your account.",
+        });
       }
-
-      await user.save();
-
+      if (result.locked) {
+        return res.status(429).json({
+          code: "ACCOUNT_TEMPORARILY_LOCKED",
+          message: `Too many incorrect attempts. Your account is locked for ${result.lockMinutes} minutes.`,
+          lockedUntil: result.lockedUntil,
+          securityLockLevel: result.level,
+        });
+      }
       return res.status(401).json({
-        message:
-          user.appPinLockedUntil && user.appPinLockedUntil > new Date()
-            ? "Too many incorrect PIN attempts. Please try again later."
-            : "Incorrect PIN. Please try again.",
+        code: "INCORRECT_PIN",
+        message: `Incorrect PIN. ${result.remainingAttempts} attempt${result.remainingAttempts === 1 ? "" : "s"} remaining before a temporary lock.`,
+        remainingAttempts: result.remainingAttempts,
       });
     }
 
-    user.appPinFailedAttempts = 0;
-    user.appPinLockedUntil = null;
-    await user.save();
-
-    res.json({ verified: true });
+    await recordSecuritySuccess(user);
+    res.json({ verified: true, valid: true });
   } catch (err) {
     console.error("App PIN verification error:", err);
-    res.status(500).json({ message: "Unable to verify app PIN" });
+    res.status(500).json({ message: "Unable to verify your PIN" });
   }
 });
 

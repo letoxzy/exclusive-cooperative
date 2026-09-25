@@ -79,21 +79,6 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false,
     },
-    // Consecutive failed app-PIN attempts. This persists across temporary
-    // lockouts so the lock duration increases until a successful PIN login.
-    appPinFailedAttempts: {
-      type: Number,
-      default: 0,
-      min: 0,
-      select: false,
-    },
-    // Server-authoritative lockout timestamp. PIN and biometric unlocks are
-    // both unavailable until this time has passed.
-    appPinLockedUntil: {
-      type: Date,
-      default: null,
-      select: false,
-    },
     autoLockSeconds: {
       type: Number,
       default: 300,
@@ -154,6 +139,43 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       select: false,
+    },
+
+    // Temporary/permanent authentication security escalation shared by
+    // website password login and mobile app PIN verification. The failed
+    // attempt counter is account-level so members cannot bypass the policy
+    // by switching between the website and mobile app.
+    securityFailedAttempts: {
+      type: Number,
+      default: 0,
+      min: 0,
+      select: false,
+    },
+    securityLockLevel: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 2,
+      select: false,
+    },
+    securityLockedUntil: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+    securityLockedPermanently: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    securityLockedAt: {
+      type: Date,
+      default: null,
+    },
+    securityLockReason: {
+      type: String,
+      default: null,
+      trim: true,
     },
 
     // Temporary lock after too many incorrect withdrawal PIN attempts.

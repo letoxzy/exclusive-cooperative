@@ -20,6 +20,7 @@ import { adminOnly } from "../middleware/adminMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
+import { resetAccountSecurityLock } from "../utils/accountSecurity.js";
 import { LOCKED_SAVINGS_PERCENTAGE, WITHDRAWABLE_PERCENTAGE } from "../utils/contributionRules.js";
 import {
   compareIdentity,
@@ -62,7 +63,7 @@ router.use(protect, adminOnly);
 router.get("/users", async (req, res) => {
   try {
     const users = await User.find()
-      .select("-password")
+      .select("-password +securityLockedUntil +securityLockLevel +securityLockedPermanently")
       .sort("-createdAt");
 
     res.json(users);
@@ -134,6 +135,66 @@ router.get("/security-alerts", async (req, res) => {
     res.json(alerts);
   } catch (err) {
     res.status(500).json({ message: "Failed to load security alerts." });
+  }
+});
+
+/*
+  ============================
+  SECURITY LOCK / UNLOCK
+  ============================
+*/
+
+// PATCH /api/admin/users/:id/security-unlock
+// Clears an automatic permanent security lock and resets the account's
+// authentication escalation. This does not change the separate manual
+// isBlocked status.
+router.patch("/users/:id/security-unlock", async (req, res) => {
+  try {
+    const member = await User.findById(req.params.id);
+
+    if (!member) {
+      return res.status(404).json({ message: "Member account not found." });
+    }
+
+    if (member.role === "admin") {
+      return res.status(403).json({
+        message: "Administrator security accounts cannot be unlocked here.",
+      });
+    }
+
+    if (!member.securityLockedPermanently) {
+      return res.status(400).json({
+        message: "This account does not have a permanent security lock.",
+      });
+    }
+
+    await resetAccountSecurityLock(member);
+
+    try {
+      await createNotificationAndPush({
+        user: member._id,
+        type: "security",
+        title: "Account Unlocked",
+        message: "An administrator has unlocked your account. You can now sign in again. If you forgot your password, you can use Forgot Password.",
+      });
+    } catch (notificationError) {
+      console.error("Security unlock notification failed:", notificationError);
+    }
+
+    return res.json({
+      _id: member._id,
+      fullName: member.fullName,
+      email: member.email,
+      isBlocked: member.isBlocked,
+      securityLockedPermanently: member.securityLockedPermanently,
+      securityLockLevel: member.securityLockLevel,
+      securityLockedAt: member.securityLockedAt,
+    });
+  } catch (err) {
+    console.error("Security unlock error:", err);
+    return res.status(500).json({
+      message: err.message || "Failed to unlock account security.",
+    });
   }
 });
 
@@ -1261,7 +1322,6 @@ router.patch(
               $in: [
                 "approved",
                 "active",
-                "overdue",
               ],
             },
           });
@@ -1444,12 +1504,6 @@ router.patch(
       loan.amountPaid = 0;
       loan.outstandingBalance =
         loan.totalRepayment;
-      loan.overdueChargeTotal = 0;
-      loan.overdueAt = null;
-      loan.nextOverdueChargeAt = null;
-      loan.repaymentReminder3SentAt = null;
-      loan.repaymentReminder1SentAt = null;
-      loan.repaymentDueTodaySentAt = null;
 
       // The approved loan becomes available as a separate loan-funds balance.
       // This is NOT added to savingsBalance and is reduced only when the
@@ -1670,11 +1724,6 @@ router.patch(
 
         loan.completedDate =
           new Date();
-        loan.nextOverdueChargeAt = null;
-      } else if (loan.status === "overdue") {
-        // A partial repayment does not erase overdue history. Keep the loan
-        // overdue and preserve the next 7-day charge date.
-        loan.status = "overdue";
       }
 
       await loan.save();

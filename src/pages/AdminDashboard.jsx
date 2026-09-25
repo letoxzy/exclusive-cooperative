@@ -539,6 +539,23 @@ function AdminDashboard() {
         setActionModal(null);
       }
 
+      if (actionModal.type === "security-unlock") {
+        const updated = await request(
+          `/admin/users/${actionModal.member._id}/security-unlock`,
+          {
+            method: "PATCH",
+            token: user.token,
+          },
+        );
+
+        setMembers((prev) =>
+          prev.map((item) =>
+            item._id === updated._id ? { ...item, ...updated } : item,
+          ),
+        );
+        setActionModal(null);
+      }
+
       if (actionModal.type === "delete-member") {
         setDeletingMemberId(actionModal.member._id);
 
@@ -1770,6 +1787,19 @@ function AdminDashboard() {
     );
   };
 
+  const handleSecurityUnlock = (member) => {
+    if (!member?._id || member.role === "admin") return;
+
+    setActionModal({
+      type: "security-unlock",
+      member,
+      title: "Unlock Security-Locked Account",
+      description: `${member.fullName || member.email} reached the maximum number of failed authentication attempts. Unlocking will reset the security escalation and allow the member to sign in again.`,
+      confirmText: "Unlock Account",
+      danger: false,
+    });
+  };
+
   const handleBlockToggle = (member) => {
     const blocked = Boolean(member.isBlocked);
     setActionModal({
@@ -1893,9 +1923,20 @@ function AdminDashboard() {
 
                     <td>
                       <span
-                        className={`status-badge ${m.isBlocked ? "rejected" : "approved"}`}
+                        className={`status-badge ${
+                          m.securityLockedPermanently || m.isBlocked || m.securityLockedUntil
+                            ? "rejected"
+                            : "approved"
+                        }`}
                       >
-                        {m.isBlocked ? "Blocked" : "Active"}
+                        {m.securityLockedPermanently
+                          ? "Security Locked"
+                          : m.isBlocked
+                            ? "Blocked"
+                            : m.securityLockedUntil &&
+                                new Date(m.securityLockedUntil) > new Date()
+                              ? `Locked · ${m.securityLockLevel === 1 ? "10 min" : "30 min"}`
+                              : "Active"}
                       </span>
                     </td>
 
@@ -1906,20 +1947,31 @@ function AdminDashboard() {
                         <span className="muted">Protected</span>
                       ) : (
                         <div className="member-action-stack">
-                          <button
-                            type="button"
-                            className={
-                              m.isBlocked ? "admin-secondary-btn" : "reject-btn"
-                            }
-                            onClick={() => handleBlockToggle(m)}
-                            title={
-                              m.isBlocked
-                                ? `Unblock ${m.fullName || "member"}`
-                                : `Block ${m.fullName || "member"}`
-                            }
-                          >
-                            {m.isBlocked ? "Unblock Account" : "Block Account"}
-                          </button>
+                          {m.securityLockedPermanently ? (
+                            <button
+                              type="button"
+                              className="admin-secondary-btn"
+                              onClick={() => handleSecurityUnlock(m)}
+                              title={`Unlock security lock for ${m.fullName || "member"}`}
+                            >
+                              Unlock Account
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className={
+                                m.isBlocked ? "admin-secondary-btn" : "reject-btn"
+                              }
+                              onClick={() => handleBlockToggle(m)}
+                              title={
+                                m.isBlocked
+                                  ? `Unblock ${m.fullName || "member"}`
+                                  : `Block ${m.fullName || "member"}`
+                              }
+                            >
+                              {m.isBlocked ? "Unblock Account" : "Block Account"}
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="reject-btn"

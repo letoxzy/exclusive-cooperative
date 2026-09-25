@@ -152,21 +152,26 @@ router.post("/pin/verify", protect, async (req, res) => {
     member.appPinFailedAttempts = failed;
 
     let lockMinutes = 0;
-    if (failed >= 10) lockMinutes = 24 * 60;
-    else if (failed >= 7) lockMinutes = 60;
-    else if (failed >= 4) lockMinutes = 30;
-    else if (failed >= 1) lockMinutes = 10;
+    if (failed % 5 === 0) {
+      if (failed >= 20) lockMinutes = 24 * 60;
+      else if (failed >= 15) lockMinutes = 60;
+      else if (failed >= 10) lockMinutes = 30;
+      else lockMinutes = 10;
+      member.appPinLockedUntil = new Date(Date.now() + lockMinutes * 60 * 1000);
+    } else {
+      member.appPinLockedUntil = null;
+    }
 
-    member.appPinLockedUntil = new Date(Date.now() + lockMinutes * 60 * 1000);
+    const remainingInGroup = 5 - ((failed - 1) % 5);
     await member.save();
-
-    const remainingInGroup = 3 - ((failed - 1) % 3);
     return res.status(401).json({
       code: "INCORRECT_PIN",
       message:
-        failed >= 10
+        failed >= 20
           ? "Too many incorrect PIN attempts. Your account is locked for 24 hours."
-          : `Incorrect PIN. ${remainingInGroup} attempt${remainingInGroup === 1 ? "" : "s"} remaining before the next security lock.`,
+          : lockMinutes > 0
+            ? `Too many incorrect PIN attempts. Your account is temporarily locked for ${lockMinutes >= 60 ? `${lockMinutes / 60} hour${lockMinutes === 60 ? "" : "s"}` : `${lockMinutes} minutes`}.`
+            : `Incorrect PIN. ${remainingInGroup} attempt${remainingInGroup === 1 ? "" : "s"} remaining before the next security lock.`,
       lockedUntil: member.appPinLockedUntil,
       failedAttempts: failed,
       lockMinutes,

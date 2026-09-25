@@ -17,7 +17,13 @@ async function request(path, { method = "GET", body, token, isFormData } = {}) {
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message || "Something went wrong");
+  if (!res.ok) {
+    const error = new Error(data.message || "Something went wrong");
+    error.code = data.code;
+    error.lockedUntil = data.lockedUntil;
+    error.status = res.status;
+    throw error;
+  }
   return data;
 }
 

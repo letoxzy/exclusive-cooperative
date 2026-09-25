@@ -180,13 +180,66 @@ router.post("/reset-password/:token", async (req, res) => {
 });
 
 // POST /api/auth/login
+// Shared website/mobile password security: 5 failed attempts per lock tier.
+// Lock durations: 10 minutes -> 30 minutes -> 1 hour -> 24 hours.
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
+    const user = await User.findOne({ email }).select(
+      "+password +loginFailedAttempts +loginLockedUntil +appPinHash",
+    );
 
-    if (!user || !(await user.matchPassword(password))) {
+    if (!user) {
       return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    const now = new Date();
+    if (user.loginLockedUntil && user.loginLockedUntil > now) {
+      return res.status(429).json({
+        code: "LOGIN_LOCKED",
+        message: "Your account has been temporarily locked for security.",
+        lockedUntil: user.loginLockedUntil,
+        failedAttempts: Number(user.loginFailedAttempts || 0),
+      });
+    }
+
+    if (user.loginLockedUntil && user.loginLockedUntil <= now) {
+      user.loginLockedUntil = null;
+    }
+
+    const matches = await user.matchPassword(password);
+
+    if (!matches) {
+      const failed = Number(user.loginFailedAttempts || 0) + 1;
+      user.loginFailedAttempts = failed;
+
+      let lockMinutes = 0;
+      if (failed % 5 === 0) {
+        if (failed >= 20) lockMinutes = 24 * 60;
+        else if (failed >= 15) lockMinutes = 60;
+        else if (failed >= 10) lockMinutes = 30;
+        else lockMinutes = 10;
+        user.loginLockedUntil = new Date(Date.now() + lockMinutes * 60 * 1000);
+      } else {
+        user.loginLockedUntil = null;
+      }
+
+      const remainingInGroup = 5 - ((failed - 1) % 5);
+      await user.save();
+
+      return res.status(401).json({
+        code: "INCORRECT_LOGIN",
+        message:
+          failed >= 20
+            ? "Too many incorrect login attempts. Your account is locked for 24 hours."
+            : lockMinutes > 0
+              ? `Too many incorrect login attempts. Your account is temporarily locked for ${lockMinutes >= 60 ? `${lockMinutes / 60} hour${lockMinutes === 60 ? "" : "s"}` : `${lockMinutes} minutes`}.`
+              : `Invalid email or password. ${remainingInGroup} attempt${remainingInGroup === 1 ? "" : "s"} remaining before the next security lock.`,
+        lockedUntil: user.loginLockedUntil,
+        failedAttempts: failed,
+        lockMinutes,
+      });
     }
 
     if (user.isBlocked) {
@@ -195,6 +248,10 @@ router.post("/login", async (req, res) => {
         message: "Your account has been blocked by an administrator. Please contact the cooperative.",
       });
     }
+
+    user.loginFailedAttempts = 0;
+    user.loginLockedUntil = null;
+    await user.save();
 
     res.json({
       _id: user._id,

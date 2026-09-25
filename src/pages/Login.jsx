@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -9,13 +9,48 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [lockedUntil, setLockedUntil] = useState(null);
+  const [lockRemaining, setLockRemaining] = useState(0);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const update = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  useEffect(() => {
+    if (!lockedUntil) {
+      setLockRemaining(0);
+      return;
+    }
+
+    const update = () => {
+      const remaining = Math.max(
+        0,
+        new Date(lockedUntil).getTime() - Date.now(),
+      );
+      setLockRemaining(remaining);
+      if (remaining === 0) {
+        setLockedUntil(null);
+        setError("Your security lock has expired. You can try again now.");
+      }
+    };
+
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [lockedUntil]);
+
+  const formatLockRemaining = (milliseconds) => {
+    const totalSeconds = Math.ceil(milliseconds / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+    return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  };
+
   const handleSubmit = async (e) => {
+    if (lockRemaining > 0) return;
     e.preventDefault();
     setError("");
     setLoading(true);
@@ -30,7 +65,12 @@ function Login() {
 
       navigate(data.role === "admin" ? "/admin" : "/dashboard");
     } catch (err) {
-      setError(err.message);
+      if (err?.code === "LOGIN_LOCKED" && err?.lockedUntil) {
+        setLockedUntil(err.lockedUntil);
+        setError("Your account has been temporarily locked for security.");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -86,8 +126,23 @@ function Login() {
 
           {error && <p className="form-error">{error}</p>}
 
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? "Logging in..." : "Log In"}
+          {lockRemaining > 0 && (
+            <p className="form-error">
+              Account temporarily locked. Try again in{" "}
+              {formatLockRemaining(lockRemaining)}.
+            </p>
+          )}
+
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={loading || lockRemaining > 0}
+          >
+            {lockRemaining > 0
+              ? `Try again in ${formatLockRemaining(lockRemaining)}`
+              : loading
+                ? "Logging in..."
+                : "Log In"}
           </button>
         </form>
 

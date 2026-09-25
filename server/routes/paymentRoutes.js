@@ -5,6 +5,7 @@ import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { sendPushNotification } from "../utils/pushNotification.js";
+import { getContributionStatus } from "../utils/contributionRules.js";
 
 const router = express.Router();
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -32,6 +33,25 @@ function sameCalendarMonth(a, b) {
     a.getMonth() === b.getMonth()
   );
 }
+
+// GET /api/payments/contribution-status
+// Returns the member's current contribution window/status for the mobile app.
+router.get(
+  "/contribution-status",
+  protect,
+  requireApprovedMember,
+  async (req, res) => {
+    try {
+      const status = await getContributionStatus(req.user);
+      return res.json(status);
+    } catch (err) {
+      console.error("Get contribution status:", err);
+      return res.status(500).json({
+        message: "Could not load contribution status.",
+      });
+    }
+  },
+);
 
 // POST /api/payments/paystack/initialize
 // Starts a real Paystack transaction and returns the checkout URL.

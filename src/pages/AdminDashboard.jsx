@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
+import { getPasswordChecks, isStrongPassword } from "../utils/passwordPolicy";
 
 import "../styles/admin.css";
 import "../styles/admin-components.css";
@@ -21,14 +22,13 @@ import AdminActionModal from "../components/admin/AdminActionModal";
 import GalleryManagement from "../components/admin/GalleryManagement";
 import KycReviewModal from "../components/admin/KycReviewModal";
 
-
 const statusLabel = (value) =>
   String(value || "not started")
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 function AdminDashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
 
   const [activeSection, setActiveSection] = useState("overview");
 
@@ -740,10 +740,7 @@ function AdminDashboard() {
       // Refresh both the repayment queue and loan records immediately.
       // This keeps the admin dashboard's repayment status, amount paid,
       // outstanding balance, and loan status in sync after confirmation.
-      await Promise.all([
-        loadLoanRepayments(),
-        loadLoans(),
-      ]);
+      await Promise.all([loadLoanRepayments(), loadLoans()]);
     } catch (err) {
       setError(err.message);
     }
@@ -1937,7 +1934,11 @@ function AdminDashboard() {
               )}
             </div>
 
-            <div className="admin-filter-group" role="group" aria-label="Member filters">
+            <div
+              className="admin-filter-group"
+              role="group"
+              aria-label="Member filters"
+            >
               {[
                 ["all", "All"],
                 ["active", "Active"],
@@ -1970,152 +1971,158 @@ function AdminDashboard() {
               <span>Try a different search term or filter.</span>
             </div>
           ) : (
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Membership Type</th>
-                  <th>Savings Balance</th>
-                  <th>Shareholding</th>
-                  <th>Loan Eligibility</th>
-                  <th>Account Setup</th>
-                  <th>Account Status</th>
-                  <th>Joined</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Membership Type</th>
+                    <th>Savings Balance</th>
+                    <th>Shareholding</th>
+                    <th>Loan Eligibility</th>
+                    <th>Account Setup</th>
+                    <th>Account Status</th>
+                    <th>Joined</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
 
-              <tbody>
-                {filteredMembers.map((m) => (
-                  <tr key={m._id}>
-                    <td>{m.fullName}</td>
-                    <td>{m.email}</td>
+                <tbody>
+                  {filteredMembers.map((m) => (
+                    <tr key={m._id}>
+                      <td>{m.fullName}</td>
+                      <td>{m.email}</td>
 
-                    <td>
-                      <span
-                        className={`status-badge ${
-                          m.role === "admin" ? "approved" : "pending"
-                        }`}
-                      >
-                        {m.role}
-                      </span>
-                    </td>
-
-                    <td>
-                      {m.membershipType ? (
-                        <span className="loan-type-badge">
-                          {m.membershipType === "interest-free"
-                            ? "Interest-Free"
-                            : "Interest-Bearing"}
-                        </span>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-
-                    <td>₦{Number(m.savingsBalance || 0).toLocaleString()}</td>
-
-                    <td>
-                      <div className="member-shareholding-cell">
-                        <span>
-                          ₦{Number(m.shareholding || 0).toLocaleString()}
-                        </span>
-                        <button
-                          type="button"
-                          className="admin-secondary-btn member-shareholding-btn"
-                          onClick={() => handleShareholdingUpdate(m)}
+                      <td>
+                        <span
+                          className={`status-badge ${
+                            m.role === "admin" ? "approved" : "pending"
+                          }`}
                         >
-                          Update
-                        </button>
-                      </div>
-                    </td>
+                          {m.role}
+                        </span>
+                      </td>
 
-                    <td>
-                      ₦{(Number(m.savingsBalance || 0) * 2).toLocaleString()}
-                    </td>
+                      <td>
+                        {m.membershipType ? (
+                          <span className="loan-type-badge">
+                            {m.membershipType === "interest-free"
+                              ? "Interest-Free"
+                              : "Interest-Bearing"}
+                          </span>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
 
-                    <td>
-                      <span
-                        className={`status-badge ${m.mustChangePassword ? "pending" : "approved"}`}
-                      >
-                        {m.mustChangePassword ? "Password Pending" : "Ready"}
-                      </span>
-                    </td>
+                      <td>₦{Number(m.savingsBalance || 0).toLocaleString()}</td>
 
-                    <td>
-                      <span
-                        className={`status-badge ${
-                          m.securityLockedPermanently || m.isBlocked || m.securityLockedUntil
-                            ? "rejected"
-                            : "approved"
-                        }`}
-                      >
-                        {m.securityLockedPermanently
-                          ? "Security Locked"
-                          : m.isBlocked
-                            ? "Blocked"
-                            : m.securityLockedUntil &&
-                                new Date(m.securityLockedUntil) > new Date()
-                              ? `Locked · ${m.securityLockLevel === 1 ? "10 min" : "30 min"}`
-                              : "Active"}
-                      </span>
-                    </td>
-
-                    <td>{new Date(m.createdAt).toLocaleDateString()}</td>
-
-                    <td className="actions-cell">
-                      {m.role === "admin" ? (
-                        <span className="muted">Protected</span>
-                      ) : (
-                        <div className="member-action-stack">
-                          {m.securityLockedPermanently ? (
-                            <button
-                              type="button"
-                              className="admin-secondary-btn"
-                              onClick={() => handleSecurityUnlock(m)}
-                              title={`Unlock security lock for ${m.fullName || "member"}`}
-                            >
-                              Unlock Account
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className={
-                                m.isBlocked ? "admin-secondary-btn" : "reject-btn"
-                              }
-                              onClick={() => handleBlockToggle(m)}
-                              title={
-                                m.isBlocked
-                                  ? `Unblock ${m.fullName || "member"}`
-                                  : `Block ${m.fullName || "member"}`
-                              }
-                            >
-                              {m.isBlocked ? "Unblock Account" : "Block Account"}
-                            </button>
-                          )}
+                      <td>
+                        <div className="member-shareholding-cell">
+                          <span>
+                            ₦{Number(m.shareholding || 0).toLocaleString()}
+                          </span>
                           <button
                             type="button"
-                            className="reject-btn"
-                            onClick={() => handleDeleteMember(m)}
-                            disabled={deletingMemberId === m._id}
-                            title={`Delete ${m.fullName || "member"}`}
+                            className="admin-secondary-btn member-shareholding-btn"
+                            onClick={() => handleShareholdingUpdate(m)}
                           >
-                            <FaTrash />
-                            {deletingMemberId === m._id
-                              ? "Deleting..."
-                              : "Delete Account"}
+                            Update
                           </button>
                         </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </td>
+
+                      <td>
+                        ₦{(Number(m.savingsBalance || 0) * 2).toLocaleString()}
+                      </td>
+
+                      <td>
+                        <span
+                          className={`status-badge ${m.mustChangePassword ? "pending" : "approved"}`}
+                        >
+                          {m.mustChangePassword ? "Password Pending" : "Ready"}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span
+                          className={`status-badge ${
+                            m.securityLockedPermanently ||
+                            m.isBlocked ||
+                            m.securityLockedUntil
+                              ? "rejected"
+                              : "approved"
+                          }`}
+                        >
+                          {m.securityLockedPermanently
+                            ? "Security Locked"
+                            : m.isBlocked
+                              ? "Blocked"
+                              : m.securityLockedUntil &&
+                                  new Date(m.securityLockedUntil) > new Date()
+                                ? `Locked · ${m.securityLockLevel === 1 ? "10 min" : "30 min"}`
+                                : "Active"}
+                        </span>
+                      </td>
+
+                      <td>{new Date(m.createdAt).toLocaleDateString()}</td>
+
+                      <td className="actions-cell">
+                        {m.role === "admin" ? (
+                          <span className="muted">Protected</span>
+                        ) : (
+                          <div className="member-action-stack">
+                            {m.securityLockedPermanently ? (
+                              <button
+                                type="button"
+                                className="admin-secondary-btn"
+                                onClick={() => handleSecurityUnlock(m)}
+                                title={`Unlock security lock for ${m.fullName || "member"}`}
+                              >
+                                Unlock Account
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className={
+                                  m.isBlocked
+                                    ? "admin-secondary-btn"
+                                    : "reject-btn"
+                                }
+                                onClick={() => handleBlockToggle(m)}
+                                title={
+                                  m.isBlocked
+                                    ? `Unblock ${m.fullName || "member"}`
+                                    : `Block ${m.fullName || "member"}`
+                                }
+                              >
+                                {m.isBlocked
+                                  ? "Unblock Account"
+                                  : "Block Account"}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="reject-btn"
+                              onClick={() => handleDeleteMember(m)}
+                              disabled={deletingMemberId === m._id}
+                              title={`Delete ${m.fullName || "member"}`}
+                            >
+                              <FaTrash />
+                              {deletingMemberId === m._id
+                                ? "Deleting..."
+                                : "Delete Account"}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       </>
@@ -2162,7 +2169,11 @@ function AdminDashboard() {
               )}
             </div>
 
-            <div className="admin-filter-group" role="group" aria-label="Application filters">
+            <div
+              className="admin-filter-group"
+              role="group"
+              aria-label="Application filters"
+            >
               {[
                 ["all", "All"],
                 ["pending", "Pending"],
@@ -2305,9 +2316,15 @@ function AdminDashboard() {
 
     const counts = {
       review: loanEligibilityApplications.filter(isReady).length,
-      progress: loanEligibilityApplications.filter((item) => item.status === "draft").length,
-      approved: loanEligibilityApplications.filter((item) => item.status === "approved").length,
-      rejected: loanEligibilityApplications.filter((item) => item.status === "rejected").length,
+      progress: loanEligibilityApplications.filter(
+        (item) => item.status === "draft",
+      ).length,
+      approved: loanEligibilityApplications.filter(
+        (item) => item.status === "approved",
+      ).length,
+      rejected: loanEligibilityApplications.filter(
+        (item) => item.status === "rejected",
+      ).length,
       all: loanEligibilityApplications.length,
     };
 
@@ -2335,7 +2352,8 @@ function AdminDashboard() {
             <h1>Full Loan Applications</h1>
             <p className="admin-subtitle">
               Review each member's identity verification, compare it with their
-              cooperative record, then approve or reject before they can request a loan.
+              cooperative record, then approve or reject before they can request
+              a loan.
             </p>
           </div>
           {counts.review > 0 && (
@@ -2370,7 +2388,9 @@ function AdminDashboard() {
                   ? "Nothing waiting for review"
                   : "No applications here"}
               </strong>
-              <span>Completed member verifications will appear here automatically.</span>
+              <span>
+                Completed member verifications will appear here automatically.
+              </span>
             </div>
           ) : (
             <div className="admin-table-wrap full-loan-table-wrap">
@@ -2388,24 +2408,33 @@ function AdminDashboard() {
                 </thead>
                 <tbody>
                   {visible.map((application) => {
-                    const finished = application.providerVerificationStatus === "completed";
-                    const matched = application.identityMatchStatus === "matched";
-                    const mismatch = application.identityMatchStatus === "mismatch";
+                    const finished =
+                      application.providerVerificationStatus === "completed";
+                    const matched =
+                      application.identityMatchStatus === "matched";
+                    const mismatch =
+                      application.identityMatchStatus === "mismatch";
 
                     return (
                       <tr key={application._id}>
                         <td>
                           <strong>{application.user?.fullName || "—"}</strong>
                           <br />
-                          <span className="muted">{application.user?.email || "—"}</span>
+                          <span className="muted">
+                            {application.user?.email || "—"}
+                          </span>
                         </td>
                         <td>
-                          <span className={`verification-mini ${finished ? "verified" : "pending"}`}>
+                          <span
+                            className={`verification-mini ${finished ? "verified" : "pending"}`}
+                          >
                             {finished ? "Completed" : "In progress"}
                           </span>
                           <br />
                           <span className="muted">
-                            {statusLabel(application.providerVerificationStatus)}
+                            {statusLabel(
+                              application.providerVerificationStatus,
+                            )}
                           </span>
                         </td>
                         <td>
@@ -2418,12 +2447,16 @@ function AdminDashboard() {
                                   : "verification-text-pending"
                             }
                           >
-                            {mismatch ? "Needs checking" : statusLabel(application.identityMatchStatus)}
+                            {mismatch
+                              ? "Needs checking"
+                              : statusLabel(application.identityMatchStatus)}
                           </span>
                           {application.bvnLast4 && (
                             <>
                               <br />
-                              <span className="muted">BVN •••••••{application.bvnLast4}</span>
+                              <span className="muted">
+                                BVN •••••••{application.bvnLast4}
+                              </span>
                             </>
                           )}
                         </td>
@@ -2439,21 +2472,35 @@ function AdminDashboard() {
                           </span>
                         </td>
                         <td>
-                          <span className={`status-badge ${application.status}`}>
-                            {application.status === "draft" ? "In progress" : application.status}
+                          <span
+                            className={`status-badge ${application.status}`}
+                          >
+                            {application.status === "draft"
+                              ? "In progress"
+                              : application.status}
                           </span>
                         </td>
                         <td>
                           {application.submittedDate
-                            ? new Date(application.submittedDate).toLocaleDateString()
+                            ? new Date(
+                                application.submittedDate,
+                              ).toLocaleDateString()
                             : "—"}
                         </td>
                         <td className="actions-cell full-loan-actions-cell">
                           <button
-                            className={application.status === "pending" ? "approve-btn" : "view-btn"}
-                            onClick={() => setReviewEligibilityId(application._id)}
+                            className={
+                              application.status === "pending"
+                                ? "approve-btn"
+                                : "view-btn"
+                            }
+                            onClick={() =>
+                              setReviewEligibilityId(application._id)
+                            }
                           >
-                            {application.status === "pending" ? "Review" : "View"}
+                            {application.status === "pending"
+                              ? "Review"
+                              : "View"}
                           </button>
                         </td>
                       </tr>
@@ -2858,6 +2905,114 @@ function AdminDashboard() {
      SETTINGS
   ================================= */
 
+  /* ================================
+     SETTINGS: ACCOUNT DETAILS + PASSWORD
+  ================================= */
+
+  const [settingsName, setSettingsName] = useState(user?.fullName || "");
+  const [savingName, setSavingName] = useState(false);
+  const [nameMessage, setNameMessage] = useState(null); // { type: "success" | "error", text }
+  // Tracks the value settingsName was last synced from, so a fresh user.fullName
+  // (e.g. after refreshUser()) updates the field without fighting active typing.
+  const [syncedFullName, setSyncedFullName] = useState(user?.fullName || "");
+
+  if (user?.fullName !== undefined && user.fullName !== syncedFullName) {
+    setSyncedFullName(user.fullName);
+    setSettingsName(user.fullName);
+  }
+
+  const saveAdminName = async (event) => {
+    event.preventDefault();
+    const trimmed = settingsName.trim();
+
+    if (!trimmed) {
+      setNameMessage({ type: "error", text: "Name cannot be empty." });
+      return;
+    }
+
+    setSavingName(true);
+    setNameMessage(null);
+
+    try {
+      await request("/users/me", {
+        method: "PATCH",
+        token: user.token,
+        body: { fullName: trimmed },
+      });
+      await refreshUser();
+      setNameMessage({ type: "success", text: "Your name has been updated." });
+    } catch (err) {
+      setNameMessage({ type: "error", text: err.message });
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState(null);
+
+  const passwordChecks = getPasswordChecks(passwordForm.newPassword);
+  const newPasswordStrong = isStrongPassword(passwordForm.newPassword);
+
+  const savePassword = async (event) => {
+    event.preventDefault();
+    setPasswordMessage(null);
+
+    if (!passwordForm.currentPassword) {
+      setPasswordMessage({
+        type: "error",
+        text: "Enter your current password.",
+      });
+      return;
+    }
+    if (!newPasswordStrong) {
+      setPasswordMessage({
+        type: "error",
+        text: "Your new password must be at least 8 characters and include uppercase and lowercase letters, a number, and a special character.",
+      });
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordMessage({
+        type: "error",
+        text: "New passwords do not match.",
+      });
+      return;
+    }
+
+    setSavingPassword(true);
+
+    try {
+      await request("/users/me/password", {
+        method: "PATCH",
+        token: user.token,
+        body: {
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        },
+      });
+      setPasswordMessage({
+        type: "success",
+        text: "Your password has been updated.",
+      });
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (err) {
+      setPasswordMessage({ type: "error", text: err.message });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   const renderSettings = () => {
     return (
       <>
@@ -2866,11 +3021,13 @@ function AdminDashboard() {
             <p className="eyebrow">Administration</p>
             <h1>Settings</h1>
             <p className="admin-subtitle">
-              Manage administrator and cooperative configuration.
+              Manage your administrator account and see the cooperative's
+              current configuration.
             </p>
           </div>
         </div>
 
+        {/* ACCOUNT INFORMATION — name is editable, email/role are fixed */}
         <section className="admin-card">
           <div className="admin-card-header">
             <div>
@@ -2879,39 +3036,201 @@ function AdminDashboard() {
             </div>
           </div>
 
-          <div className="admin-mini-stat">
-            <span>Name</span>
-            <strong>{user?.fullName || "—"}</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Email</span>
-            <strong>{user?.email || "—"}</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Role</span>
-            <strong>{user?.role || "Administrator"}</strong>
-          </div>
+          <form className="admin-settings-form" onSubmit={saveAdminName}>
+            {nameMessage && (
+              <div
+                className={
+                  nameMessage.type === "error" ? "form-error" : "form-success"
+                }
+              >
+                {nameMessage.text}
+              </div>
+            )}
+
+            <div className="admin-form-grid">
+              <label>
+                Full name
+                <input
+                  type="text"
+                  value={settingsName}
+                  onChange={(e) => setSettingsName(e.target.value)}
+                  placeholder="Your full name"
+                  disabled={savingName}
+                />
+              </label>
+
+              <label>
+                Email address
+                <input type="email" value={user?.email || ""} disabled />
+              </label>
+            </div>
+
+            <div className="admin-mini-stat">
+              <span>Role</span>
+              <strong style={{ textTransform: "capitalize" }}>
+                {user?.role || "Administrator"}
+              </strong>
+            </div>
+
+            <button
+              type="submit"
+              className="update-btn"
+              disabled={
+                savingName || settingsName.trim() === (user?.fullName || "")
+              }
+              style={{ marginTop: 16 }}
+            >
+              {savingName ? "Saving…" : "Save name"}
+            </button>
+          </form>
+
+          <p className="admin-settings-footnote">
+            Your email address identifies your admin account and can't be
+            changed here. Contact another administrator if it needs updating.
+          </p>
         </section>
 
+        {/* CHANGE PASSWORD */}
         <section className="admin-card">
           <div className="admin-card-header">
             <div>
-              <p className="eyebrow">System</p>
-              <h2>Current Dashboard Status</h2>
+              <p className="eyebrow">Security</p>
+              <h2>Change Password</h2>
             </div>
           </div>
 
+          <form className="admin-settings-form" onSubmit={savePassword}>
+            {passwordMessage && (
+              <div
+                className={
+                  passwordMessage.type === "error"
+                    ? "form-error"
+                    : "form-success"
+                }
+              >
+                {passwordMessage.text}
+              </div>
+            )}
+
+            <div className="admin-form-grid">
+              <label className="admin-form-full">
+                Current password
+                <input
+                  type={showPasswords ? "text" : "password"}
+                  value={passwordForm.currentPassword}
+                  onChange={(e) =>
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      currentPassword: e.target.value,
+                    }))
+                  }
+                  autoComplete="current-password"
+                  disabled={savingPassword}
+                />
+              </label>
+
+              <label>
+                New password
+                <input
+                  type={showPasswords ? "text" : "password"}
+                  value={passwordForm.newPassword}
+                  onChange={(e) =>
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      newPassword: e.target.value,
+                    }))
+                  }
+                  autoComplete="new-password"
+                  disabled={savingPassword}
+                />
+              </label>
+
+              <label>
+                Confirm new password
+                <input
+                  type={showPasswords ? "text" : "password"}
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) =>
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      confirmPassword: e.target.value,
+                    }))
+                  }
+                  autoComplete="new-password"
+                  disabled={savingPassword}
+                />
+              </label>
+            </div>
+
+            <label className="admin-settings-checkbox">
+              <input
+                type="checkbox"
+                checked={showPasswords}
+                onChange={(e) => setShowPasswords(e.target.checked)}
+              />
+              Show passwords
+            </label>
+
+            {passwordForm.newPassword && (
+              <ul className="admin-password-checklist">
+                <li className={passwordChecks.length ? "met" : ""}>
+                  At least 8 characters
+                </li>
+                <li className={passwordChecks.upperLower ? "met" : ""}>
+                  Uppercase and lowercase letters
+                </li>
+                <li className={passwordChecks.number ? "met" : ""}>A number</li>
+                <li className={passwordChecks.special ? "met" : ""}>
+                  A special character
+                </li>
+              </ul>
+            )}
+
+            <button
+              type="submit"
+              className="update-btn"
+              disabled={savingPassword}
+              style={{ marginTop: 4 }}
+            >
+              {savingPassword ? "Saving…" : "Update password"}
+            </button>
+          </form>
+        </section>
+
+        {/* COOPERATIVE INFORMATION — reference only; these values are fixed
+            in the app today rather than editable from here. */}
+        <section className="admin-card">
+          <div className="admin-card-header">
+            <div>
+              <p className="eyebrow">Cooperative</p>
+              <h2>Cooperative Configuration</h2>
+            </div>
+          </div>
+
+          <div className="admin-settings-note">
+            <strong>These values are fixed in the app for now</strong>
+            <p>
+              They're shown here for reference. Changing them requires a
+              developer to update the code — there's no option to edit them from
+              this page yet.
+            </p>
+          </div>
+
           <div className="admin-mini-stat">
-            <span>Members loaded</span>
-            <strong>{members.length}</strong>
+            <span>Loan eligibility multiplier</span>
+            <strong>2× current savings balance</strong>
           </div>
           <div className="admin-mini-stat">
-            <span>Loan records loaded</span>
-            <strong>{loans.length}</strong>
+            <span>Repayment account name</span>
+            <strong>Exclusive Cooperative Multipurpose Society Limited</strong>
           </div>
           <div className="admin-mini-stat">
-            <span>Dividend distributions loaded</span>
-            <strong>{dividends.length}</strong>
+            <span>Repayment bank</span>
+            <strong>UBA</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Repayment account number</span>
+            <strong>0123456789</strong>
           </div>
         </section>
       </>

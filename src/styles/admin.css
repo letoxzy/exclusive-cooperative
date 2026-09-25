@@ -556,6 +556,21 @@
   margin-bottom: 20px;
 }
 
+
+.form-success {
+  color: #067647;
+
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+  border-radius: 8px;
+
+  padding: 12px 14px;
+
+  font-size: 13px;
+
+  margin-bottom: 20px;
+}
+
 .admin-error {
   margin-bottom: 20px;
 }
@@ -921,6 +936,64 @@
 
 .admin-settings-note strong { color: var(--navy); }
 .admin-settings-note p { color: var(--muted); margin: 6px 0 0; font-size: 13px; }
+
+.admin-settings-footnote {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin: 14px 0 0;
+}
+
+.admin-settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.admin-settings-checkbox input {
+  width: auto;
+}
+
+.admin-password-checklist {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  margin: 0 0 18px;
+  padding: 0;
+}
+
+.admin-password-checklist li {
+  font-size: 12.5px;
+  color: var(--muted);
+  padding-left: 20px;
+  position: relative;
+}
+
+.admin-password-checklist li::before {
+  content: "○";
+  position: absolute;
+  left: 0;
+  color: var(--border);
+}
+
+.admin-password-checklist li.met {
+  color: #067647;
+}
+
+.admin-password-checklist li.met::before {
+  content: "●";
+  color: #067647;
+}
+
+@media (max-width: 620px) {
+  .admin-password-checklist { grid-template-columns: 1fr; }
+}
+
 .transaction-in { font-weight: 800; }
 .transaction-out { font-weight: 800; }
 

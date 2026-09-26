@@ -83,7 +83,7 @@ router.get("/cooperative-settings", async (req, res) => {
   } catch (err) {
     console.error("Load cooperative settings error:", err);
     res.status(500).json({
-      message: err.message || "Failed to load cooperative settings.",
+      message: "Failed to load cooperative settings.",
     });
   }
 });
@@ -143,7 +143,7 @@ router.put("/cooperative-settings", async (req, res) => {
   } catch (err) {
     console.error("Save cooperative settings error:", err);
     res.status(500).json({
-      message: err.message || "Failed to save cooperative settings.",
+      message: "Failed to save cooperative settings.",
     });
   }
 });
@@ -244,7 +244,7 @@ router.patch("/users/:id/block", async (req, res) => {
     });
   } catch (err) {
     console.error("Block/unblock member error:", err);
-    return res.status(500).json({ message: err.message || "Failed to update account status." });
+    return res.status(500).json({ message: "Failed to update account status." });
   }
 });
 
@@ -316,7 +316,7 @@ router.patch("/users/:id/security-unlock", async (req, res) => {
   } catch (err) {
     console.error("Security unlock error:", err);
     return res.status(500).json({
-      message: err.message || "Failed to unlock account security.",
+      message: "Failed to unlock account security.",
     });
   }
 });
@@ -383,7 +383,7 @@ router.patch("/users/:id/shareholding", async (req, res) => {
     console.error("Update member shareholding error:", err);
 
     return res.status(500).json({
-      message: err.message || "Failed to update member shareholding.",
+      message: "Failed to update member shareholding.",
     });
   }
 });
@@ -425,7 +425,7 @@ router.delete("/users/:id", async (req, res) => {
     console.error("Delete member account error:", err);
 
     return res.status(500).json({
-      message: err.message || "Failed to delete member account.",
+      message: "Failed to delete member account.",
     });
   }
 });
@@ -678,9 +678,7 @@ router.post(
       console.error("Add existing member error:", err);
 
       res.status(500).json({
-        message:
-          err.message ||
-          "Failed to create existing member account.",
+        message: "Failed to create existing member account.",
       });
     }
   }
@@ -708,8 +706,9 @@ router.get("/savings-requests", async (req, res) => {
 
     res.json(requests);
   } catch (err) {
+    console.error("List savings requests error:", err);
     res.status(500).json({
-      message: err.message,
+      message: "Could not load savings requests.",
     });
   }
 });
@@ -863,8 +862,9 @@ router.get("/membership", async (req, res) => {
 
     res.json(apps);
   } catch (err) {
+    console.error("List membership applications error:", err);
     res.status(500).json({
-      message: err.message,
+      message: "Could not load membership applications.",
     });
   }
 });
@@ -1007,8 +1007,9 @@ router.patch(
 
       res.json(app);
     } catch (err) {
+      console.error("Process membership application error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not process this membership application.",
       });
     }
   }
@@ -1041,8 +1042,9 @@ router.get(
 
       res.json(applications);
     } catch (err) {
+      console.error("List loan eligibility applications error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not load loan eligibility applications.",
       });
     }
   }
@@ -1165,8 +1167,9 @@ router.get(
           : null,
       });
     } catch (err) {
+      console.error("Load KYC verification error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not load KYC verification details.",
       });
     }
   }
@@ -1320,8 +1323,9 @@ router.patch(
           "Invalid action. Use approve or reject.",
       });
     } catch (err) {
+      console.error("Process loan eligibility application error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not process this loan eligibility application.",
       });
     }
   }
@@ -1348,8 +1352,9 @@ router.get("/loans", async (req, res) => {
 
     res.json(loans);
   } catch (err) {
+    console.error("List loans error:", err);
     res.status(500).json({
-      message: err.message,
+      message: "Could not load loans.",
     });
   }
 });
@@ -1375,8 +1380,9 @@ router.get(
 
       res.json(loan);
     } catch (err) {
+      console.error("Load loan error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not load this loan.",
       });
     }
   }
@@ -1607,8 +1613,9 @@ router.patch(
           "Invalid action. Use approve or reject.",
       });
     } catch (err) {
+      console.error("Process loan error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not process this loan.",
       });
     }
   }
@@ -1708,8 +1715,9 @@ router.patch(
         populatedLoan
       );
     } catch (err) {
+      console.error("Disburse loan error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not disburse this loan.",
       });
     }
   }
@@ -1748,8 +1756,9 @@ router.get(
 
       res.json(repayments);
     } catch (err) {
+      console.error("List loan repayments error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not load loan repayments.",
       });
     }
   }
@@ -1935,8 +1944,9 @@ router.patch(
         loan,
       });
     } catch (err) {
+      console.error("Process loan repayment error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not process this loan repayment.",
       });
     }
   }
@@ -1971,8 +1981,9 @@ router.get(
 
       res.json(withdrawals);
     } catch (err) {
+      console.error("List withdrawals error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not load withdrawals.",
       });
     }
   }
@@ -2117,8 +2128,9 @@ router.post(
         withdrawal
       );
     } catch (err) {
+      console.error("Sync withdrawal error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not sync this withdrawal with Paystack.",
       });
     }
   }
@@ -2142,8 +2154,9 @@ router.get(
         distributions
       );
     } catch (err) {
+      console.error("List dividends error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not load dividend distributions.",
       });
     }
   }
@@ -2259,8 +2272,9 @@ router.post(
         distribution
       );
     } catch (err) {
+      console.error("Create dividend distribution error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not create this dividend distribution.",
       });
     }
   }
@@ -2298,8 +2312,9 @@ router.get(
         entries,
       });
     } catch (err) {
+      console.error("Load dividend distribution error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not load this dividend distribution.",
       });
     }
   }
@@ -2509,8 +2524,9 @@ router.post(
         distribution
       );
     } catch (err) {
+      console.error("Calculate dividend distribution error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not calculate this dividend distribution.",
       });
     }
   }
@@ -2583,8 +2599,9 @@ router.patch(
         populated
       );
     } catch (err) {
+      console.error("Update dividend entry error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not update this dividend entry.",
       });
     }
   }
@@ -2665,8 +2682,9 @@ router.patch(
         entries,
       });
     } catch (err) {
+      console.error("Pay dividend distribution error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not process dividend payouts.",
       });
     }
   }

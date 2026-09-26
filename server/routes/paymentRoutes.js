@@ -188,7 +188,7 @@ router.get("/paystack/receipt/:reference", protect, requireApprovedMember, async
 
 // GET /api/payments/paystack/verify/:reference
 // Called after the member returns from Paystack's checkout page.
-router.get("/paystack/verify/:reference", protect, async (req, res) => {
+router.get("/paystack/verify/:reference", protect, requireApprovedMember, async (req, res) => {
   const { reference } = req.params;
 
   try {

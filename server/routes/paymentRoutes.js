@@ -1,11 +1,11 @@
 import express from "express";
+import crypto from "crypto";
 import SavingsTransaction from "../models/SavingsTransaction.js";
 import Membership from "../models/Membership.js";
-import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
-import { sendPushNotification } from "../utils/pushNotification.js";
 import { getContributionStatus } from "../utils/contributionRules.js";
+import { creditPaystackSavingsPayment } from "../utils/paystackSavingsSettlement.js";
 
 const router = express.Router();
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -145,8 +145,9 @@ router.post(
         reference: data.data.reference,
       });
     } catch (err) {
+      console.error("Paystack initialize error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not start payment. Please try again.",
       });
     }
   }
@@ -191,7 +192,8 @@ router.get("/paystack/verify/:reference", protect, async (req, res) => {
   const { reference } = req.params;
 
   try {
-    // Prevent the same Paystack payment from being credited twice.
+    // Someone may have already confirmed this exact payment (the webhook
+    // usually beats the client here). Report it rather than re-verifying.
     const existing = await SavingsTransaction.findOne({ reference });
 
     if (existing) {
@@ -222,52 +224,80 @@ router.get("/paystack/verify/:reference", protect, async (req, res) => {
     // Paystack returns the amount in kobo.
     const amount = data.data.amount / 100;
 
-    // Record the successful savings transaction.
-    const transaction = await SavingsTransaction.create({
-      user: req.user._id,
+    const result = await creditPaystackSavingsPayment({
+      userId: req.user._id,
       amount,
-      status: "approved",
-      method: "paystack",
       reference,
     });
 
-    // Update the member's savings balance.
-    req.user.savingsBalance += amount;
-    await req.user.save();
-
-    // Create an in-app notification.
-    await Notification.create({
-      user: req.user._id,
-      type: "savings",
-      title: "Savings Payment Successful",
-      message: `Your savings payment of ₦${amount.toLocaleString()} was successful.`,
-      data: {
-        reference,
-        amount,
-        transactionId: transaction._id.toString(),
-      },
-    });
-
-    await sendPushNotification(req.user, {
-  title: "Savings Payment Successful",
-  body: `Your savings payment of ₦${amount.toLocaleString()} was successful.`,
-  data: {
-    type: "savings",
-    reference,
-    amount,
-    transactionId: transaction._id.toString(),
-  },
-});
-
     res.json({
-      status: "success",
-      amount,
-      savingsBalance: req.user.savingsBalance,
+      status: result.alreadyProcessed ? "already_processed" : "success",
+      amount: result.amount,
+      savingsBalance: result.savingsBalance,
     });
   } catch (err) {
+    console.error("Paystack verify error:", err);
     res.status(500).json({
-      message: err.message,
+      message: "We could not confirm this payment right now. Please try again shortly.",
     });
+  }
+});
+
+// POST /api/payments/paystack/webhook
+//
+// Server-to-server safety net: even if the member's app/browser never
+// calls /verify (closed tab, killed app, dropped connection right after
+// paying), Paystack still tells us here, so the deposit isn't lost.
+//
+// Configure this URL in:
+// Paystack Dashboard -> API Keys & Webhooks
+router.post("/paystack/webhook", async (req, res) => {
+  const signature = req.headers["x-paystack-signature"];
+
+  if (!signature) {
+    return res.sendStatus(401);
+  }
+
+  const payload = JSON.stringify(req.body);
+
+  const expected = crypto
+    .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
+    .update(payload)
+    .digest("hex");
+
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+
+  if (
+    signatureBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
+  ) {
+    return res.sendStatus(401);
+  }
+
+  // Acknowledge immediately so Paystack does not keep retrying.
+  res.sendStatus(200);
+
+  try {
+    const { event, data } = req.body || {};
+
+    if (event !== "charge.success" || !data?.reference) return;
+
+    // Only handle savings top-ups here; other charge.success events
+    // (if this account ever adds other charge types) are ignored.
+    const userId = data.metadata?.userId;
+    if (!userId) return;
+
+    const amount = Number(data.amount || 0) / 100;
+    if (!amount) return;
+
+    await creditPaystackSavingsPayment({
+      userId,
+      amount,
+      reference: data.reference,
+    });
+  } catch (err) {
+    console.error("Paystack savings webhook processing error:", err);
   }
 });
 

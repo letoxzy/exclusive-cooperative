@@ -1,6 +1,10 @@
 import User from "../models/User.js";
 import SavingsTransaction from "../models/SavingsTransaction.js";
 import { createNotificationAndPush } from "./createNotification.js";
+import {
+  LOCKED_SAVINGS_PERCENTAGE,
+  WITHDRAWABLE_PERCENTAGE,
+} from "./contributionRules.js";
 
 /**
  * Credits a verified Paystack savings top-up.
@@ -27,6 +31,17 @@ import { createNotificationAndPush } from "./createNotification.js";
 export async function creditPaystackSavingsPayment({ userId, amount, reference }) {
   let transaction;
 
+  // Same 60/40 split every other approved contribution gets recorded with
+  // (see adminRoutes.js's savings-request approval). Without this, these
+  // fields silently sit at their schema default of 0, which is
+  // indistinguishable from "no value" to code that reads them directly
+  // (e.g. a $ifNull fallback treats 0 as present, not missing) — so any
+  // future feature built on lockedAmount/withdrawalAmount would quietly
+  // see ₦0 for every Paystack top-up. Setting them here at creation time
+  // means both deposit paths are always consistent.
+  const lockedAmount = Math.round(amount * LOCKED_SAVINGS_PERCENTAGE * 100) / 100;
+  const withdrawalAmount = Math.round(amount * WITHDRAWABLE_PERCENTAGE * 100) / 100;
+
   try {
     transaction = await SavingsTransaction.create({
       user: userId,
@@ -34,6 +49,8 @@ export async function creditPaystackSavingsPayment({ userId, amount, reference }
       status: "approved",
       method: "paystack",
       reference,
+      lockedAmount,
+      withdrawalAmount,
     });
   } catch (err) {
     // Duplicate key on `reference` means another request already recorded

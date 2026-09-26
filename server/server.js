@@ -43,7 +43,19 @@ app.use(
   })
 );
 
-app.use(express.json());
+app.use(
+  express.json({
+    // Paystack's webhook signature is computed over the exact bytes it
+    // sent. Re-serializing the parsed body with JSON.stringify() usually
+    // matches, but isn't guaranteed to byte-for-byte (key order, number
+    // formatting, etc.), which would falsely reject a genuine webhook.
+    // Capturing the raw buffer here lets the webhook routes verify
+    // against the real payload instead.
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

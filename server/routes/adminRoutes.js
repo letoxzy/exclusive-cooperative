@@ -739,7 +739,7 @@ router.patch(
       }
 
       if (action === "approve") {
-        const user = await User.findById(txn.user);
+        const user = await User.findById(txn.user).select("_id");
 
         if (!user) {
           return res.status(404).json({
@@ -747,31 +747,73 @@ router.patch(
           });
         }
 
-        const lockedAmount = Number(
-          txn.lockedAmount ||
-            Number(txn.amount || 0) * LOCKED_SAVINGS_PERCENTAGE
+        const amount = Number(txn.amount || 0);
+        const lockedAmount = Math.round(
+          Number(
+            txn.lockedAmount || amount * LOCKED_SAVINGS_PERCENTAGE
+          ) * 100
+        ) / 100;
+        const withdrawalAmount = Math.round(
+          Number(
+            txn.withdrawalAmount || amount * WITHDRAWABLE_PERCENTAGE
+          ) * 100
+        ) / 100;
+
+        // Atomically flip pending -> approved first, guarded on the current
+        // status, so a double-click or two admins acting on the same
+        // request at once can't both pass the earlier check and credit
+        // the member twice.
+        const approvedTxn = await SavingsTransaction.findOneAndUpdate(
+          { _id: txn._id, status: "pending" },
+          {
+            $set: {
+              status: "approved",
+              lockedAmount,
+              withdrawalAmount,
+            },
+          },
+          { new: true }
         );
-        const withdrawalAmount = Number(
-          txn.withdrawalAmount ||
-            Number(txn.amount || 0) * WITHDRAWABLE_PERCENTAGE
-        );
 
-        user.savingsBalance += lockedAmount;
+        if (!approvedTxn) {
+          return res.status(409).json({
+            message: "This request has already been handled.",
+          });
+        }
 
-        await user.save();
+        // Savings Balance represents the member's full accumulated
+        // contributions (see withdrawalSettlement.js) — the same 100% a
+        // Paystack top-up credits. Only 40% of a given month's total is
+        // ever eligible to withdraw, but that's a separate, time-boxed
+        // entitlement computed elsewhere; it must not reduce what's
+        // credited here. An atomic $inc avoids a lost update if the
+        // member's balance is touched by something else at the same time.
+        await User.findByIdAndUpdate(txn.user, {
+          $inc: { savingsBalance: amount },
+        });
 
-        txn.lockedAmount = Math.round(lockedAmount * 100) / 100;
-        txn.withdrawalAmount = Math.round(withdrawalAmount * 100) / 100;
-        txn.status = "approved";
+        txn.status = approvedTxn.status;
+        txn.lockedAmount = approvedTxn.lockedAmount;
+        txn.withdrawalAmount = approvedTxn.withdrawalAmount;
       } else if (action === "reject") {
-        txn.status = "rejected";
+        const rejectedTxn = await SavingsTransaction.findOneAndUpdate(
+          { _id: txn._id, status: "pending" },
+          { $set: { status: "rejected" } },
+          { new: true }
+        );
+
+        if (!rejectedTxn) {
+          return res.status(409).json({
+            message: "This request has already been handled.",
+          });
+        }
+
+        txn.status = rejectedTxn.status;
       } else {
         return res.status(400).json({
           message: "Invalid action",
         });
       }
-
-      await txn.save();
 
       const savingsNotification =
         action === "approve"
@@ -779,7 +821,9 @@ router.patch(
               title: "Savings Payment Approved",
               message: `Your contribution of ₦${Number(
                 txn.amount || 0
-              ).toLocaleString()} has been approved. 60% has been added to your locked savings and 40% to your current monthly withdrawal pool.`,
+              ).toLocaleString()} has been approved and added to your savings balance. ₦${Number(
+                txn.withdrawalAmount || 0
+              ).toLocaleString()} of it (40%) is available to withdraw this month.`,
             }
           : {
               title: "Savings Payment Rejected",
@@ -796,8 +840,9 @@ router.patch(
 
       res.json(txn);
     } catch (err) {
+      console.error("Savings request approval error:", err);
       res.status(500).json({
-        message: err.message,
+        message: "Could not process this savings request.",
       });
     }
   }

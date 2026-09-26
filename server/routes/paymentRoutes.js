@@ -258,7 +258,14 @@ router.post("/paystack/webhook", async (req, res) => {
     return res.sendStatus(401);
   }
 
-  const payload = JSON.stringify(req.body);
+  // Verify against the exact bytes Paystack sent, not a re-serialized
+  // copy of the parsed body (see server.js for where rawBody is captured).
+  const payload = req.rawBody;
+
+  if (!payload) {
+    console.error("Paystack webhook: raw body unavailable, rejecting.");
+    return res.sendStatus(401);
+  }
 
   const expected = crypto
     .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)

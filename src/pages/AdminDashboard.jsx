@@ -2007,7 +2007,7 @@ function AdminDashboard() {
             className="admin-primary-btn"
             onClick={() => setShowAddExistingMember(true)}
           >
-            + Add Existing Member
+            + Add Member
           </button>
         </div>
 

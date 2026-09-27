@@ -50,8 +50,8 @@ function Login() {
   };
 
   const handleSubmit = async (e) => {
-    if (lockRemaining > 0) return;
     e.preventDefault();
+    if (lockRemaining > 0) return;
     setError("");
     setLoading(true);
 
@@ -124,12 +124,14 @@ function Login() {
             <Link to="/forgot-password">Forgot password?</Link>
           </div>
 
-          {error && <p className="form-error">{error}</p>}
+          {error && lockRemaining === 0 && (
+            <p className="form-error">{error}</p>
+          )}
 
           {lockRemaining > 0 && (
             <p className="form-error">
-              Account temporarily locked. Try again in{" "}
-              {formatLockRemaining(lockRemaining)}.
+              Your account has been temporarily locked for security. Try again
+              in {formatLockRemaining(lockRemaining)}.
             </p>
           )}
 

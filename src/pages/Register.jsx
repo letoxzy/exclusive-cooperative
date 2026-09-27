@@ -20,16 +20,15 @@ function Register() {
 
   const passwordChecks = getPasswordChecks(form.password);
   const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
-  const passwordStrength =
-    passwordScore === 0
-      ? ""
-      : passwordScore <= 1
-        ? "Weak"
-        : passwordScore === 2
-          ? "Fair"
-          : passwordScore === 3
-            ? "Good"
-            : "Strong";
+  const passwordStrength = !form.password
+    ? ""
+    : passwordScore <= 1
+      ? "Weak"
+      : passwordScore === 2
+        ? "Fair"
+        : passwordScore === 3
+          ? "Good"
+          : "Strong";
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -41,7 +40,9 @@ function Register() {
     e.preventDefault();
 
     if (!isStrongPassword(form.password)) {
-      setError("Please choose a strong password that meets all the requirements.");
+      setError(
+        "Please choose a strong password that meets all the requirements.",
+      );
       return;
     }
 
@@ -98,7 +99,9 @@ function Register() {
           <div className="form-group">
             <label htmlFor="password">Password *</label>
 
-            <div className={`password-wrapper ${passwordStrength === "Strong" ? "password-strong" : ""}`}>
+            <div
+              className={`password-wrapper ${passwordStrength === "Strong" ? "password-strong" : ""}`}
+            >
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
@@ -123,7 +126,9 @@ function Register() {
               <div className="password-strength" aria-live="polite">
                 <div className="strength-header">
                   <span>Password strength</span>
-                  <strong className={`strength-${passwordStrength.toLowerCase()}`}>
+                  <strong
+                    className={`strength-${passwordStrength.toLowerCase()}`}
+                  >
                     {passwordStrength}
                   </strong>
                 </div>
@@ -137,7 +142,10 @@ function Register() {
                   ))}
                 </div>
 
-                <ul id="password-requirements" className="password-requirements">
+                <ul
+                  id="password-requirements"
+                  className="password-requirements"
+                >
                   <li className={passwordChecks.length ? "met" : ""}>
                     At least 8 characters
                   </li>
@@ -173,7 +181,9 @@ function Register() {
                 className="password-toggle"
                 onClick={() => setShowConfirmPassword((prev) => !prev)}
                 aria-label={
-                  showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"
+                  showConfirmPassword
+                    ? "Hide confirmation password"
+                    : "Show confirmation password"
                 }
               >
                 {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}

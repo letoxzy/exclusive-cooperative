@@ -85,7 +85,7 @@ function Home() {
           </p>
 
           <div className="hero-actions">
-            <Link to="/membership" className="btn-primary">
+            <Link to="/register" className="btn-primary">
               Become a Member
             </Link>
 
@@ -256,7 +256,7 @@ function Home() {
               transactions, loans, and other member services online.
             </p>
 
-            <Link to="/membership">Become a Member →</Link>
+            <Link to="/register">Become a Member →</Link>
           </div>
 
           <div className="service-card service-card-account">

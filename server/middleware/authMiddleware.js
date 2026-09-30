@@ -6,15 +6,23 @@ import User from "../models/User.js";
 export const protect = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader?.startsWith("Bearer ")) {
+  // Accept the token either as a Bearer header (mobile app) or as an
+  // httpOnly cookie (website). The cookie can't be read by JavaScript,
+  // which protects website users from token theft via script injection.
+  let token;
+  if (authHeader?.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
+  } else if (req.cookies?.token) {
+    token = req.cookies.token;
+  }
+
+  if (!token) {
     return res.status(401).json({
       message: "Not authorized, no token",
     });
   }
 
   try {
-    const token = authHeader.split(" ")[1];
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Keep the password hidden from normal authenticated requests.

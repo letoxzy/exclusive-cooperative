@@ -20,6 +20,24 @@ const PASSWORD_RESET_MESSAGE =
 const hashResetToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
+// Sends the JWT as an httpOnly cookie so the website never has to store
+// it in JavaScript-readable storage. The JSON response still includes the
+// token for the mobile app, which keeps using the Bearer header.
+const isProduction = process.env.NODE_ENV === "production";
+
+const authCookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  // "none" is required for cross-site cookies (Vercel website -> Render API);
+  // it requires secure: true, which is why both are production-only.
+  sameSite: isProduction ? "none" : "lax",
+  maxAge: 30 * 24 * 60 * 60 * 1000, // matches the 30-day JWT lifetime
+};
+
+const setAuthCookie = (res, token) => {
+  res.cookie("token", token, authCookieOptions);
+};
+
 const sendPasswordResetEmail = async ({ email, link }) => {
   const { EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, EMAILJS_PRIVATE_KEY } =
     process.env;
@@ -75,6 +93,9 @@ router.post("/register", async (req, res) => {
 
     const user = await User.create({ fullName, email, password });
 
+    const token = generateToken(user._id);
+    setAuthCookie(res, token);
+
     res.status(201).json({
       _id: user._id,
       fullName: user.fullName,
@@ -90,7 +111,7 @@ router.post("/register", async (req, res) => {
       autoLockSeconds: user.autoLockSeconds,
       biometricEnabled: user.biometricEnabled,
       createdAt: user.createdAt,
-      token: generateToken(user._id),
+      token,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -259,6 +280,9 @@ router.post("/login", async (req, res) => {
       await recordSecuritySuccess(user);
     }
 
+    const token = generateToken(user._id);
+    setAuthCookie(res, token);
+
     res.json({
       _id: user._id,
       fullName: user.fullName,
@@ -274,11 +298,17 @@ router.post("/login", async (req, res) => {
       autoLockSeconds: user.autoLockSeconds,
       biometricEnabled: user.biometricEnabled,
       createdAt: user.createdAt,
-      token: generateToken(user._id),
+      token,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+});
+
+// POST /api/auth/logout — clears the httpOnly auth cookie (website)
+router.post("/logout", (req, res) => {
+  res.clearCookie("token", { ...authCookieOptions, maxAge: undefined });
+  res.json({ message: "Logged out" });
 });
 
 // GET /api/auth/me

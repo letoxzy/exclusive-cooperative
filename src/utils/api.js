@@ -13,6 +13,9 @@ async function request(path, { method = "GET", body, token, isFormData } = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers,
+    // Sends the httpOnly auth cookie with every request. The server also
+    // still accepts the Bearer header, so passing `token` remains supported.
+    credentials: "include",
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
   });
 

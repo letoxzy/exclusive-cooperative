@@ -7,21 +7,19 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session from localStorage on first load
+  // Restore the session on first load by asking the backend who the
+  // login cookie belongs to. The token itself is never stored in the
+  // browser — it lives in an httpOnly cookie scripts cannot read.
   useEffect(() => {
-    const stored = localStorage.getItem("exclusive_user");
-    if (stored) setUser(JSON.parse(stored));
-    setLoading(false);
+    request("/auth/me")
+      .then((data) => setUser({ ...data, token: "cookie" }))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
-
-  const persist = (userData) => {
-    setUser(userData);
-    localStorage.setItem("exclusive_user", JSON.stringify(userData));
-  };
 
   const login = async (email, password) => {
     const data = await request("/auth/login", { method: "POST", body: { email, password } });
-    persist(data);
+    setUser({ ...data, token: "cookie" });
     return data;
   };
 
@@ -30,20 +28,24 @@ export function AuthProvider({ children }) {
       method: "POST",
       body: { fullName, email, password },
     });
-    persist(data);
+    setUser({ ...data, token: "cookie" });
     return data;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await request("/auth/logout", { method: "POST" });
+    } catch {
+      // Even if the request fails, clear local state.
+    }
     setUser(null);
-    localStorage.removeItem("exclusive_user");
   };
 
   // Re-fetch the latest user record (e.g. after savings balance changes)
   const refreshUser = async () => {
     if (!user) return;
-    const data = await request("/auth/me", { token: user.token });
-    persist({ ...data, token: user.token });
+    const data = await request("/auth/me");
+    setUser({ ...data, token: "cookie" });
   };
 
   return (

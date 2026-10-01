@@ -8,11 +8,14 @@ export const API_ORIGIN = API_URL.replace(/\/api\/?$/, "");
 async function request(path, { method = "GET", body, token, isFormData } = {}) {
   const headers = {};
   if (!isFormData) headers["Content-Type"] = "application/json";
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  // The website authenticates via the login cookie, so a real
+  // token is only sent when one is actually provided (e.g. mobile).
+  if (token && token !== "cookie") headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers,
+    credentials: "include", // send the login cookie with every request
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
   });
 

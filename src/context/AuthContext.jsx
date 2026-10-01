@@ -7,20 +7,21 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore the session on first load by asking the server who the
-  // httpOnly cookie belongs to. The token itself is never stored in
-  // JavaScript-readable storage (localStorage), so it can't be stolen
-  // by an injected script.
+  // Restore session from localStorage on first load
   useEffect(() => {
-    request("/auth/me")
-      .then((data) => setUser(data))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+    const stored = localStorage.getItem("exclusive_user");
+    if (stored) setUser(JSON.parse(stored));
+    setLoading(false);
   }, []);
+
+  const persist = (userData) => {
+    setUser(userData);
+    localStorage.setItem("exclusive_user", JSON.stringify(userData));
+  };
 
   const login = async (email, password) => {
     const data = await request("/auth/login", { method: "POST", body: { email, password } });
-    setUser(data);
+    persist(data);
     return data;
   };
 
@@ -29,24 +30,20 @@ export function AuthProvider({ children }) {
       method: "POST",
       body: { fullName, email, password },
     });
-    setUser(data);
+    persist(data);
     return data;
   };
 
-  const logout = async () => {
-    try {
-      await request("/auth/logout", { method: "POST" });
-    } catch {
-      // Even if the request fails, clear the local state.
-    }
+  const logout = () => {
     setUser(null);
+    localStorage.removeItem("exclusive_user");
   };
 
   // Re-fetch the latest user record (e.g. after savings balance changes)
   const refreshUser = async () => {
     if (!user) return;
-    const data = await request("/auth/me");
-    setUser(data);
+    const data = await request("/auth/me", { token: user.token });
+    persist({ ...data, token: user.token });
   };
 
   return (

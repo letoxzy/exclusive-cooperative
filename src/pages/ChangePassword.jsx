@@ -82,11 +82,10 @@ function ChangePassword() {
         `${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/users/me/password`,
         {
           method: "PATCH",
-          credentials: "include",
           headers: {
             "Content-Type": "application/json",
-            
           },
+          credentials: "include",
           body: JSON.stringify({
             currentPassword: form.currentPassword,
             newPassword: form.newPassword,

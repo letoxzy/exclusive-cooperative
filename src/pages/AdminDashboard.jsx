@@ -153,7 +153,7 @@ function AdminDashboard() {
 
   // Automatically check for new membership applications
   useEffect(() => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     const checkForNewApplications = async () => {
       try {
@@ -169,7 +169,7 @@ function AdminDashboard() {
     const interval = setInterval(checkForNewApplications, 10000);
 
     return () => clearInterval(interval);
-  }, [user?.token, loadApplications]);
+  }, [user?._id, loadApplications]);
 
   const loadLoans = useCallback(async () => {
     const data = await request("/admin/loans", {
@@ -191,7 +191,7 @@ function AdminDashboard() {
   // identity verification appears in the admin notification bell without
   // requiring the administrator to refresh the page.
   useEffect(() => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     const refreshLoanEligibilityQueue = () => {
       loadLoanEligibilityApplications().catch((err) => {
@@ -203,7 +203,7 @@ function AdminDashboard() {
     const interval = setInterval(refreshLoanEligibilityQueue, 10000);
 
     return () => clearInterval(interval);
-  }, [user?.token, loadLoanEligibilityApplications]);
+  }, [user?._id, loadLoanEligibilityApplications]);
 
   const loadDividends = useCallback(async () => {
     const data = await request("/admin/dividends", {
@@ -391,7 +391,7 @@ function AdminDashboard() {
   ================================= */
 
   useEffect(() => {
-    if (!user?.token || activeSection !== "repayments") return;
+    if (!user?._id || activeSection !== "repayments") return;
 
     const refreshRepaymentQueue = () => {
       loadLoanRepayments().catch((err) => {
@@ -402,7 +402,7 @@ function AdminDashboard() {
     const interval = window.setInterval(refreshRepaymentQueue, 10000);
 
     return () => window.clearInterval(interval);
-  }, [user?.token, activeSection, loadLoanRepayments]);
+  }, [user?._id, activeSection, loadLoanRepayments]);
 
   /* ================================
      SAVINGS REQUEST ACTION

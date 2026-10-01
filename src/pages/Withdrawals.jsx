@@ -86,7 +86,7 @@ function Withdrawals() {
   }, [banks, bankSearch]);
 
   const loadWithdrawals = useCallback(async () => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     try {
       setLoading(true);
@@ -99,10 +99,10 @@ function Withdrawals() {
     } finally {
       setLoading(false);
     }
-  }, [user?.token]);
+  }, [user?._id]);
 
   const loadBanks = useCallback(async () => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     try {
       setBanksLoading(true);
@@ -115,10 +115,10 @@ function Withdrawals() {
     } finally {
       setBanksLoading(false);
     }
-  }, [user?.token]);
+  }, [user?._id]);
 
   const loadPinStatus = useCallback(async () => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     try {
       setPinLoading(true);
@@ -131,7 +131,7 @@ function Withdrawals() {
     } finally {
       setPinLoading(false);
     }
-  }, [user?.token]);
+  }, [user?._id]);
 
   useEffect(() => {
     loadWithdrawals();

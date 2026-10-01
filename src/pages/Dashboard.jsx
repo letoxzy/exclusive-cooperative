@@ -100,7 +100,7 @@ function Dashboard() {
    * ================================
    */
   const loadRequests = useCallback(async () => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     try {
       const data = await request("/users/me/savings-requests", {
@@ -111,7 +111,7 @@ function Dashboard() {
     } catch (err) {
       setError(err.message);
     }
-  }, [user?.token]);
+  }, [user?._id]);
 
   /*
    * ================================
@@ -125,7 +125,7 @@ function Dashboard() {
    */
   const loadTransactions = useCallback(
     async (silent = false) => {
-      if (!user?.token) {
+      if (!user?._id) {
         setTransactionsLoading(false);
         return;
       }
@@ -146,12 +146,12 @@ function Dashboard() {
         if (!silent) setTransactionsLoading(false);
       }
     },
-    [user?.token],
+    [user?._id],
   );
 
   const loadLoans = useCallback(
     async (silent = false) => {
-      if (!user?.token) {
+      if (!user?._id) {
         setLoanLoading(false);
         return;
       }
@@ -174,7 +174,7 @@ function Dashboard() {
         if (!silent) setLoanLoading(false);
       }
     },
-    [user?.token],
+    [user?._id],
   );
 
   /*
@@ -194,7 +194,7 @@ function Dashboard() {
    * flow, so the loan card remains stable.
    */
   useEffect(() => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     loadRequests();
     loadLoans();
@@ -238,7 +238,7 @@ function Dashboard() {
     refreshUser().catch((err) => {
       console.error("DASHBOARD USER REFRESH ERROR:", err);
     });
-  }, [user?.token, loadRequests, loadLoans, loadTransactions]);
+  }, [user?._id, loadRequests, loadLoans, loadTransactions]);
 
   /*
    * ================================
@@ -251,7 +251,7 @@ function Dashboard() {
    * and periodically while the dashboard is open.
    */
   useEffect(() => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     const refreshLoanData = () => {
       void loadLoans(true);
@@ -272,7 +272,7 @@ function Dashboard() {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.clearInterval(interval);
     };
-  }, [user?.token, loadLoans, loadTransactions]);
+  }, [user?._id, loadLoans, loadTransactions]);
 
   useEffect(() => {
     const modalOpen = Boolean(
@@ -314,7 +314,7 @@ function Dashboard() {
    */
   const loadRepayments = useCallback(
     async (loanId) => {
-      if (!user?.token || !loanId) return;
+      if (!user?._id || !loanId) return;
       try {
         const data = await request(`/loans/${loanId}/repayments`, {
           token: user.token,
@@ -324,7 +324,7 @@ function Dashboard() {
         setRepaymentError(err.message);
       }
     },
-    [user?.token],
+    [user?._id],
   );
 
   useEffect(() => {
@@ -399,7 +399,7 @@ function Dashboard() {
 
       const response = await fetch(`${apiBaseUrl}/loans/${loanId}/repayments`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${user.token}` },
+        credentials: "include",
         body: formData,
       });
 

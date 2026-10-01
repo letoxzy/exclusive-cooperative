@@ -117,7 +117,7 @@ function Profile() {
 
   // Load membership
   useEffect(() => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     setMembershipLoading(true);
 
@@ -143,11 +143,11 @@ function Profile() {
       })
       .catch(() => setMembership(null))
       .finally(() => setMembershipLoading(false));
-  }, [user?.token]);
+  }, [user?._id]);
 
   // Load withdrawal PIN status
   useEffect(() => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     const loadPinStatus = async () => {
       try {
@@ -166,7 +166,7 @@ function Profile() {
     };
 
     loadPinStatus();
-  }, [user?.token]);
+  }, [user?._id]);
 
   const initials = (user?.fullName || "")
     .split(" ")

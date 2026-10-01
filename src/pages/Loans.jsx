@@ -14,7 +14,7 @@ function Loans() {
   const [error, setError] = useState("");
 
   const loadEligibility = useCallback(async () => {
-    if (!user?.token) {
+    if (!user?._id) {
       setEligibility(null);
       return;
     }
@@ -33,7 +33,7 @@ function Loans() {
     } finally {
       setLoading(false);
     }
-  }, [user?.token]);
+  }, [user?._id]);
 
   useEffect(() => {
     loadEligibility();

@@ -24,7 +24,7 @@ function Navbar() {
    */
 
   const loadNotifications = async () => {
-    if (!user?.token) {
+    if (!user?._id) {
       setNotifications([]);
       return;
     }
@@ -49,7 +49,7 @@ function Navbar() {
    */
 
   useEffect(() => {
-    if (!user?.token) return;
+    if (!user?._id) return;
 
     loadNotifications();
 
@@ -63,7 +63,7 @@ function Navbar() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [user?.token]);
+  }, [user?._id]);
 
   /*
    * =========================

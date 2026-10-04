@@ -556,21 +556,6 @@
   margin-bottom: 20px;
 }
 
-
-.form-success {
-  color: #067647;
-
-  background: #ecfdf3;
-  border: 1px solid #abefc6;
-  border-radius: 8px;
-
-  padding: 12px 14px;
-
-  font-size: 13px;
-
-  margin-bottom: 20px;
-}
-
 .admin-error {
   margin-bottom: 20px;
 }
@@ -936,64 +921,6 @@
 
 .admin-settings-note strong { color: var(--navy); }
 .admin-settings-note p { color: var(--muted); margin: 6px 0 0; font-size: 13px; }
-
-.admin-settings-footnote {
-  color: var(--muted);
-  font-size: 12.5px;
-  margin: 14px 0 0;
-}
-
-.admin-settings-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--navy);
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 14px;
-  cursor: pointer;
-}
-
-.admin-settings-checkbox input {
-  width: auto;
-}
-
-.admin-password-checklist {
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 16px;
-  margin: 0 0 18px;
-  padding: 0;
-}
-
-.admin-password-checklist li {
-  font-size: 12.5px;
-  color: var(--muted);
-  padding-left: 20px;
-  position: relative;
-}
-
-.admin-password-checklist li::before {
-  content: "○";
-  position: absolute;
-  left: 0;
-  color: var(--border);
-}
-
-.admin-password-checklist li.met {
-  color: #067647;
-}
-
-.admin-password-checklist li.met::before {
-  content: "●";
-  color: #067647;
-}
-
-@media (max-width: 620px) {
-  .admin-password-checklist { grid-template-columns: 1fr; }
-}
-
 .transaction-in { font-weight: 800; }
 .transaction-out { font-weight: 800; }
 
@@ -1237,8 +1164,10 @@
   }
 }
 
+
 /* =========================================
    ADMIN REFRESH BUTTONS
+   One consistent refresh action per admin page.
 ========================================= */
 
 .admin-refresh-btn {
@@ -1246,36 +1175,38 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-
-  min-height: 38px;
-  padding: 0 14px;
-
+  min-width: 96px;
+  min-height: 42px;
+  padding: 0 16px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-
+  border-radius: 10px;
   background: var(--white);
   color: var(--navy);
-
-  font-family: inherit;
-  font-size: 12.5px;
+  font: inherit;
+  font-size: 14px;
   font-weight: 700;
-
+  line-height: 1;
   cursor: pointer;
-
   transition:
-    background 0.2s ease,
+    background-color 0.2s ease,
     border-color 0.2s ease,
     color 0.2s ease,
-    transform 0.2s ease;
+    transform 0.15s ease;
 }
 
 .admin-refresh-btn:hover:not(:disabled) {
   background: var(--light);
   border-color: var(--navy);
+  color: var(--navy);
 }
 
 .admin-refresh-btn:active:not(:disabled) {
   transform: translateY(1px);
+}
+
+.admin-refresh-btn:focus-visible {
+  outline: 3px solid rgba(201, 162, 39, 0.35);
+  outline-offset: 2px;
 }
 
 .admin-refresh-btn:disabled {
@@ -1283,38 +1214,22 @@
   cursor: not-allowed;
 }
 
-.admin-refresh-btn svg {
-  font-size: 13px;
-}
-
-.admin-refresh-btn.refreshing svg {
-  animation: adminRefreshSpin 0.8s linear infinite;
-}
-
-@keyframes adminRefreshSpin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Keep heading actions aligned nicely */
 .admin-page-heading-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 @media (max-width: 700px) {
   .admin-page-heading-actions {
     width: 100%;
+    justify-content: flex-start;
   }
 
-  .admin-refresh-btn {
-    width: 100%;
+  .admin-page-heading .admin-refresh-btn {
+    min-height: 40px;
   }
 }

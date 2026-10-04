@@ -251,6 +251,7 @@ function AdminDashboard() {
       if (section === "membership") return await loadApplications();
       if (section === "savings") return await loadRequests();
       if (section === "loans") return await loadLoans();
+      if (section === "loan-requests") return await loadLoans();
       if (section === "loan-eligibility") return await loadLoanEligibilityApplications();
       if (section === "repayments") return await loadLoanRepayments();
       if (section === "withdrawals") return await loadWithdrawals();
@@ -907,6 +908,13 @@ function AdminDashboard() {
               Here's what's happening with your cooperative today.
             </p>
           </div>
+          <button
+            type="button"
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("overview")}
+          >
+            Refresh
+          </button>
         </div>
 
         <div className="admin-stat-grid">
@@ -955,9 +963,6 @@ function AdminDashboard() {
               </strong>
             </div>
           </div>
-          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("overview")}>
-            Refresh
-          </button>
         </div>
 
         <div className="admin-overview-grid">
@@ -1101,6 +1106,13 @@ function AdminDashboard() {
               Review and manage member savings requests.
             </p>
           </div>
+          <button
+            type="button"
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("savings")}
+          >
+            Refresh
+          </button>
         </div>
 
         <section className="admin-card">
@@ -1190,7 +1202,11 @@ function AdminDashboard() {
               Review, approve, or reject member loan applications.
             </p>
           </div>
-          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("savings")}>
+          <button
+            type="button"
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("loan-requests")}
+          >
             Refresh
           </button>
         </div>
@@ -1322,6 +1338,13 @@ function AdminDashboard() {
               Confirm repayments members have recorded against active loans.
             </p>
           </div>
+          <button
+            type="button"
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("repayments")}
+          >
+            Refresh
+          </button>
         </div>
 
         <section className="admin-card">
@@ -1474,12 +1497,9 @@ function AdminDashboard() {
           </div>
           <button
             type="button"
-            className="btn-secondary"
-            onClick={loadWithdrawals}
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("withdrawals")}
           >
-            Refresh
-          </button>
-          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("repayments")}>
             Refresh
           </button>
         </div>
@@ -1760,7 +1780,11 @@ function AdminDashboard() {
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("dividends")}>
+            <button
+              type="button"
+              className="admin-refresh-btn"
+              onClick={() => refreshAdminSection("dividends")}
+            >
               Refresh
             </button>
             <button
@@ -2035,8 +2059,12 @@ function AdminDashboard() {
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("members")}>
+          <div className="admin-page-heading-actions">
+            <button
+              type="button"
+              className="admin-refresh-btn"
+              onClick={() => refreshAdminSection("members")}
+            >
               Refresh
             </button>
             <button
@@ -2282,6 +2310,13 @@ function AdminDashboard() {
               Review applications submitted by new members.
             </p>
           </div>
+          <button
+            type="button"
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("membership")}
+          >
+            Refresh
+          </button>
         </div>
 
         <section className="admin-card">
@@ -2500,7 +2535,11 @@ function AdminDashboard() {
               <span>Ready for review</span>
             </div>
           )}
-          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("membership")}>
+          <button
+            type="button"
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("loan-eligibility")}
+          >
             Refresh
           </button>
         </div>
@@ -2518,9 +2557,6 @@ function AdminDashboard() {
               {tab.text} <span>{counts[tab.key]}</span>
             </button>
           ))}
-          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("loan-eligibility")}>
-            Refresh
-          </button>
         </div>
 
         <section className="admin-card full-loan-admin-card">
@@ -2694,7 +2730,11 @@ function AdminDashboard() {
               Monitor approved, disbursed, and active cooperative loans.
             </p>
           </div>
-          <button type="button" className="btn-secondary" onClick={loadLoans}>
+          <button
+            type="button"
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("loans")}
+          >
             Refresh
           </button>
         </div>
@@ -2850,10 +2890,8 @@ function AdminDashboard() {
           </div>
           <button
             type="button"
-            className="btn-secondary"
-            onClick={() =>
-              Promise.all([loadRequests(), loadLoanRepayments(), loadLoans()])
-            }
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("transactions")}
           >
             Refresh
           </button>
@@ -2970,18 +3008,10 @@ function AdminDashboard() {
           </div>
           <button
             type="button"
-            className="btn-secondary"
-            onClick={() =>
-              Promise.all([
-                loadMembers(),
-                loadLoans(),
-                loadLoanRepayments(),
-                loadDividends(),
-                loadRequests(),
-              ])
-            }
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("reports")}
           >
-            Refresh Data
+            Refresh
           </button>
         </div>
 
@@ -3169,6 +3199,13 @@ function AdminDashboard() {
               current configuration.
             </p>
           </div>
+          <button
+            type="button"
+            className="admin-refresh-btn"
+            onClick={() => refreshAdminSection("settings")}
+          >
+            Refresh
+          </button>
         </div>
 
         {/* ACCOUNT INFORMATION — name is editable, email/role are fixed */}
@@ -3556,9 +3593,6 @@ function AdminDashboard() {
           {loading && <div className="admin-loading">Loading...</div>}
 
           {!loading && renderContent()}
-          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("settings")}>
-            Refresh
-          </button>
         </div>
       </main>
 

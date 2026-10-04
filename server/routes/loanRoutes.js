@@ -30,9 +30,9 @@ const uploadReceipt = multer({
     bio-data pulled from their approved Membership record) and have
     an admin approve it. Only then are they "loan eligible" and can
     submit an actual loan request via "Apply for Loan".
-  - Once loan eligible, a member can request up to 2x their current
-    savings balance (savings/contributions are a separate concern —
-    this route never touches savingsBalance, only reads it).
+  - Once loan eligible, a member can request up to the configured
+    loan multiplier of their current savings balance (savings/contributions
+    are a separate concern — this route never changes savingsBalance).
   - Repayment period is 3, 6, or 12 months.
   - Interest rate scales with term: 3mo = 5%, 6mo = 7%, 12mo = 10%.
 */
@@ -336,9 +336,12 @@ router.post("/", protect, requireApprovedMember, async (req, res) => {
     // Get current savings
     // ---------------------------------------
 
+    const settings = await getCooperativeSettings();
+    const loanMultiplier = Number(settings.loanMultiplier || 2);
+
     const savingsBalance = Number(req.user.savingsBalance || 0);
 
-    const eligibleAmount = savingsBalance * LOAN_MULTIPLIER;
+    const eligibleAmount = savingsBalance * loanMultiplier;
 
     // ---------------------------------------
     // Check savings eligibility + existing loans

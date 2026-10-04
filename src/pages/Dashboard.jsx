@@ -40,6 +40,22 @@ function Dashboard() {
 
   const [showBalances, setShowBalances] = useState(true);
 
+  // Persist the member's balance visibility preference on this device.
+  useEffect(() => {
+    if (!user?._id) return;
+
+    const storageKey = `exclusive_balance_visible_${user._id}`;
+    const saved = localStorage.getItem(storageKey);
+    setShowBalances(saved !== "false");
+  }, [user?._id]);
+
+  useEffect(() => {
+    if (!user?._id) return;
+
+    const storageKey = `exclusive_balance_visible_${user._id}`;
+    localStorage.setItem(storageKey, String(showBalances));
+  }, [showBalances, user?._id]);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 

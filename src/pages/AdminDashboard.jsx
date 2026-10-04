@@ -243,6 +243,26 @@ function AdminDashboard() {
     });
   }, [user.token]);
 
+  const refreshAdminSection = useCallback(async (section) => {
+    setError("");
+    try {
+      if (section === "overview") return await Promise.all([loadRequests(), loadMembers(), loadApplications(), loadLoans(), loadLoanEligibilityApplications(), loadLoanRepayments(), loadWithdrawals(), loadSecurityAlerts(), loadCooperativeSettings()]);
+      if (section === "members") return await Promise.all([loadMembers(), loadSecurityAlerts()]);
+      if (section === "membership") return await loadApplications();
+      if (section === "savings") return await loadRequests();
+      if (section === "loans") return await loadLoans();
+      if (section === "loan-eligibility") return await loadLoanEligibilityApplications();
+      if (section === "repayments") return await loadLoanRepayments();
+      if (section === "withdrawals") return await loadWithdrawals();
+      if (section === "dividends") return await loadDividends();
+      if (section === "transactions") return await Promise.all([loadRequests(), loadLoanRepayments(), loadLoans()]);
+      if (section === "reports") return await Promise.all([loadMembers(), loadLoans(), loadLoanRepayments(), loadDividends(), loadRequests()]);
+      if (section === "settings") return await Promise.all([loadCooperativeSettings(), refreshUser()]);
+    } catch (err) {
+      setError(err?.message || "Unable to refresh this section.");
+    }
+  }, [loadRequests, loadMembers, loadApplications, loadLoans, loadLoanEligibilityApplications, loadLoanRepayments, loadWithdrawals, loadSecurityAlerts, loadCooperativeSettings, loadDividends, refreshUser]);
+
   const saveCooperativeSettings = async (event) => {
     event.preventDefault();
     setCooperativeSettingsMessage(null);
@@ -935,6 +955,9 @@ function AdminDashboard() {
               </strong>
             </div>
           </div>
+          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("overview")}>
+            Refresh
+          </button>
         </div>
 
         <div className="admin-overview-grid">
@@ -1167,6 +1190,9 @@ function AdminDashboard() {
               Review, approve, or reject member loan applications.
             </p>
           </div>
+          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("savings")}>
+            Refresh
+          </button>
         </div>
 
         <section className="admin-card">
@@ -1453,6 +1479,9 @@ function AdminDashboard() {
           >
             Refresh
           </button>
+          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("repayments")}>
+            Refresh
+          </button>
         </div>
 
         <div className="admin-stat-grid">
@@ -1730,13 +1759,17 @@ function AdminDashboard() {
             </p>
           </div>
 
-          <button
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("dividends")}>
+              Refresh
+            </button>
+            <button
             type="button"
             className="btn-primary"
             onClick={() => setShowCreateDividendForm((prev) => !prev)}
           >
             {showCreateDividendForm ? "Cancel" : "Create Dividend"}
-          </button>
+          </button></div>
         </div>
 
         {showCreateDividendForm && (
@@ -2002,13 +2035,18 @@ function AdminDashboard() {
             </p>
           </div>
 
-          <button
-            type="button"
-            className="admin-primary-btn"
-            onClick={() => setShowAddExistingMember(true)}
-          >
-            + Add Member
-          </button>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("members")}>
+              Refresh
+            </button>
+            <button
+              type="button"
+              className="admin-primary-btn"
+              onClick={() => setShowAddExistingMember(true)}
+            >
+              + Add Member
+            </button>
+          </div>
         </div>
 
         <section className="admin-card">
@@ -2462,6 +2500,9 @@ function AdminDashboard() {
               <span>Ready for review</span>
             </div>
           )}
+          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("membership")}>
+            Refresh
+          </button>
         </div>
 
         <div className="kyc-filter-tabs" role="tablist">
@@ -2477,6 +2518,9 @@ function AdminDashboard() {
               {tab.text} <span>{counts[tab.key]}</span>
             </button>
           ))}
+          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("loan-eligibility")}>
+            Refresh
+          </button>
         </div>
 
         <section className="admin-card full-loan-admin-card">
@@ -3512,6 +3556,9 @@ function AdminDashboard() {
           {loading && <div className="admin-loading">Loading...</div>}
 
           {!loading && renderContent()}
+          <button type="button" className="btn-secondary" onClick={() => refreshAdminSection("settings")}>
+            Refresh
+          </button>
         </div>
       </main>
 

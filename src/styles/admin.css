@@ -1236,3 +1236,85 @@
     flex: 0 0 auto;
   }
 }
+
+/* =========================================
+   ADMIN REFRESH BUTTONS
+========================================= */
+
+.admin-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  min-height: 38px;
+  padding: 0 14px;
+
+  border: 1px solid var(--border);
+  border-radius: 8px;
+
+  background: var(--white);
+  color: var(--navy);
+
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.admin-refresh-btn:hover:not(:disabled) {
+  background: var(--light);
+  border-color: var(--navy);
+}
+
+.admin-refresh-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.admin-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-refresh-btn svg {
+  font-size: 13px;
+}
+
+.admin-refresh-btn.refreshing svg {
+  animation: adminRefreshSpin 0.8s linear infinite;
+}
+
+@keyframes adminRefreshSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Keep heading actions aligned nicely */
+.admin-page-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 700px) {
+  .admin-page-heading-actions {
+    width: 100%;
+  }
+
+  .admin-refresh-btn {
+    width: 100%;
+  }
+}

@@ -6,6 +6,7 @@ import LoanEligibility from "../models/LoanEligibility.js";
 import Membership from "../models/Membership.js";
 import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { idempotent } from "../middleware/idempotency.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
@@ -277,7 +278,7 @@ router.get("/eligibility", protect, requireApprovedMember, async (req, res) => {
     purpose: "Business expansion"
   }
 */
-router.post("/", protect, requireApprovedMember, async (req, res) => {
+router.post("/", protect, requireApprovedMember, idempotent("loans:create"), async (req, res) => {
   try {
     const {
       loanType,

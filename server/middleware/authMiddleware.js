@@ -22,8 +22,20 @@ export const protect = async (req, res, next) => {
     });
   }
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    // Only a bad/expired token is an authentication failure.
+    return res.status(401).json({
+      message:
+        err?.name === "TokenExpiredError"
+          ? "Your session has expired. Please log in again."
+          : "Not authorized, invalid token",
+    });
+  }
+
+  try {
 
     // Keep the password hidden from normal authenticated requests.
     // The password-change route will fetch the user separately
@@ -52,10 +64,13 @@ export const protect = async (req, res, next) => {
 
     next();
   } catch (err) {
+    // Database/other failure: NOT an auth problem. Answering 401 here made the
+    // mobile app think the session had expired and log the member out whenever
+    // the database was slow or briefly unreachable.
     console.error("Authentication error:", err);
 
-    return res.status(401).json({
-      message: "Not authorized, invalid token",
+    return res.status(503).json({
+      message: "Service temporarily unavailable. Please try again shortly.",
     });
   }
 };

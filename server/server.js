@@ -24,6 +24,11 @@ connectDB().then(() => {
 
 const app = express();
 
+// Render (and most hosts) put a proxy in front of the app. Without this,
+// req.ip is the PROXY's address, so express-rate-limit counts every member
+// together: 50 requests per 15 minutes for ALL users combined.
+app.set("trust proxy", 1);
+
 const allowedOrigins = [
   "http://localhost:5173",
   "https://exclusive-cooperative.vercel.app",
@@ -41,7 +46,8 @@ app.use(
       }
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
+    exposedHeaders: ["Idempotent-Replay", "Retry-After"],
     // Required so the website can send/receive the httpOnly auth cookie.
     credentials: true,
   })
@@ -73,6 +79,9 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many attempts. Please try again later." },
+  // The app calls GET /auth/me on every launch and screen refresh. It is a
+  // session check, not a sign-in attempt, so it must not use up the budget.
+  skip: (req) => req.method === "GET" && req.path === "/me",
 });
 
 app.use("/api/auth", authLimiter, authRoutes);

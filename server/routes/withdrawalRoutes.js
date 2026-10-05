@@ -8,6 +8,7 @@ import Withdrawal from "../models/Withdrawal.js";
 import SavingsTransaction from "../models/SavingsTransaction.js";
 import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { idempotent } from "../middleware/idempotency.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
@@ -465,6 +466,7 @@ router.post(
   "/",
   protect,
   requireApprovedMember,
+  idempotent("withdrawals:create"),
   async (req, res) => {
     try {
       const source = String(req.body.source || "savings").trim().toLowerCase();

@@ -15,6 +15,7 @@ import kycRoutes from "./routes/kycRoutes.js";
 import withdrawalRoutes from "./routes/withdrawalRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import galleryRoutes from "./routes/galleryRoutes.js";
+import { appConfigHandler, appGate } from "./middleware/appGate.js";
 import { startLoanOverdueScheduler } from "./services/loanOverdueService.js";
 
 
@@ -46,7 +47,13 @@ app.use(
       }
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Idempotency-Key",
+      "X-App-Version",
+      "X-App-Platform",
+    ],
     exposedHeaders: ["Idempotent-Replay", "Retry-After"],
     // Required so the website can send/receive the httpOnly auth cookie.
     credentials: true,
@@ -83,6 +90,9 @@ const authLimiter = rateLimit({
   // session check, not a sign-in attempt, so it must not use up the budget.
   skip: (req) => req.method === "GET" && req.path === "/me",
 });
+
+app.get("/api/app-config", appConfigHandler);
+app.use("/api", appGate);
 
 app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/users", userRoutes);

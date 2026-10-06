@@ -1,16 +1,3 @@
-/*
-  Member dashboard refresh
-  ------------------------
-  Everything is scoped to the dashboard root (class "dashboard-refresh"), so no
-  other page (Loans, Withdrawals, Admin...) is affected. Load order: this file
-  is imported after dashboard.css and overrides it.
-
-  Design idea: a modern savings passbook. One dark-green "cover" panel holds
-  the member's money; everything below is flat, quiet, ruled like a ledger.
-  System fonts on purpose: fast on slow mobile data, and the naira sign renders
-  everywhere.
-*/
-
 body:has(.dashboard-refresh) {
   background: #f1f5f2;
 }

@@ -2851,12 +2851,13 @@ function AdminDashboard() {
         reference: item.reference || item._id,
       })),
       ...loans
-        .filter((item) =>
-          ["disbursed", "active"].includes(String(item.status).toLowerCase()),
-        )
+        // A loan counts as money out once it has been disbursed. "disbursed"
+        // is not a real status; overdue, completed and defaulted loans were
+        // being dropped from this list, and the date field is disbursedDate.
+        .filter((item) => Boolean(item.disbursedDate))
         .map((item) => ({
           id: `l-${item._id}`,
-          date: item.disbursementDate || item.applicationDate || item.createdAt,
+          date: item.disbursedDate || item.applicationDate || item.createdAt,
           member: item.user?.fullName || "—",
           type: "Loan Disbursement",
           direction: "Money Out",

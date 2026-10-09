@@ -196,6 +196,11 @@ router.get("/paystack/verify/:reference", protect, requireApprovedMember, async 
     // usually beats the client here). Report it rather than re-verifying.
     const existing = await SavingsTransaction.findOne({ reference });
 
+    // A reference belonging to someone else must look like it doesn't exist.
+    if (existing && String(existing.user) !== String(req.user._id)) {
+      return res.status(404).json({ message: "Payment not found." });
+    }
+
     if (existing) {
       return res.json({
         status: "already_processed",
@@ -219,6 +224,20 @@ router.get("/paystack/verify/:reference", protect, requireApprovedMember, async 
       return res.status(400).json({
         message: "Payment was not successful",
       });
+    }
+
+    // The payment must have been started by THIS member (we stamp the
+    // member's id into the checkout metadata at initialize time) and be in
+    // naira. Without this, anyone who learns another member's reference
+    // (receipts show it) could claim that payment for their own account.
+    if (String(data.data.metadata?.userId || "") !== String(req.user._id)) {
+      return res.status(403).json({
+        message: "This payment does not belong to your account.",
+      });
+    }
+
+    if (data.data.currency && data.data.currency !== "NGN") {
+      return res.status(400).json({ message: "Unsupported payment currency." });
     }
 
     // Paystack returns the amount in kobo.
@@ -282,29 +301,41 @@ router.post("/paystack/webhook", async (req, res) => {
     return res.sendStatus(401);
   }
 
-  // Acknowledge immediately so Paystack does not keep retrying.
-  res.sendStatus(200);
-
+  // Acknowledge only AFTER the credit is safely stored. If processing fails
+  // we answer 500 so Paystack retries the event (it retries failed
+  // deliveries for hours). Replying before processing meant a failure here
+  // was silently lost with no retry. Duplicate deliveries are harmless:
+  // crediting is idempotent on the reference.
   try {
     const { event, data } = req.body || {};
 
-    if (event !== "charge.success" || !data?.reference) return;
+    if (event !== "charge.success" || !data?.reference) {
+      return res.sendStatus(200);
+    }
 
     // Only handle savings top-ups here; other charge.success events
     // (if this account ever adds other charge types) are ignored.
     const userId = data.metadata?.userId;
-    if (!userId) return;
+    if (!userId) return res.sendStatus(200);
+
+    if (data.currency && data.currency !== "NGN") {
+      console.error("Paystack webhook: non-NGN charge ignored", data.reference);
+      return res.sendStatus(200);
+    }
 
     const amount = Number(data.amount || 0) / 100;
-    if (!amount) return;
+    if (!amount) return res.sendStatus(200);
 
     await creditPaystackSavingsPayment({
       userId,
       amount,
       reference: data.reference,
     });
+
+    return res.sendStatus(200);
   } catch (err) {
     console.error("Paystack savings webhook processing error:", err);
+    return res.sendStatus(500);
   }
 });
 

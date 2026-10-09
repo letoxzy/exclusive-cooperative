@@ -17,10 +17,16 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import galleryRoutes from "./routes/galleryRoutes.js";
 import { appConfigHandler, appGate } from "./middleware/appGate.js";
 import { startLoanOverdueScheduler } from "./services/loanOverdueService.js";
+import { ensureChartOfAccounts } from "./services/ledger.js";
 
 
-connectDB().then(() => {
+connectDB().then(async () => {
   startLoanOverdueScheduler();
+  try {
+    await ensureChartOfAccounts();
+  } catch (err) {
+    console.error("Could not seed chart of accounts:", err.message);
+  }
 });
 
 const app = express();
@@ -29,6 +35,15 @@ const app = express();
 // req.ip is the PROXY's address, so express-rate-limit counts every member
 // together: 50 requests per 15 minutes for ALL users combined.
 app.set("trust proxy", 1);
+
+// Security headers. Loaded defensively so the server still starts if the
+// package has not been installed yet (run: npm install).
+try {
+  const { default: helmet } = await import("helmet");
+  app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+} catch {
+  console.warn("helmet not installed - run `npm install` to enable security headers.");
+}
 
 const allowedOrigins = [
   "http://localhost:5173",

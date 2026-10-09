@@ -136,6 +136,9 @@ const dividendEntrySchema = new mongoose.Schema(
   }
 );
 
+// A member can appear only once in a distribution (prevents duplicate payouts).
+dividendEntrySchema.index({ distribution: 1, user: 1 }, { unique: true });
+
 export const DividendEntry = mongoose.model(
   "DividendEntry",
   dividendEntrySchema

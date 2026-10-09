@@ -21,6 +21,18 @@ import { adminOnly } from "../middleware/adminMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
+import { runAtomic } from "../utils/atomic.js";
+import { audit } from "../utils/audit.js";
+import { toKobo, fromKobo, splitProportional } from "../utils/money.js";
+import JournalEntry from "../models/JournalEntry.js";
+import AuditLog from "../models/AuditLog.js";
+import {
+  postSavingsDeposit,
+  postLoanDisbursement,
+  postLoanRepayment,
+  postDividendPayout,
+  trialBalance,
+} from "../services/ledger.js";
 import { resetAccountSecurityLock } from "../utils/accountSecurity.js";
 import { LOCKED_SAVINGS_PERCENTAGE, WITHDRAWABLE_PERCENTAGE } from "../utils/contributionRules.js";
 import {
@@ -762,17 +774,38 @@ router.patch(
         // status, so a double-click or two admins acting on the same
         // request at once can't both pass the earlier check and credit
         // the member twice.
-        const approvedTxn = await SavingsTransaction.findOneAndUpdate(
-          { _id: txn._id, status: "pending" },
-          {
-            $set: {
-              status: "approved",
-              lockedAmount,
-              withdrawalAmount,
+        // Status flip, balance credit and ledger entry commit together or
+        // not at all (a crash between them used to approve a request
+        // without ever crediting the member).
+        const approvedTxn = await runAtomic(async (session) => {
+          const opts = session ? { session } : {};
+          const flipped = await SavingsTransaction.findOneAndUpdate(
+            { _id: txn._id, status: "pending" },
+            { $set: { status: "approved", lockedAmount, withdrawalAmount } },
+            { new: true, ...opts }
+          );
+          if (!flipped) return null;
+
+          // Savings Balance is the member's full accumulated contributions
+          // (see withdrawalSettlement.js). Atomic $inc, never read-modify-write.
+          await User.findByIdAndUpdate(
+            txn.user,
+            { $inc: { savingsBalance: amount } },
+            opts
+          );
+
+          await postSavingsDeposit(
+            {
+              userId: txn.user,
+              amount,
+              reference: String(txn._id),
+              method: txn.method || "manual",
+              postedBy: req.user._id,
             },
-          },
-          { new: true }
-        );
+            { session }
+          );
+          return flipped;
+        });
 
         if (!approvedTxn) {
           return res.status(409).json({
@@ -780,20 +813,10 @@ router.patch(
           });
         }
 
-        // Savings Balance represents the member's full accumulated
-        // contributions (see withdrawalSettlement.js) — the same 100% a
-        // Paystack top-up credits. Only 40% of a given month's total is
-        // ever eligible to withdraw, but that's a separate, time-boxed
-        // entitlement computed elsewhere; it must not reduce what's
-        // credited here. An atomic $inc avoids a lost update if the
-        // member's balance is touched by something else at the same time.
-        await User.findByIdAndUpdate(txn.user, {
-          $inc: { savingsBalance: amount },
-        });
-
         txn.status = approvedTxn.status;
         txn.lockedAmount = approvedTxn.lockedAmount;
         txn.withdrawalAmount = approvedTxn.withdrawalAmount;
+        await audit(req, "savings.approve", "SavingsTransaction", txn._id, { amount });
       } else if (action === "reject") {
         const rejectedTxn = await SavingsTransaction.findOneAndUpdate(
           { _id: txn._id, status: "pending" },
@@ -1672,21 +1695,45 @@ router.patch(
         });
       }
 
-      loan.status = "active";
-      loan.disbursedDate =
-        new Date();
+      // Claim approved -> active atomically so two admins (or a double
+      // click) can't both disburse, and post the ledger entry in the same
+      // transaction.
+      const claimed = await runAtomic(async (session) => {
+        const opts = session ? { session } : {};
+        const doc = await Loan.findOneAndUpdate(
+          { _id: loan._id, status: "approved" },
+          {
+            $set: {
+              status: "active",
+              disbursedDate: new Date(),
+              amountPaid: 0,
+              outstandingBalance: loan.totalRepayment,
+              // Loan proceeds are NOT savings: savingsBalance is untouched.
+              // These counters track how much the member has taken out.
+              loanFundsWithdrawn: 0,
+              loanFundsReserved: 0,
+            },
+          },
+          { new: true, ...opts }
+        );
+        if (!doc) return null;
+        await postLoanDisbursement({ loan: doc, postedBy: req.user._id }, { session });
+        return doc;
+      });
 
+      if (!claimed) {
+        return res.status(409).json({
+          message: "This loan has already been disbursed.",
+        });
+      }
+
+      loan.status = claimed.status;
+      loan.disbursedDate = claimed.disbursedDate;
       loan.amountPaid = 0;
-      loan.outstandingBalance =
-        loan.totalRepayment;
-
-      // The approved loan becomes available as a separate loan-funds balance.
-      // This is NOT added to savingsBalance and is reduced only when the
-      // member withdraws/disburses part of the loan funds.
+      loan.outstandingBalance = claimed.outstandingBalance;
       loan.loanFundsWithdrawn = 0;
       loan.loanFundsReserved = 0;
-
-      await loan.save();
+      await audit(req, "loan.disburse", "Loan", loan._id, { amount: loan.amount });
 
       // Loan proceeds are NOT savings. Keep the member's savings balance
       // untouched; Loan.amount/outstandingBalance track the debt, while
@@ -1822,93 +1869,79 @@ router.patch(
         });
       }
 
-      const loan =
-        await Loan.findById(
-          repayment.loan
-        );
-
-      if (!loan) {
+      if (!(await Loan.exists({ _id: repayment.loan }))) {
         return res.status(404).json({
           message: "Loan not found",
         });
       }
 
-      let remaining =
-        repayment.amount;
+      // Claim pending -> approved, apply it to the loan and post the ledger
+      // entry in ONE transaction. Only the request that wins the claim
+      // applies the money, so a double-click or two admins can't apply the
+      // same repayment twice.
+      const outcome = await runAtomic(async (session) => {
+        const opts = session ? { session } : {};
+        const flipped = await LoanRepayment.findOneAndUpdate(
+          { _id: repayment._id, status: "pending" },
+          { $set: { status: "approved" } },
+          { new: true, ...opts }
+        );
+        if (!flipped) return { conflict: true };
 
-      for (
-        const installment of
-          loan.repaymentSchedule
-      ) {
-        if (remaining <= 0)
-          break;
+        const loan = await Loan.findById(repayment.loan, null, opts);
 
-        if (
-          installment.status ===
-          "paid"
-        ) {
-          continue;
+        let remaining = repayment.amount;
+        for (const installment of loan.repaymentSchedule) {
+          if (remaining <= 0) break;
+          if (installment.status === "paid") continue;
+
+          const stillOwedOnThis = installment.amountDue - installment.amountPaid;
+          const applied = Math.min(stillOwedOnThis, remaining);
+
+          installment.amountPaid += applied;
+          remaining -= applied;
+
+          if (installment.amountPaid >= installment.amountDue) {
+            installment.status = "paid";
+            installment.paidDate = new Date();
+          } else if (installment.amountPaid > 0) {
+            installment.status = "partial";
+          }
         }
 
-        const stillOwedOnThis =
-          installment.amountDue -
-          installment.amountPaid;
-
-        const applied =
-          Math.min(
-            stillOwedOnThis,
-            remaining
-          );
-
-        installment.amountPaid +=
-          applied;
-
-        remaining -= applied;
-
-        if (
-          installment.amountPaid >=
-          installment.amountDue
-        ) {
-          installment.status =
-            "paid";
-
-          installment.paidDate =
-            new Date();
-        } else if (
-          installment.amountPaid > 0
-        ) {
-          installment.status =
-            "partial";
-        }
-      }
-
-      loan.amountPaid +=
-        repayment.amount;
-
-      loan.outstandingBalance =
-        Math.max(
+        loan.amountPaid += repayment.amount;
+        // Round to kobo so float drift can't leave a stray 0.0000001 that
+        // stops the loan from ever reaching exactly zero.
+        loan.outstandingBalance = Math.max(
           0,
-          loan.outstandingBalance -
-            repayment.amount
+          Math.round((loan.outstandingBalance - repayment.amount) * 100) / 100
         );
 
-      if (
-        loan.outstandingBalance ===
-        0
-      ) {
-        loan.status =
-          "completed";
+        if (loan.outstandingBalance === 0) {
+          loan.status = "completed";
+          loan.completedDate = new Date();
+        }
 
-        loan.completedDate =
-          new Date();
+        await loan.save(opts);
+        await postLoanRepayment(
+          { loan, repayment: flipped, postedBy: req.user._id },
+          { session }
+        );
+        return { loan };
+      });
+
+      if (outcome.conflict) {
+        return res.status(409).json({
+          message: "This request has already been handled",
+        });
       }
 
-      await loan.save();
-
-      repayment.status =
-        "approved";
-
-      await repayment.save();
+      const loan = outcome.loan;
+      repayment.status = "approved";
+      await audit(req, "loan-repayment.approve", "LoanRepayment", repayment._id, {
+        amount: repayment.amount,
+        loan: String(loan._id),
+      });
 
       await createNotificationAndPush({
         user: repayment.user,
@@ -2148,10 +2181,28 @@ router.get(
     try {
       const distributions =
         await DividendDistribution.find()
-          .sort("-createdAt");
+          .sort("-createdAt")
+          .lean();
+
+      // Paid totals per distribution (the Reports tab reads paidAmount).
+      const paidRows = await DividendEntry.aggregate([
+        { $match: { status: "paid" } },
+        {
+          $group: {
+            _id: "$distribution",
+            paidAmount: { $sum: "$dividendAmount" },
+            paidCount: { $sum: 1 },
+          },
+        },
+      ]);
+      const paidById = new Map(paidRows.map((r) => [String(r._id), r]));
 
       res.json(
-        distributions
+        distributions.map((d) => ({
+          ...d,
+          paidAmount: paidById.get(String(d._id))?.paidAmount || 0,
+          paidCount: paidById.get(String(d._id))?.paidCount || 0,
+        }))
       );
     } catch (err) {
       console.error("List dividends error:", err);
@@ -2320,374 +2371,420 @@ router.get(
   }
 );
 
-router.post(
-  "/dividends/:id/calculate",
-  async (req, res) => {
-    try {
-      const distribution =
-        await DividendDistribution.findById(
-          req.params.id
-        );
+/*
+  Pays ONE dividend entry: claims pending -> paid and posts the ledger entry in
+  a single transaction. Only the caller that wins the claim pays, so repeated
+  clicks, concurrent pay-all runs, or a retry can never pay a member twice.
+  Returns the paid entry, or null if it was not pending.
+*/
+async function payDividendEntry(entryId, distributionId, postedBy) {
+  return runAtomic(async (session) => {
+    const opts = session ? { session } : {};
+    const entry = await DividendEntry.findOneAndUpdate(
+      { _id: entryId, distribution: distributionId, status: "pending" },
+      { $set: { status: "paid", paidDate: new Date() } },
+      { new: true, ...opts }
+    );
+    if (!entry) return null;
+    await postDividendPayout({ entry, postedBy }, { session });
+    return entry;
+  });
+}
 
-      if (!distribution) {
-        return res.status(404).json({
-          message:
-            "Dividend distribution not found",
-        });
-      }
+async function completeDistributionIfDone(distributionId) {
+  const stillPending = await DividendEntry.countDocuments({
+    distribution: distributionId,
+    status: "pending",
+  });
+  if (stillPending === 0) {
+    await DividendDistribution.findOneAndUpdate(
+      { _id: distributionId, status: "calculated" },
+      { status: "completed" }
+    );
+  }
+}
 
-      if (
-        distribution.status ===
-        "completed"
-      ) {
-        return res.status(400).json({
-          message:
-            "This distribution has already been completed and can't be recalculated.",
-        });
-      }
+router.post("/dividends/:id/calculate", async (req, res) => {
+  try {
+    const distribution = await DividendDistribution.findById(req.params.id);
 
-      if (
-        !distribution.periodStartDate ||
-        !distribution.periodEndDate
-      ) {
-        return res.status(400).json({
-          message:
-            "Set the dividend calculation period before calculating dividends.",
-        });
-      }
+    if (!distribution) {
+      return res.status(404).json({ message: "Dividend distribution not found" });
+    }
 
-      const periodEnd =
-        new Date(
-          distribution.periodEndDate
-        );
-
-      periodEnd.setHours(
-        23,
-        59,
-        59,
-        999
-      );
-
-      const completedLoans =
-        await Loan.find({
-          status: "completed",
-          completedDate: {
-            $gte:
-              distribution.periodStartDate,
-            $lte: periodEnd,
-          },
-        }).select(
-          "user amount totalRepayment interestRate completedDate"
-        );
-
-      const eligibleMembers =
-        await User.find({
-          isApprovedMember: true,
-          membershipType:
-            "interest-bearing",
-        }).select("_id");
-
-      const eligibleIds =
-        new Set(
-          eligibleMembers.map(
-            (member) =>
-              String(
-                member._id
-              )
-          )
-        );
-
-      const interestByMember =
-        new Map();
-
-      for (
-        const loan of completedLoans
-      ) {
-        const userId =
-          String(loan.user);
-
-        if (
-          !eligibleIds.has(
-            userId
-          )
-        ) {
-          continue;
-        }
-
-        const interestPaid =
-          Math.max(
-            0,
-            Number(
-              loan.totalRepayment ||
-                0
-            ) -
-              Number(
-                loan.amount || 0
-              )
-          );
-
-        interestByMember.set(
-          userId,
-          (
-            interestByMember.get(
-              userId
-            ) || 0
-          ) + interestPaid
-        );
-      }
-
-      const qualifyingMembers =
-        Array.from(
-          interestByMember.entries()
-        )
-          .filter(
-            ([, interest]) =>
-              interest > 0
-          )
-          .map(
-            ([
-              user,
-              qualifyingInterest,
-            ]) => ({
-              user,
-              qualifyingInterest,
-            })
-          );
-
-      const totalEligibleInterest =
-        qualifyingMembers.reduce(
-          (
-            sum,
-            member
-          ) =>
-            sum +
-            member.qualifyingInterest,
-          0
-        );
-
-      await DividendEntry.deleteMany(
-        {
-          distribution:
-            distribution._id,
-        }
-      );
-
-      if (
-        totalEligibleInterest > 0
-      ) {
-        const entries =
-          qualifyingMembers.map(
-            ({
-              user,
-              qualifyingInterest,
-            }) => ({
-              distribution:
-                distribution._id,
-
-              user,
-
-              contribution:
-                qualifyingInterest,
-
-              qualifyingInterest,
-
-              dividendAmount:
-                Math.round(
-                  (
-                    qualifyingInterest /
-                    totalEligibleInterest
-                  ) *
-                    distribution.pool
-                ),
-
-              status: "pending",
-            })
-          );
-
-        await DividendEntry.insertMany(
-          entries
-        );
-      }
-
-      distribution.totalEligibleInterest =
-        totalEligibleInterest;
-
-      distribution.status =
-        "calculated";
-
-      distribution.calculatedDate =
-        new Date();
-
-      await distribution.save();
-
-      res.json(
-        distribution
-      );
-    } catch (err) {
-      console.error("Calculate dividend distribution error:", err);
-      res.status(500).json({
-        message: "Could not calculate this dividend distribution.",
+    if (distribution.status === "completed") {
+      return res.status(400).json({
+        message:
+          "This distribution has already been completed and can't be recalculated.",
       });
     }
-  }
-);
 
-router.patch(
-  "/dividends/:id/entries/:entryId",
-  async (req, res) => {
-    try {
-      const entry =
-        await DividendEntry.findOne({
-          _id:
-            req.params.entryId,
-          distribution:
-            req.params.id,
-        });
+    if (!distribution.periodStartDate || !distribution.periodEndDate) {
+      return res.status(400).json({
+        message:
+          "Set the dividend calculation period before calculating dividends.",
+      });
+    }
 
-      if (!entry) {
-        return res.status(404).json({
-          message:
-            "Dividend entry not found",
-        });
+    // Recalculating used to delete every entry, including ones already paid,
+    // and then create fresh "pending" ones - paying those members again.
+    const alreadyPaid = await DividendEntry.countDocuments({
+      distribution: distribution._id,
+      status: "paid",
+    });
+    if (alreadyPaid > 0) {
+      return res.status(400).json({
+        message:
+          "Some dividends in this distribution have already been paid, so it can no longer be recalculated.",
+      });
+    }
+
+    const periodEnd = new Date(distribution.periodEndDate);
+    periodEnd.setHours(23, 59, 59, 999);
+
+    const completedLoans = await Loan.find({
+      status: "completed",
+      completedDate: { $gte: distribution.periodStartDate, $lte: periodEnd },
+    }).select("user amount totalRepayment interestRate completedDate");
+
+    const eligibleMembers = await User.find({
+      isApprovedMember: true,
+      membershipType: "interest-bearing",
+    }).select("_id");
+    const eligibleIds = new Set(eligibleMembers.map((m) => String(m._id)));
+
+    // Interest = totalRepayment - principal. Overdue charges are tracked
+    // separately (overdueChargeTotal), so penalties are not counted here.
+    const interestByMember = new Map();
+    for (const loan of completedLoans) {
+      const userId = String(loan.user);
+      if (!eligibleIds.has(userId)) continue;
+      const interestPaid = Math.max(
+        0,
+        Number(loan.totalRepayment || 0) - Number(loan.amount || 0)
+      );
+      interestByMember.set(userId, (interestByMember.get(userId) || 0) + interestPaid);
+    }
+
+    const qualifyingMembers = Array.from(interestByMember.entries())
+      .filter(([, interest]) => interest > 0)
+      .map(([user, qualifyingInterest]) => ({ user, qualifyingInterest }));
+
+    const totalEligibleInterest = qualifyingMembers.reduce(
+      (sum, m) => sum + m.qualifyingInterest,
+      0
+    );
+
+    // Largest-remainder split in kobo: the entries add up to exactly the
+    // pool (independent rounding used to drift by a few naira).
+    const shares = splitProportional(
+      toKobo(distribution.pool),
+      qualifyingMembers.map((m) => m.qualifyingInterest)
+    );
+
+    await runAtomic(async (session) => {
+      const opts = session ? { session } : {};
+      await DividendEntry.deleteMany(
+        { distribution: distribution._id, status: "pending" },
+        opts
+      );
+
+      if (totalEligibleInterest > 0) {
+        await DividendEntry.insertMany(
+          qualifyingMembers.map(({ user, qualifyingInterest }, i) => ({
+            distribution: distribution._id,
+            user,
+            contribution: qualifyingInterest,
+            qualifyingInterest,
+            dividendAmount: fromKobo(shares[i]),
+            status: "pending",
+          })),
+          opts
+        );
       }
 
-      entry.status = "paid";
-      entry.paidDate =
-        new Date();
+      distribution.totalEligibleInterest = totalEligibleInterest;
+      distribution.status = "calculated";
+      distribution.calculatedDate = new Date();
+      await distribution.save(opts);
+    });
 
-      await entry.save();
+    await audit(req, "dividend.calculate", "DividendDistribution", distribution._id, {
+      pool: distribution.pool,
+      members: qualifyingMembers.length,
+    });
 
+    res.json(distribution);
+  } catch (err) {
+    console.error("Calculate dividend distribution error:", err);
+    res.status(500).json({
+      message: "Could not calculate this dividend distribution.",
+    });
+  }
+});
+
+router.patch("/dividends/:id/entries/:entryId", async (req, res) => {
+  try {
+    const distribution = await DividendDistribution.findById(req.params.id);
+
+    if (!distribution) {
+      return res.status(404).json({ message: "Dividend distribution not found" });
+    }
+
+    if (distribution.status !== "calculated") {
+      return res.status(400).json({
+        message:
+          "Dividends can only be paid after the distribution is calculated, and not once it is completed.",
+      });
+    }
+
+    const paid = await payDividendEntry(
+      req.params.entryId,
+      distribution._id,
+      req.user._id
+    );
+
+    if (!paid) {
+      const exists = await DividendEntry.exists({
+        _id: req.params.entryId,
+        distribution: distribution._id,
+      });
+      return res.status(exists ? 409 : 404).json({
+        message: exists
+          ? "This dividend has already been paid."
+          : "Dividend entry not found",
+      });
+    }
+
+    try {
       await createNotificationAndPush({
-        user: entry.user,
+        user: paid.user,
         type: "dividend",
         title: "Dividend Paid",
+        message: `Your dividend of ₦${Number(paid.dividendAmount || 0).toLocaleString()} has been paid.`,
+      });
+    } catch (err) {
+      console.error("Dividend notification error:", err.message);
+    }
+
+    await completeDistributionIfDone(distribution._id);
+    await audit(req, "dividend.pay-entry", "DividendEntry", paid._id, {
+      amount: paid.dividendAmount,
+    });
+
+    const populated = await DividendEntry.findById(paid._id).populate(
+      "user",
+      "fullName email membershipType"
+    );
+    res.json(populated);
+  } catch (err) {
+    console.error("Update dividend entry error:", err);
+    res.status(500).json({ message: "Could not update this dividend entry." });
+  }
+});
+
+router.patch("/dividends/:id/pay-all", async (req, res) => {
+  try {
+    const distribution = await DividendDistribution.findById(req.params.id);
+
+    if (!distribution) {
+      return res.status(404).json({ message: "Dividend distribution not found" });
+    }
+
+    if (distribution.status !== "calculated") {
+      return res.status(400).json({
         message:
-          `Your dividend of ₦${Number(
-            entry.dividendAmount || 0
-          ).toLocaleString()} has been paid.`,
-      });
-
-      const remainingPending =
-        await DividendEntry.countDocuments(
-          {
-            distribution:
-              req.params.id,
-            status: "pending",
-          }
-        );
-
-      if (
-        remainingPending === 0
-      ) {
-        await DividendDistribution.findByIdAndUpdate(
-          req.params.id,
-          {
-            status: "completed",
-          }
-        );
-      }
-
-      const populated =
-        await DividendEntry.findById(
-          entry._id
-        ).populate(
-          "user",
-          "fullName email membershipType"
-        );
-
-      res.json(
-        populated
-      );
-    } catch (err) {
-      console.error("Update dividend entry error:", err);
-      res.status(500).json({
-        message: "Could not update this dividend entry.",
+          "Dividends can only be paid after the distribution is calculated, and not once it is completed.",
       });
     }
-  }
-);
 
-router.patch(
-  "/dividends/:id/pay-all",
-  async (req, res) => {
-    try {
-      const distribution =
-        await DividendDistribution.findById(
-          req.params.id
-        );
+    const pendingEntries = await DividendEntry.find({
+      distribution: distribution._id,
+      status: "pending",
+    }).select("_id");
 
-      if (!distribution) {
-        return res.status(404).json({
-          message:
-            "Dividend distribution not found",
-        });
-      }
-
-      const pendingEntries =
-        await DividendEntry.find({
-          distribution:
-            distribution._id,
-          status: "pending",
-        });
-
-      const paidDate =
-        new Date();
-
-      await DividendEntry.updateMany(
-        {
-          distribution:
-            distribution._id,
-          status: "pending",
-        },
-        {
-          status: "paid",
-          paidDate,
-        }
-      );
-
-      await Promise.all(
-        pendingEntries.map(
-          (entry) =>
-            createNotificationAndPush({
-              user: entry.user,
-              type: "dividend",
-              title: "Dividend Paid",
-              message:
-                `Your dividend of ₦${Number(
-                  entry.dividendAmount ||
-                    0
-                ).toLocaleString()} has been paid.`,
-            })
-        )
-      );
-
-      distribution.status =
-        "completed";
-
-      await distribution.save();
-
-      const entries =
-        await DividendEntry.find({
-          distribution:
-            distribution._id,
-        })
-          .populate(
-            "user",
-            "fullName email membershipType"
-          )
-          .sort("-dividendAmount");
-
-      res.json({
-        distribution,
-        entries,
-      });
-    } catch (err) {
-      console.error("Pay dividend distribution error:", err);
-      res.status(500).json({
-        message: "Could not process dividend payouts.",
-      });
+    if (pendingEntries.length === 0) {
+      return res.status(400).json({ message: "There are no pending dividends to pay." });
     }
+
+    // Each entry is claimed and ledgered atomically on its own. If something
+    // fails midway, the ones already paid stay paid and the rest can simply
+    // be retried - nobody is paid twice.
+    const paidEntries = [];
+    for (const { _id } of pendingEntries) {
+      const paid = await payDividendEntry(_id, distribution._id, req.user._id);
+      if (paid) paidEntries.push(paid);
+    }
+
+    await Promise.all(
+      paidEntries.map((entry) =>
+        createNotificationAndPush({
+          user: entry.user,
+          type: "dividend",
+          title: "Dividend Paid",
+          message: `Your dividend of ₦${Number(entry.dividendAmount || 0).toLocaleString()} has been paid.`,
+        }).catch((err) => console.error("Dividend notification error:", err.message))
+      )
+    );
+
+    await completeDistributionIfDone(distribution._id);
+    await audit(req, "dividend.pay-all", "DividendDistribution", distribution._id, {
+      paid: paidEntries.length,
+      total: paidEntries.reduce((s, e) => s + Number(e.dividendAmount || 0), 0),
+    });
+
+    const fresh = await DividendDistribution.findById(distribution._id);
+    const entries = await DividendEntry.find({ distribution: distribution._id })
+      .populate("user", "fullName email membershipType")
+      .sort("-dividendAmount");
+
+    res.json({ distribution: fresh, entries });
+  } catch (err) {
+    console.error("Pay dividend distribution error:", err);
+    res.status(500).json({ message: "Could not process dividend payouts." });
   }
-);
+});
+
+/*
+  ============================
+  LEDGER, AUDIT & REPORTS (server-side, paginated)
+  ============================
+*/
+
+const pageParams = (req) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
+  return { page, limit, skip: (page - 1) * limit };
+};
+
+// GET /api/admin/ledger/trial-balance?asOf=YYYY-MM-DD   (amounts in naira)
+router.get("/ledger/trial-balance", async (req, res) => {
+  try {
+    const tb = await trialBalance({ asOf: req.query.asOf });
+    res.json({
+      accounts: tb.accounts.map((a) => ({
+        code: a.code,
+        name: a.name,
+        type: a.type,
+        debit: fromKobo(a.debit),
+        credit: fromKobo(a.credit),
+        balance: fromKobo(a.balance),
+      })),
+      totalDebit: fromKobo(tb.totalDebit),
+      totalCredit: fromKobo(tb.totalCredit),
+      balanced: tb.balanced,
+    });
+  } catch (err) {
+    console.error("Trial balance error:", err);
+    res.status(500).json({ message: "Could not load the trial balance." });
+  }
+});
+
+// GET /api/admin/ledger/entries?page=&limit=&account=&user=&sourceType=&from=&to=
+router.get("/ledger/entries", async (req, res) => {
+  try {
+    const { page, limit, skip } = pageParams(req);
+    const q = {};
+    if (req.query.account) q["lines.account"] = String(req.query.account);
+    if (req.query.user) q["lines.user"] = req.query.user;
+    if (req.query.sourceType) q.sourceType = String(req.query.sourceType);
+    if (req.query.from || req.query.to) {
+      q.postedAt = {};
+      if (req.query.from) q.postedAt.$gte = new Date(req.query.from);
+      if (req.query.to) q.postedAt.$lte = new Date(req.query.to);
+    }
+
+    const [total, rows] = await Promise.all([
+      JournalEntry.countDocuments(q),
+      JournalEntry.find(q).sort("-postedAt").skip(skip).limit(limit).lean(),
+    ]);
+
+    res.json({
+      page,
+      limit,
+      total,
+      entries: rows.map((e) => ({
+        ...e,
+        total: fromKobo(e.totalKobo),
+        lines: e.lines.map((l) => ({
+          ...l,
+          debit: fromKobo(l.debit),
+          credit: fromKobo(l.credit),
+        })),
+      })),
+    });
+  } catch (err) {
+    console.error("Ledger entries error:", err);
+    res.status(500).json({ message: "Could not load ledger entries." });
+  }
+});
+
+// GET /api/admin/audit-logs?page=&limit=&action=&actor=
+router.get("/audit-logs", async (req, res) => {
+  try {
+    const { page, limit, skip } = pageParams(req);
+    const q = {};
+    if (req.query.action) q.action = String(req.query.action);
+    if (req.query.actor) q.actor = req.query.actor;
+
+    const [total, logs] = await Promise.all([
+      AuditLog.countDocuments(q),
+      AuditLog.find(q).sort("-createdAt").skip(skip).limit(limit).lean(),
+    ]);
+    res.json({ page, limit, total, logs });
+  } catch (err) {
+    console.error("Audit log error:", err);
+    res.status(500).json({ message: "Could not load the audit log." });
+  }
+});
+
+// GET /api/admin/reports/summary - totals computed in the database, not the browser
+router.get("/reports/summary", async (req, res) => {
+  try {
+    const sum = (rows) => Number(rows[0]?.total || 0);
+
+    const [members, savings, disbursed, outstanding, repaid, withdrawn, dividends] =
+      await Promise.all([
+        User.countDocuments({ role: { $ne: "admin" } }),
+        User.aggregate([
+          { $match: { role: { $ne: "admin" } } },
+          { $group: { _id: null, total: { $sum: "$savingsBalance" } } },
+        ]),
+        Loan.aggregate([
+          { $match: { disbursedDate: { $ne: null } } },
+          { $group: { _id: null, total: { $sum: "$amount" } } },
+        ]),
+        Loan.aggregate([
+          { $match: { disbursedDate: { $ne: null }, outstandingBalance: { $gt: 0 } } },
+          { $group: { _id: null, total: { $sum: "$outstandingBalance" } } },
+        ]),
+        LoanRepayment.aggregate([
+          { $match: { status: "approved" } },
+          { $group: { _id: null, total: { $sum: "$amount" } } },
+        ]),
+        Withdrawal.aggregate([
+          { $match: { status: "success" } },
+          { $group: { _id: null, total: { $sum: "$amount" } } },
+        ]),
+        DividendEntry.aggregate([
+          { $match: { status: "paid" } },
+          { $group: { _id: null, total: { $sum: "$dividendAmount" } } },
+        ]),
+      ]);
+
+    res.json({
+      members,
+      totalSavings: sum(savings),
+      loansDisbursed: sum(disbursed),
+      loansOutstanding: sum(outstanding),
+      repaymentsReceived: sum(repaid),
+      withdrawalsPaid: sum(withdrawn),
+      dividendsPaid: sum(dividends),
+    });
+  } catch (err) {
+    console.error("Reports summary error:", err);
+    res.status(500).json({ message: "Could not load the report summary." });
+  }
+});
 
 export default router;

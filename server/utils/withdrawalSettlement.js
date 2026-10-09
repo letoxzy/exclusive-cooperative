@@ -1,5 +1,6 @@
 import User from "../models/User.js";
 import Loan from "../models/Loan.js";
+import { postWithdrawalPaid } from "../services/ledger.js";
 
 const DEFAULT_ADMINISTRATIVE_FEE = 0;
 
@@ -164,4 +165,15 @@ export async function settleWithdrawal(
   }
 
   await withdrawal.save();
+
+  // Cash has left the bank only on a successful withdrawal. The post is
+  // idempotent (reference "withdrawal:<id>"); if it fails the money state is
+  // already correct and `npm run ledger:verify` will list the missing entry.
+  if (withdrawal.status === "success") {
+    try {
+      await postWithdrawalPaid({ withdrawal });
+    } catch (err) {
+      console.error("Ledger post failed for withdrawal", String(withdrawal._id), err.message);
+    }
+  }
 }

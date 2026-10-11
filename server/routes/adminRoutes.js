@@ -26,6 +26,7 @@ import { audit } from "../utils/audit.js";
 import { makerCheckerEnabled, sameAdmin } from "../utils/fourEyes.js";
 import { collectInterestRows, repaymentPortions } from "../utils/dividendBasis.js";
 import { summarizeInterest, allocatePool } from "../utils/dividendMath.js";
+import { buildRejection } from "../utils/kycReview.js";
 import { toKobo, fromKobo, splitProportional } from "../utils/money.js";
 import JournalEntry from "../models/JournalEntry.js";
 import AuditLog from "../models/AuditLog.js";
@@ -1219,6 +1220,10 @@ router.get(
           reviewedDate: application.reviewedDate,
           reviewedBy: application.reviewedBy?.fullName || "",
           rejectionReason: application.rejectionReason,
+          rejectionCategory: application.rejectionCategory || "",
+          internalNote: application.internalNote || "",
+          reapplyAllowed: application.reapplyAllowed !== false,
+          reapplyAfter: application.reapplyAfter || null,
           approvedWithMismatch: application.approvedWithMismatch,
           user: {
             fullName: application.user?.fullName || "",
@@ -1274,6 +1279,9 @@ router.patch(
       const {
         action,
         rejectionReason,
+        rejectionCategory,
+        internalNote,
+        allowReapply,
         confirmMismatch,
       } = req.body;
 
@@ -1304,29 +1312,57 @@ router.patch(
       }
 
       if (action === "reject") {
-        const reason = String(rejectionReason || "").trim();
+        const rejection = buildRejection({
+          rejectionReason,
+          rejectionCategory,
+          internalNote,
+          allowReapply,
+        });
 
-        if (reason.length < 3) {
-          return res.status(400).json({
-            message:
-              "Please give the member a reason for the rejection.",
+        if (rejection.error) {
+          return res.status(400).json({ message: rejection.error });
+        }
+
+        // Only a still-pending application can be rejected. If another admin
+        // approved or rejected it a moment ago, this changes nothing (409) -
+        // previously the last save won, which could leave a member flagged
+        // loan-eligible with a "rejected" application.
+        const rejected = await LoanEligibility.findOneAndUpdate(
+          { _id: application._id, status: "pending" },
+          {
+            $set: {
+              ...rejection.fields,
+              status: "rejected",
+              reviewedDate: new Date(),
+              reviewedBy: req.user._id,
+            },
+          },
+          { new: true }
+        );
+
+        if (!rejected) {
+          return res.status(409).json({
+            message: "This application has already been reviewed.",
           });
         }
 
-        application.status = "rejected";
-        application.rejectionReason = reason;
-        application.reviewedDate = new Date();
-        application.reviewedBy = req.user._id;
-
-        await application.save();
-
-        await createNotificationAndPush({
-          user: application.user,
-          type: "loan-eligibility",
-          title:
-            "Full Loan Application Update",
-          message: `Your Full Loan Application was not approved. Reason: ${application.rejectionReason}`,
+        await audit(req, "loan-eligibility.reject", "LoanEligibility", rejected._id, {
+          member: String(rejected.user),
+          category: rejected.rejectionCategory,
+          reapplyAllowed: rejected.reapplyAllowed,
+          reapplyAfter: rejected.reapplyAfter,
         });
+
+        try {
+          await createNotificationAndPush({
+            user: rejected.user,
+            type: "loan-eligibility",
+            title: "Full Loan Application Update",
+            message: rejection.memberMessage,
+          });
+        } catch (notificationError) {
+          console.error("Eligibility rejected but notification failed:", notificationError.message);
+        }
 
         const populated =
           await LoanEligibility.findById(
@@ -1375,19 +1411,41 @@ router.patch(
           });
         }
 
-        application.status = "approved";
-        application.reviewedDate = new Date();
-        application.reviewedBy = req.user._id;
-        application.approvedWithMismatch = mismatch || duplicateBvn;
+        // Claim pending -> approved and flag the member loan-eligible in one
+        // transaction, so it can never race with a rejection or half-apply.
+        const approved = await runAtomic(async (session) => {
+          const opts = session ? { session } : {};
+          const doc = await LoanEligibility.findOneAndUpdate(
+            { _id: application._id, status: "pending" },
+            {
+              $set: {
+                status: "approved",
+                reviewedDate: new Date(),
+                reviewedBy: req.user._id,
+                approvedWithMismatch: mismatch || duplicateBvn,
+              },
+            },
+            { new: true, ...opts }
+          );
+          if (!doc) return null;
+          await User.findByIdAndUpdate(
+            application.user,
+            { isLoanEligible: true },
+            opts
+          );
+          return doc;
+        });
 
-        await application.save();
+        if (!approved) {
+          return res.status(409).json({
+            message: "This application has already been reviewed.",
+          });
+        }
 
-        await User.findByIdAndUpdate(
-          application.user,
-          {
-            isLoanEligible: true,
-          }
-        );
+        await audit(req, "loan-eligibility.approve", "LoanEligibility", approved._id, {
+          member: String(approved.user),
+          approvedWithMismatch: approved.approvedWithMismatch,
+        });
 
         await createNotificationAndPush({
           user: application.user,

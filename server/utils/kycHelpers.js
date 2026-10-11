@@ -44,6 +44,22 @@ export function safeApplication(application) {
       (value.status === "draft" || (value.status === "rejected" && !value.reviewedBy))
   );
 
+  // Can the member start a NEW verification right now? Only an administrator's
+  // rejection can block this (attempts closed by the system can always be redone).
+  const adminRejected = value.status === "rejected" && Boolean(value.reviewedBy);
+  value.canStartNew = true;
+  if (adminRejected) {
+    if (value.reapplyAllowed === false) {
+      value.canStartNew = false;
+    } else if (value.reapplyAfter && new Date(value.reapplyAfter) > new Date()) {
+      value.canStartNew = false;
+    }
+  }
+
+  // Private to administrators.
+  delete value.internalNote;
+  delete value.rejectionCategory;
+
   delete value.bvn;
   delete value.bvnHash;
   delete value.verificationSnapshot;

@@ -174,6 +174,30 @@ const loanEligibilitySchema = new mongoose.Schema(
       default: "",
     },
 
+    // Why an administrator rejected the application (for reporting), a private
+    // note that is NEVER shown to the member, and whether/when they may reapply.
+    rejectionCategory: {
+      type: String,
+      enum: [
+        "",
+        "identity_mismatch",
+        "duplicate_bvn",
+        "unclear_photo",
+        "details_incomplete",
+        "suspected_fraud",
+        "other",
+      ],
+      default: "",
+    },
+    internalNote: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: "",
+    },
+    reapplyAllowed: { type: Boolean, default: true },
+    reapplyAfter: { type: Date, default: null },
+
     // Set when the verification finishes and the application enters the
     // administrator's review queue.
     submittedDate: {

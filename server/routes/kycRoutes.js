@@ -18,6 +18,7 @@ import {
   safeApplication,
 } from "../utils/kycHelpers.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
+import { reapplyBlock } from "../utils/kycReview.js";
 
 const router = express.Router();
 
@@ -110,6 +111,17 @@ router.post("/start", protect, requireApprovedMember, async (req, res) => {
     if (application?.status === "pending" && isVerificationComplete(application)) {
       return res.status(400).json({
         message: "Your verification is complete and is already awaiting administrator review.",
+      });
+    }
+
+    // An administrator's rejection can be final, or carry a waiting period, so
+    // a rejected member cannot keep re-running (and re-billing) verification.
+    const blocked = reapplyBlock(application);
+    if (blocked) {
+      return res.status(403).json({
+        code: blocked.code,
+        message: blocked.message,
+        reapplyAfter: blocked.reapplyAfter || null,
       });
     }
 

@@ -20,6 +20,9 @@ import AddExistingMemberModal from "../components/admin/AddExistingMemberModal";
 import AdminNotifications from "../components/admin/AdminNotifications";
 import AdminActionModal from "../components/admin/AdminActionModal";
 import GalleryManagement from "../components/admin/GalleryManagement";
+import LedgerPanel from "../components/admin/LedgerPanel";
+import AuditLogPanel from "../components/admin/AuditLogPanel";
+import ReconciliationPanel from "../components/admin/ReconciliationPanel";
 import KycReviewModal from "../components/admin/KycReviewModal";
 
 const statusLabel = (value) =>
@@ -799,6 +802,26 @@ function AdminDashboard() {
       setSelectedDividend(data.distribution);
       setDividendEntries(data.entries);
 
+      await loadDividends();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDividendActionLoading(false);
+    }
+  };
+
+  // Second administrator approves a calculated distribution before payout.
+  const handleApproveDividend = async (id) => {
+    try {
+      setError("");
+      setDividendActionLoading(true);
+
+      await request(`/admin/dividends/${id}/approve`, {
+        method: "POST",
+        token: user.token,
+      });
+
+      await openDividendDetail(id);
       await loadDividends();
     } catch (err) {
       setError(err.message);
@@ -1615,10 +1638,20 @@ function AdminDashboard() {
                   : "Dividend Distribution"}
               </h1>
               <p className="admin-subtitle">
-                Only interest-bearing members with fully settled loans in the
-                selected period are eligible. Shares are based on the loan
-                interest actually paid by each member.
+                Only approved, interest-bearing members qualify. Shares are
+                based on the loan interest actually collected from each member
+                in the selected period: approved repayments only, interest
+                portion only (principal and overdue charges are excluded).
               </p>
+              {selectedDividend && selectedDividend.derivedRepayments > 0 && (
+                <p className="admin-subtitle">
+                  {selectedDividend.derivedRepayments} of{" "}
+                  {selectedDividend.repaymentsCounted} repayments were approved
+                  before interest was recorded per repayment, so their interest
+                  was worked out from the loan terms. Check these before
+                  approving.
+                </p>
+              )}
             </div>
 
             <button
@@ -1674,6 +1707,26 @@ function AdminDashboard() {
                       : "Recalculate Dividends"}
                   </button>
                 )}
+
+                {selectedDividend.status === "calculated" &&
+                  dividendEntries.length > 0 &&
+                  !selectedDividend.approvedBy && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={dividendActionLoading}
+                      onClick={() =>
+                        handleApproveDividend(selectedDividend._id)
+                      }
+                    >
+                      Approve Distribution
+                    </button>
+                  )}
+
+                {selectedDividend.status === "calculated" &&
+                  selectedDividend.approvedBy && (
+                    <span className="admin-subtitle">Approved</span>
+                  )}
 
                 {selectedDividend.status === "calculated" &&
                   dividendEntries.length > 0 && (
@@ -3539,6 +3592,15 @@ function AdminDashboard() {
 
       case "settings":
         return renderSettings();
+
+      case "ledger":
+        return <LedgerPanel token={user.token} />;
+
+      case "reconciliation":
+        return <ReconciliationPanel token={user.token} />;
+
+      case "audit":
+        return <AuditLogPanel token={user.token} />;
 
       case "gallery":
         return <GalleryManagement token={user.token} />;

@@ -13,6 +13,9 @@ import {
   FaCog,
   FaImages,
   FaSignOutAlt,
+  FaBook,
+  FaBalanceScale,
+  FaClipboardList,
 } from "react-icons/fa";
 
 import logo from "../../assets/logo.png";
@@ -77,6 +80,21 @@ const menuItems = [
     id: "reports",
     label: "Reports",
     icon: FaChartBar,
+  },
+  {
+    id: "ledger",
+    label: "Ledger",
+    icon: FaBook,
+  },
+  {
+    id: "reconciliation",
+    label: "Reconciliation",
+    icon: FaBalanceScale,
+  },
+  {
+    id: "audit",
+    label: "Audit Log",
+    icon: FaClipboardList,
   },
   {
     id: "gallery",

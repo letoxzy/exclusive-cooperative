@@ -73,6 +73,17 @@ const dividendDistributionSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // Maker-checker: calculated by one admin, approved by a different one
+    // before any payout (when MAKER_CHECKER=true). Recalculating voids approval.
+    calculatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    approvedAt: { type: Date, default: null },
+
+    // How many approved repayments fed this calculation, and how many of those
+    // had their interest derived (approved before the split was stored).
+    repaymentsCounted: { type: Number, default: 0 },
+    derivedRepayments: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -119,6 +130,9 @@ const dividendEntrySchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+
+    // Number of approved repayments behind this member's interest figure.
+    repaymentsCounted: { type: Number, default: 0 },
 
     status: {
       type: String,

@@ -171,6 +171,10 @@ const loanSchema = new mongoose.Schema(
       default: "pending",
     },
 
+    // Maker-checker: the admin who approved and the admin who disbursed.
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    disbursedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+
     // Admin's reason when rejecting
     rejectionReason: {
       type: String,

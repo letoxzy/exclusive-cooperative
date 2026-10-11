@@ -23,6 +23,9 @@ import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
 import { runAtomic } from "../utils/atomic.js";
 import { audit } from "../utils/audit.js";
+import { makerCheckerEnabled, sameAdmin } from "../utils/fourEyes.js";
+import { collectInterestRows, repaymentPortions } from "../utils/dividendBasis.js";
+import { summarizeInterest, allocatePool } from "../utils/dividendMath.js";
 import { toKobo, fromKobo, splitProportional } from "../utils/money.js";
 import JournalEntry from "../models/JournalEntry.js";
 import AuditLog from "../models/AuditLog.js";
@@ -339,6 +342,45 @@ router.patch("/users/:id/security-unlock", async (req, res) => {
   ============================
 */
 
+// Reasons a member account must not be deleted yet (empty list = safe).
+async function memberDeletionBlockers(member) {
+  const id = member._id;
+  const reasons = [];
+
+  const paid = await Withdrawal.aggregate([
+    { $match: { user: id, status: "success", source: "savings" } },
+    { $group: { _id: null, total: { $sum: "$totalDeduction" } } },
+  ]);
+  // savingsBalance is the gross of all contributions; successful savings
+  // withdrawals are tracked separately, so what the member is still owed is:
+  const savingsOwed =
+    Math.round((Number(member.savingsBalance || 0) - Number(paid[0]?.total || 0)) * 100) / 100;
+  if (savingsOwed > 0) {
+    reasons.push(`they still hold \u20a6${savingsOwed.toLocaleString()} in savings`);
+  }
+  if (Number(member.withdrawalReserved || 0) > 0) {
+    reasons.push("a withdrawal is reserved against their savings");
+  }
+
+  const [openLoan, owing, processing, pendingSavings, pendingRepayment, pendingDividend] =
+    await Promise.all([
+      Loan.exists({ user: id, status: { $in: ["pending", "approved", "active", "overdue", "defaulted"] } }),
+      Loan.exists({ user: id, outstandingBalance: { $gt: 0 } }),
+      Withdrawal.exists({ user: id, status: "processing" }),
+      SavingsTransaction.exists({ user: id, status: "pending" }),
+      LoanRepayment.exists({ user: id, status: "pending" }),
+      DividendEntry.exists({ user: id, status: "pending" }),
+    ]);
+
+  if (openLoan || owing) reasons.push("they have an open loan or loan application");
+  if (processing) reasons.push("a withdrawal is still processing");
+  if (pendingSavings) reasons.push("a savings payment is awaiting approval");
+  if (pendingRepayment) reasons.push("a loan repayment is awaiting approval");
+  if (pendingDividend) reasons.push("an unpaid dividend is owed to them");
+
+  return reasons;
+}
+
 // PATCH /api/admin/users/:id/shareholding
 // Updates a member's total cooperative shareholding value.
 router.patch("/users/:id/shareholding", async (req, res) => {
@@ -370,6 +412,12 @@ router.patch("/users/:id/shareholding", async (req, res) => {
 
     member.shareholding = value;
     await member.save();
+
+    await audit(req, "member.shareholding", "User", member._id, {
+      member: member.email,
+      from: previousShareholding,
+      to: value,
+    });
 
     // Notify the member whenever an administrator changes the recorded
     // shareholding value. Notification failure should not undo the saved
@@ -418,6 +466,25 @@ router.delete("/users/:id", async (req, res) => {
         message: "Administrator accounts cannot be deleted here.",
       });
     }
+
+    // A member who still has money or unfinished business with the
+    // cooperative must be settled first. Deleting the account would orphan
+    // their loans, withdrawals and records, and make their balance vanish.
+    const blockers = await memberDeletionBlockers(member);
+    if (blockers.length > 0) {
+      return res.status(409).json({
+        message:
+          "This member cannot be deleted yet: " + blockers.join("; ") + ". Settle these first.",
+        blockers,
+      });
+    }
+
+    await audit(req, "member.delete", "User", member._id, {
+      email: member.email,
+      fullName: member.fullName,
+      savingsBalance: Number(member.savingsBalance || 0),
+      shareholding: Number(member.shareholding || 0),
+    });
 
     await Membership.deleteMany({
       user: member._id,
@@ -1597,6 +1664,7 @@ router.patch(
         }
 
         loan.status = "approved";
+        loan.approvedBy = req.user._id;
         loan.approvedDate =
           approvalDate;
         loan.amountPaid = 0;
@@ -1695,6 +1763,14 @@ router.patch(
         });
       }
 
+      // Four-eyes: the admin who approved the loan cannot also disburse it.
+      if (makerCheckerEnabled() && sameAdmin(loan.approvedBy, req.user._id)) {
+        return res.status(403).json({
+          message:
+            "A different administrator must disburse this loan. You approved it.",
+        });
+      }
+
       // Claim approved -> active atomically so two admins (or a double
       // click) can't both disburse, and post the ledger entry in the same
       // transaction.
@@ -1706,6 +1782,7 @@ router.patch(
             $set: {
               status: "active",
               disbursedDate: new Date(),
+              disbursedBy: req.user._id,
               amountPaid: 0,
               outstandingBalance: loan.totalRepayment,
               // Loan proceeds are NOT savings: savingsBalance is untouched.
@@ -1881,14 +1958,28 @@ router.patch(
       // same repayment twice.
       const outcome = await runAtomic(async (session) => {
         const opts = session ? { session } : {};
+        const loan = await Loan.findById(repayment.loan, null, opts);
+
+        // Fix this repayment's principal / interest / overdue-charge split NOW
+        // and store it on the record. Dividends count only this stored
+        // interest, so it must never be recalculated later.
+        const portions = repaymentPortions(loan, repayment.amount);
+
         const flipped = await LoanRepayment.findOneAndUpdate(
           { _id: repayment._id, status: "pending" },
-          { $set: { status: "approved" } },
+          {
+            $set: {
+              status: "approved",
+              approvedAt: new Date(),
+              approvedBy: req.user._id,
+              principalPortion: portions.principal,
+              interestPortion: portions.interest,
+              chargePortion: portions.charges,
+            },
+          },
           { new: true, ...opts }
         );
         if (!flipped) return { conflict: true };
-
-        const loan = await Loan.findById(repayment.loan, null, opts);
 
         let remaining = repayment.amount;
         for (const installment of loan.repaymentSchedule) {
@@ -2439,48 +2530,32 @@ router.post("/dividends/:id/calculate", async (req, res) => {
       });
     }
 
+    const periodStart = new Date(distribution.periodStartDate);
     const periodEnd = new Date(distribution.periodEndDate);
     periodEnd.setHours(23, 59, 59, 999);
 
-    const completedLoans = await Loan.find({
-      status: "completed",
-      completedDate: { $gte: distribution.periodStartDate, $lte: periodEnd },
-    }).select("user amount totalRepayment interestRate completedDate");
+    // BASIS: loan interest actually collected in the period. Only repayments
+    // an administrator approved inside [start, end] count, and only the
+    // interest portion of each (never principal or overdue charges).
+    const rows = await collectInterestRows({ start: periodStart, end: periodEnd });
 
+    // Only approved, interest-bearing members qualify.
     const eligibleMembers = await User.find({
       isApprovedMember: true,
       membershipType: "interest-bearing",
     }).select("_id");
     const eligibleIds = new Set(eligibleMembers.map((m) => String(m._id)));
 
-    // Interest = totalRepayment - principal. Overdue charges are tracked
-    // separately (overdueChargeTotal), so penalties are not counted here.
-    const interestByMember = new Map();
-    for (const loan of completedLoans) {
-      const userId = String(loan.user);
-      if (!eligibleIds.has(userId)) continue;
-      const interestPaid = Math.max(
-        0,
-        Number(loan.totalRepayment || 0) - Number(loan.amount || 0)
-      );
-      interestByMember.set(userId, (interestByMember.get(userId) || 0) + interestPaid);
-    }
-
-    const qualifyingMembers = Array.from(interestByMember.entries())
-      .filter(([, interest]) => interest > 0)
-      .map(([user, qualifyingInterest]) => ({ user, qualifyingInterest }));
-
-    const totalEligibleInterest = qualifyingMembers.reduce(
-      (sum, m) => sum + m.qualifyingInterest,
-      0
-    );
+    const {
+      members: qualifyingMembers,
+      totalInterest: totalEligibleInterest,
+      repaymentsCounted,
+      derivedRepayments,
+    } = summarizeInterest(rows, eligibleIds);
 
     // Largest-remainder split in kobo: the entries add up to exactly the
     // pool (independent rounding used to drift by a few naira).
-    const shares = splitProportional(
-      toKobo(distribution.pool),
-      qualifyingMembers.map((m) => m.qualifyingInterest)
-    );
+    const shares = allocatePool(distribution.pool, qualifyingMembers);
 
     await runAtomic(async (session) => {
       const opts = session ? { session } : {};
@@ -2497,6 +2572,7 @@ router.post("/dividends/:id/calculate", async (req, res) => {
             contribution: qualifyingInterest,
             qualifyingInterest,
             dividendAmount: fromKobo(shares[i]),
+            repaymentsCounted: qualifyingMembers[i].repaymentsCounted,
             status: "pending",
           })),
           opts
@@ -2504,22 +2580,120 @@ router.post("/dividends/:id/calculate", async (req, res) => {
       }
 
       distribution.totalEligibleInterest = totalEligibleInterest;
+      distribution.repaymentsCounted = repaymentsCounted;
+      distribution.derivedRepayments = derivedRepayments;
       distribution.status = "calculated";
       distribution.calculatedDate = new Date();
+      distribution.calculatedBy = req.user._id;
+      // Any change to the numbers voids a previous approval.
+      distribution.approvedBy = null;
+      distribution.approvedAt = null;
       await distribution.save(opts);
     });
 
     await audit(req, "dividend.calculate", "DividendDistribution", distribution._id, {
       pool: distribution.pool,
       members: qualifyingMembers.length,
+      totalInterestCollected: totalEligibleInterest,
+      repaymentsCounted,
+      derivedRepayments,
     });
 
-    res.json(distribution);
+    // The admin screen reads { distribution, entries } (same shape as pay-all).
+    const entries = await DividendEntry.find({ distribution: distribution._id })
+      .populate("user", "fullName email membershipType")
+      .sort("-dividendAmount");
+
+    res.json({ distribution, entries });
   } catch (err) {
     console.error("Calculate dividend distribution error:", err);
     res.status(500).json({
       message: "Could not calculate this dividend distribution.",
     });
+  }
+});
+
+router.post("/dividends/:id/approve", async (req, res) => {
+  try {
+    const distribution = await DividendDistribution.findById(req.params.id);
+
+    if (!distribution) {
+      return res.status(404).json({ message: "Dividend distribution not found" });
+    }
+
+    if (distribution.status !== "calculated") {
+      return res.status(400).json({
+        message: "Only a calculated distribution can be approved.",
+      });
+    }
+
+    // Four-eyes: whoever calculated it cannot approve it.
+    if (makerCheckerEnabled() && sameAdmin(distribution.calculatedBy, req.user._id)) {
+      return res.status(403).json({
+        message: "A different administrator must approve this distribution. You calculated it.",
+      });
+    }
+
+    const approved = await DividendDistribution.findOneAndUpdate(
+      { _id: distribution._id, status: "calculated", approvedBy: null },
+      { $set: { approvedBy: req.user._id, approvedAt: new Date() } },
+      { new: true }
+    );
+
+    if (!approved) {
+      return res.status(409).json({ message: "This distribution has already been approved." });
+    }
+
+    await audit(req, "dividend.approve", "DividendDistribution", approved._id, {
+      pool: approved.pool,
+      calculatedBy: String(approved.calculatedBy || ""),
+    });
+
+    res.json(approved);
+  } catch (err) {
+    console.error("Approve dividend distribution error:", err);
+    res.status(500).json({ message: "Could not approve this distribution." });
+  }
+});
+
+// GET /api/admin/dividends/:id/entries/:entryId/breakdown
+// Lists every approved repayment (with its interest portion) behind one
+// member's dividend figure, so the number can be checked line by line.
+router.get("/dividends/:id/entries/:entryId/breakdown", async (req, res) => {
+  try {
+    const distribution = await DividendDistribution.findById(req.params.id);
+    const entry = distribution
+      ? await DividendEntry.findOne({ _id: req.params.entryId, distribution: distribution._id })
+          .populate("user", "fullName email")
+      : null;
+
+    if (!distribution || !entry) {
+      return res.status(404).json({ message: "Dividend entry not found" });
+    }
+
+    const end = new Date(distribution.periodEndDate);
+    end.setHours(23, 59, 59, 999);
+    const rows = (
+      await collectInterestRows({ start: new Date(distribution.periodStartDate), end })
+    ).filter((r) => r.userId === String(entry.user._id) && r.interestKobo > 0);
+
+    res.json({
+      member: entry.user,
+      period: { start: distribution.periodStartDate, end: distribution.periodEndDate },
+      interestCollected: fromKobo(rows.reduce((s, r) => s + r.interestKobo, 0)),
+      dividendAmount: entry.dividendAmount,
+      repayments: rows.map((r) => ({
+        repaymentId: r.repaymentId,
+        loanId: r.loanId,
+        date: r.date,
+        amountPaid: r.amount,
+        interestPortion: fromKobo(r.interestKobo),
+        source: r.derived ? "derived" : "verified",
+      })),
+    });
+  } catch (err) {
+    console.error("Dividend breakdown error:", err);
+    res.status(500).json({ message: "Could not load the breakdown." });
   }
 });
 
@@ -2535,6 +2709,13 @@ router.patch("/dividends/:id/entries/:entryId", async (req, res) => {
       return res.status(400).json({
         message:
           "Dividends can only be paid after the distribution is calculated, and not once it is completed.",
+      });
+    }
+
+    if (makerCheckerEnabled() && !distribution.approvedBy) {
+      return res.status(403).json({
+        message:
+          "This distribution must be approved by a second administrator before it can be paid.",
       });
     }
 
@@ -2595,6 +2776,13 @@ router.patch("/dividends/:id/pay-all", async (req, res) => {
       return res.status(400).json({
         message:
           "Dividends can only be paid after the distribution is calculated, and not once it is completed.",
+      });
+    }
+
+    if (makerCheckerEnabled() && !distribution.approvedBy) {
+      return res.status(403).json({
+        message:
+          "This distribution must be approved by a second administrator before it can be paid.",
       });
     }
 

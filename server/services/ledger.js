@@ -1,6 +1,7 @@
 import LedgerAccount from "../models/LedgerAccount.js";
 import JournalEntry from "../models/JournalEntry.js";
-import { toKobo, splitProportional } from "../utils/money.js";
+import { toKobo } from "../utils/money.js";
+import { repaymentPortions } from "../utils/dividendBasis.js";
 
 /*
   Double-entry ledger service. Every money movement posts ONE balanced journal
@@ -120,10 +121,9 @@ export async function postLoanDisbursement({ loan, postedBy }, ctx) {
 export async function postLoanRepayment({ loan, repayment, postedBy }, ctx) {
   if (!ledgerEnabled()) return noop;
   const total = toKobo(repayment.amount);
-  const principal = Number(loan.amount || 0);
-  const interest = Math.max(0, Number(loan.totalRepayment || 0) - principal);
-  const charges = Math.max(0, Number(loan.overdueChargeTotal || 0));
-  const [pK, iK, cK] = splitProportional(total, [principal, interest, charges]);
+  // Same split that is stored on the repayment (single source of truth).
+  const { principalKobo: pK, interestKobo: iK, chargesKobo: cK } =
+    repaymentPortions(loan, repayment.amount);
   return postJournalEntry(
     {
       reference: `loan-repayment:${repayment._id}`,

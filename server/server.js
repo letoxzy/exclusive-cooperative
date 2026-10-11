@@ -15,6 +15,7 @@ import kycRoutes from "./routes/kycRoutes.js";
 import withdrawalRoutes from "./routes/withdrawalRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import galleryRoutes from "./routes/galleryRoutes.js";
+import reconciliationRoutes from "./routes/reconciliationRoutes.js";
 import { appConfigHandler, appGate } from "./middleware/appGate.js";
 import { startLoanOverdueScheduler } from "./services/loanOverdueService.js";
 import { ensureChartOfAccounts } from "./services/ledger.js";
@@ -22,6 +23,12 @@ import { ensureChartOfAccounts } from "./services/ledger.js";
 
 connectDB().then(async () => {
   startLoanOverdueScheduler();
+  if (process.env.LEDGER_ENABLED === "true") {
+    console.warn(
+      "[ledger] LEDGER_ENABLED=true. The accounting ledger has NOT been fully tested against " +
+        "real data yet. Keep it false in production until staging verification passes."
+    );
+  }
   try {
     await ensureChartOfAccounts();
   } catch (err) {
@@ -113,6 +120,7 @@ app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/security", securityRoutes);
 app.use("/api/membership", membershipRoutes);
+app.use("/api/admin/reconciliation", reconciliationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/loans", loanRoutes);

@@ -9,6 +9,15 @@ const loanRepaymentSchema = new mongoose.Schema(
     method: { type: String, enum: ["manual"], default: "manual" },
     receiptUrl: { type: String, default: "" },
     receiptPublicId: { type: String, default: "" },
+
+    // Set when an administrator approves the repayment. Dividends use these to
+    // count only verified interest collected in a period. The split is fixed at
+    // approval time and never recalculated. null = approved before this existed.
+    approvedAt: { type: Date, default: null },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    principalPortion: { type: Number, default: null },
+    interestPortion: { type: Number, default: null },
+    chargePortion: { type: Number, default: null },
   },
   { timestamps: true }
 );

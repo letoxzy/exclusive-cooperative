@@ -8,6 +8,16 @@ const label = (value) =>
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+const REJECTION_CATEGORIES = [
+  { value: "identity_mismatch", label: "Identity details do not match" },
+  { value: "duplicate_bvn", label: "BVN already used by another member" },
+  { value: "unclear_photo", label: "Photo or ID unclear" },
+  { value: "details_incomplete", label: "Details incomplete" },
+  { value: "suspected_fraud", label: "Suspected fraud" },
+  { value: "other", label: "Other" },
+];
+const FINAL_BY_DEFAULT = ["suspected_fraud", "duplicate_bvn"];
+
 const formatDate = (value) =>
   value ? new Date(value).toLocaleString() : "—";
 
@@ -57,6 +67,9 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
   const [confirmed, setConfirmed] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
+  const [category, setCategory] = useState("");
+  const [internalNote, setInternalNote] = useState("");
+  const [allowReapply, setAllowReapply] = useState(true);
   const [zoom, setZoom] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -174,7 +187,13 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
         token,
         body:
           action === "reject"
-            ? { action, rejectionReason: reason.trim() }
+            ? {
+                action,
+                rejectionReason: reason.trim(),
+                rejectionCategory: category,
+                internalNote: internalNote.trim(),
+                allowReapply,
+              }
             : { action, confirmMismatch: confirmed },
       });
 
@@ -433,6 +452,19 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
                   {application.reviewedDate ? ` on ${formatDate(application.reviewedDate)}` : ""}
                   {application.reviewedBy ? ` by ${application.reviewedBy}` : ""}.{" "}
                   {application.rejectionReason}
+                  <div className="kyc-hint">
+                    Category: {label(application.rejectionCategory)} ·{" "}
+                    {application.reapplyAllowed === false
+                      ? "Member cannot reapply (contact the office)"
+                      : application.reapplyAfter && new Date(application.reapplyAfter) > new Date()
+                        ? `Member can reapply after ${formatDate(application.reapplyAfter)}`
+                        : "Member may reapply"}
+                  </div>
+                  {application.internalNote && (
+                    <div className="kyc-hint">
+                      <strong>Private note (admins only):</strong> {application.internalNote}
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -460,6 +492,22 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
 
             {rejecting ? (
               <div className="kyc-reject-box">
+                <label htmlFor="kyc-reject-category">Category</label>
+                <select
+                  id="kyc-reject-category"
+                  value={category}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setCategory(next);
+                    setAllowReapply(!FINAL_BY_DEFAULT.includes(next));
+                  }}
+                  disabled={acting}
+                >
+                  <option value="">Select a category…</option>
+                  {REJECTION_CATEGORIES.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
                 <label htmlFor="kyc-reject-reason">Reason shown to the member</label>
                 <textarea
                   id="kyc-reject-reason"
@@ -469,7 +517,26 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
                   placeholder="For example: the name on the ID does not match your membership record."
                   disabled={acting}
                   autoFocus
+                  maxLength={500}
                 />
+                <label htmlFor="kyc-reject-note">Private note (admins only, never shown to the member)</label>
+                <textarea
+                  id="kyc-reject-note"
+                  rows={2}
+                  value={internalNote}
+                  onChange={(event) => setInternalNote(event.target.value)}
+                  disabled={acting}
+                  maxLength={1000}
+                />
+                <label className="kyc-confirm">
+                  <input
+                    type="checkbox"
+                    checked={allowReapply}
+                    onChange={(event) => setAllowReapply(event.target.checked)}
+                    disabled={acting}
+                  />
+                  <span>Allow the member to reapply (after a 24-hour wait)</span>
+                </label>
                 <div className="kyc-actions">
                   <button
                     type="button"
@@ -483,7 +550,7 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
                     type="button"
                     className="kyc-btn danger"
                     onClick={() => act("reject")}
-                    disabled={acting || reason.trim().length < 3}
+                    disabled={acting || !category || reason.trim().length < 3}
                   >
                     {acting ? "Rejecting…" : "Reject application"}
                   </button>

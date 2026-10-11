@@ -390,6 +390,15 @@ function FullLoanApplication() {
               {application.rejectionReason ||
                 "Your previous verification was not completed successfully."}
             </p>
+            {application.canStartNew === false && (
+              <p>
+                {application.reapplyAllowed === false
+                  ? "Please contact the cooperative office to continue."
+                  : application.reapplyAfter
+                    ? `You can start a new verification after ${new Date(application.reapplyAfter).toLocaleString()}.`
+                    : ""}
+              </p>
+            )}
           </div>
         )}
 
@@ -477,7 +486,7 @@ function FullLoanApplication() {
             type="button"
             className="btn-primary full-loan-main-action"
             onClick={startKycWidget}
-            disabled={kycLoading || !consent}
+            disabled={kycLoading || !consent || application?.canStartNew === false}
           >
             {kycLoading ? "Opening verification..." : "Start identity verification"}
             {!kycLoading && <span>→</span>}

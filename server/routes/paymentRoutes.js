@@ -12,6 +12,56 @@ const PAYSTACK_BASE = "https://api.paystack.co";
 
 const MIN_CONTRIBUTION = 10000;
 
+// App deep-link schemes we are willing to send a member back to after paying.
+// "exp"/"exps" are Expo Go (development); production builds use the app scheme.
+const ALLOWED_APP_SCHEMES = (
+  process.env.MOBILE_APP_SCHEMES || "exclusivecooperative,exp,exps"
+)
+  .split(",")
+  .map((item) => item.trim().toLowerCase())
+  .filter(Boolean);
+
+// Accept the app's own return link only if it is a deep link with an allowed
+// scheme (never http/https), so this cannot be used as an open redirect.
+function safeAppReturnUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw.length > 300) return null;
+  const match = raw.match(/^([a-z][a-z0-9+.-]*):\/\//i);
+  if (!match) return null;
+  return ALLOWED_APP_SCHEMES.includes(match[1].toLowerCase()) ? raw : null;
+}
+
+function publicApiBase(req) {
+  const configured = String(process.env.API_PUBLIC_URL || "").replace(/\/+$/, "");
+  return configured || `${req.protocol}://${req.get("host")}`;
+}
+
+const escapeHtml = (value) =>
+  String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Paystack sends the member here (a normal https page) after payment. We hand
+// them straight back to the app. Public on purpose: it only redirects and
+// carries the reference; the app verifies the payment with the server.
+router.get("/paystack/mobile-return", (req, res) => {
+  const base = safeAppReturnUrl(req.query.r) || "exclusivecooperative://payment-callback";
+  const reference = String(req.query.reference || req.query.trxref || "").slice(0, 100);
+  const target =
+    base + (base.includes("?") ? "&" : "?") + "reference=" + encodeURIComponent(reference);
+
+  res.set("Cache-Control", "no-store");
+  res.set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
+  res.status(200).type("html").send(`<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Returning to the app</title>
+<meta http-equiv="refresh" content="0;url=${escapeHtml(target)}"></head>
+<body style="font-family:sans-serif;text-align:center;padding:48px 20px">
+<h2>Payment received</h2>
+<p>Taking you back to the app&hellip;</p>
+<p><a href="${escapeHtml(target)}" style="display:inline-block;padding:12px 24px;background:#0b6b3a;color:#fff;border-radius:8px;text-decoration:none">Return to the app</a></p>
+<script>window.location.replace(${JSON.stringify(target)});</script>
+</body></html>`);
+});
+
 function normalizeFrequency(value) {
   const frequency = String(value || "monthly").trim().toLowerCase();
   if (frequency === "daily") return "daily";
@@ -60,7 +110,7 @@ router.post(
   protect,
   requireApprovedMember,
   async (req, res) => {
-    const { amount, mobile } = req.body;
+    const { amount, mobile, returnUrl } = req.body;
 
     if (typeof amount !== "number" || !Number.isFinite(amount) || amount < MIN_CONTRIBUTION) {
       return res.status(400).json({
@@ -108,8 +158,11 @@ router.post(
         }
       }
 
+      // Mobile: Paystack returns to an https page on our API, which then opens
+      // the app. Paystack does not reliably redirect straight to app:// links.
+      const appReturn = safeAppReturnUrl(returnUrl) || "exclusivecooperative://payment-callback";
       const callbackUrl = mobile
-        ? "exclusivecooperative://payment-callback"
+        ? `${publicApiBase(req)}/api/payments/paystack/mobile-return?r=${encodeURIComponent(appReturn)}`
         : `${process.env.CLIENT_URL}/payment-callback`;
 
       const response = await fetch(

@@ -74,6 +74,7 @@ function AuditLogPanel({ token }) {
             <option value="member.delete">Member deleted</option>
             <option value="loan-eligibility.approve">Loan verification approved</option>
             <option value="loan-eligibility.reject">Loan verification rejected</option>
+            <option value="loan-eligibility.allow-reapply">Loan verification reapply allowed</option>
           </select>
         </div>
 

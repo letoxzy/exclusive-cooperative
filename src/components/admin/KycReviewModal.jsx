@@ -70,6 +70,8 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
   const [category, setCategory] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [allowReapply, setAllowReapply] = useState(true);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockReason, setUnlockReason] = useState("");
   const [zoom, setZoom] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -206,7 +208,32 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
     }
   };
 
+  const unlock = async () => {
+    try {
+      setActing(true);
+      setError("");
+
+      await request(`/admin/loan-eligibility-applications/${applicationId}`, {
+        method: "PATCH",
+        token,
+        body: { action: "allow_reapply", unlockReason: unlockReason.trim() },
+      });
+
+      await onDone();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActing(false);
+    }
+  };
+
   const application = view?.application;
+  const isBlocked = Boolean(
+    application?.status === "rejected" &&
+      (application.reapplyAllowed === false ||
+        (application.reapplyAfter && new Date(application.reapplyAfter) > new Date()))
+  );
   const isPending = application?.status === "pending";
   const needsConfirm = Boolean(
     isPending &&
@@ -460,6 +487,13 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
                         ? `Member can reapply after ${formatDate(application.reapplyAfter)}`
                         : "Member may reapply"}
                   </div>
+                  {application.reapplyUnlockReason && (
+                    <div className="kyc-hint">
+                      <strong>Reapply allowed by the office</strong>
+                      {application.reapplyUnlockedAt ? ` on ${formatDate(application.reapplyUnlockedAt)}` : ""}:{" "}
+                      {application.reapplyUnlockReason}
+                    </div>
+                  )}
                   {application.internalNote && (
                     <div className="kyc-hint">
                       <strong>Private note (admins only):</strong> {application.internalNote}
@@ -470,6 +504,48 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
             </>
           )}
         </div>
+
+        {view && isBlocked && (
+          <footer className="kyc-review-footer">
+            {error && <div className="kyc-alert bad">{error}</div>}
+            {unlocking ? (
+              <div className="kyc-reject-box">
+                <label htmlFor="kyc-unlock-reason">
+                  Why is this member being allowed to reapply? (recorded in the audit log)
+                </label>
+                <textarea
+                  id="kyc-unlock-reason"
+                  rows={2}
+                  value={unlockReason}
+                  onChange={(event) => setUnlockReason(event.target.value)}
+                  placeholder="For example: member came to the office; ID checked and records corrected."
+                  disabled={acting}
+                  maxLength={500}
+                  autoFocus
+                />
+                <div className="kyc-actions">
+                  <button type="button" className="kyc-btn ghost" onClick={() => setUnlocking(false)} disabled={acting}>
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="kyc-btn primary"
+                    onClick={unlock}
+                    disabled={acting || unlockReason.trim().length < 3}
+                  >
+                    {acting ? "Saving…" : "Allow to reapply"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="kyc-actions">
+                <button type="button" className="kyc-btn primary" onClick={() => setUnlocking(true)} disabled={acting}>
+                  Allow member to reapply
+                </button>
+              </div>
+            )}
+          </footer>
+        )}
 
         {view && isPending && (
           <footer className="kyc-review-footer">

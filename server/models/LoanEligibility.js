@@ -197,6 +197,9 @@ const loanEligibilitySchema = new mongoose.Schema(
     },
     reapplyAllowed: { type: Boolean, default: true },
     reapplyAfter: { type: Date, default: null },
+  reapplyUnlockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  reapplyUnlockedAt: { type: Date, default: null },
+  reapplyUnlockReason: { type: String, trim: true, maxlength: 500, default: "" },
 
     // Set when the verification finishes and the application enters the
     // administrator's review queue.

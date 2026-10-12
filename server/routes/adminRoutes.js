@@ -1224,6 +1224,8 @@ router.get(
           internalNote: application.internalNote || "",
           reapplyAllowed: application.reapplyAllowed !== false,
           reapplyAfter: application.reapplyAfter || null,
+          reapplyUnlockReason: application.reapplyUnlockReason || "",
+          reapplyUnlockedAt: application.reapplyUnlockedAt || null,
           approvedWithMismatch: application.approvedWithMismatch,
           user: {
             fullName: application.user?.fullName || "",
@@ -1295,6 +1297,62 @@ router.patch(
           message:
             "Loan eligibility application not found",
         });
+      }
+
+      // Lift a block on a rejected application (e.g. the member came to the
+      // office and the problem was sorted out). Needs a written reason and is
+      // audited with the admin's name.
+      if (action === "allow_reapply") {
+        const unlockReason = String(req.body.unlockReason || "").trim();
+
+        if (unlockReason.length < 3 || unlockReason.length > 500) {
+          return res.status(400).json({
+            message: "Please enter the reason for allowing this member to reapply (3 to 500 characters).",
+          });
+        }
+
+        const unlocked = await LoanEligibility.findOneAndUpdate(
+          { _id: application._id, status: "rejected" },
+          {
+            $set: {
+              reapplyAllowed: true,
+              reapplyAfter: null,
+              reapplyUnlockedBy: req.user._id,
+              reapplyUnlockedAt: new Date(),
+              reapplyUnlockReason: unlockReason,
+            },
+          },
+          { new: true }
+        );
+
+        if (!unlocked) {
+          return res.status(409).json({
+            message: "Only a rejected application can be opened for reapplying.",
+          });
+        }
+
+        await audit(req, "loan-eligibility.allow-reapply", "LoanEligibility", unlocked._id, {
+          member: String(unlocked.user),
+          category: unlocked.rejectionCategory,
+          reason: unlockReason,
+        });
+
+        try {
+          await createNotificationAndPush({
+            user: unlocked.user,
+            type: "loan-eligibility",
+            title: "Full Loan Application Update",
+            message: "The cooperative office has reviewed your case. You can now start a new identity verification for your Full Loan Application.",
+          });
+        } catch (notificationError) {
+          console.error("Reapply allowed but notification failed:", notificationError.message);
+        }
+
+        const populated = await LoanEligibility.findById(application._id)
+          .populate("user", "fullName email savingsBalance isApprovedMember")
+          .populate("reviewedBy", "fullName");
+
+        return res.json(populated);
       }
 
       if (application.status === "draft") {

@@ -22,6 +22,7 @@ import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
 import { runAtomic } from "../utils/atomic.js";
+import { applyPaymentToLoan } from "../utils/loanRepaymentSettlement.js";
 import { audit } from "../utils/audit.js";
 import { makerCheckerEnabled, sameAdmin } from "../utils/fourEyes.js";
 import { collectInterestRows, repaymentPortions } from "../utils/dividendBasis.js";
@@ -1980,6 +1981,10 @@ router.get(
           }
         : {};
 
+      // ?needsRefund=true lists online payments that could not be fully
+      // applied to the loan and must be refunded by the office.
+      if (req.query.needsRefund === "true") filter.needsRefund = true;
+
       const repayments =
         await LoanRepayment.find(
           filter
@@ -2097,37 +2102,7 @@ router.patch(
         );
         if (!flipped) return { conflict: true };
 
-        let remaining = repayment.amount;
-        for (const installment of loan.repaymentSchedule) {
-          if (remaining <= 0) break;
-          if (installment.status === "paid") continue;
-
-          const stillOwedOnThis = installment.amountDue - installment.amountPaid;
-          const applied = Math.min(stillOwedOnThis, remaining);
-
-          installment.amountPaid += applied;
-          remaining -= applied;
-
-          if (installment.amountPaid >= installment.amountDue) {
-            installment.status = "paid";
-            installment.paidDate = new Date();
-          } else if (installment.amountPaid > 0) {
-            installment.status = "partial";
-          }
-        }
-
-        loan.amountPaid += repayment.amount;
-        // Round to kobo so float drift can't leave a stray 0.0000001 that
-        // stops the loan from ever reaching exactly zero.
-        loan.outstandingBalance = Math.max(
-          0,
-          Math.round((loan.outstandingBalance - repayment.amount) * 100) / 100
-        );
-
-        if (loan.outstandingBalance === 0) {
-          loan.status = "completed";
-          loan.completedDate = new Date();
-        }
+        applyPaymentToLoan(loan, repayment.amount);
 
         await loan.save(opts);
         await postLoanRepayment(

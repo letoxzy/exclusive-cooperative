@@ -460,12 +460,15 @@ router.get("/me/transactions", protect, async (req, res) => {
       ...repayments.map((repayment) => ({
         id: `repayment-${repayment._id}`,
         type: "Loan Repayment",
-        description: "Loan repayment confirmed",
+        description:
+          repayment.method === "paystack"
+            ? "Loan repayment (Paystack)"
+            : "Loan repayment confirmed",
         amount: Number(repayment.amount || 0),
         status: repayment.status,
         direction: "debit",
-        reference: repayment._id,
-        date: repayment.updatedAt || repayment.createdAt,
+        reference: repayment.reference || repayment._id,
+        date: repayment.approvedAt || repayment.updatedAt || repayment.createdAt,
       })),
 
       // LOAN DISBURSEMENTS

@@ -6,7 +6,19 @@ const loanRepaymentSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     amount: { type: Number, required: true, min: 1 },
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
-    method: { type: String, enum: ["manual"], default: "manual" },
+    method: { type: String, enum: ["manual", "paystack"], default: "manual" },
+
+    // Paystack transaction reference (online payments only). Unique, so the
+    // same payment can never be applied twice, whether it arrives through the
+    // app, the website or the webhook.
+    reference: { type: String, default: undefined },
+
+    // Money received that could NOT be applied to the loan (paid after the
+    // loan was already cleared, or more than was owed). needsRefund flags it
+    // for the office to refund; it is never silently kept.
+    overpaidAmount: { type: Number, default: 0, min: 0 },
+    needsRefund: { type: Boolean, default: false },
+    note: { type: String, trim: true, maxlength: 300, default: "" },
     receiptUrl: { type: String, default: "" },
     receiptPublicId: { type: String, default: "" },
 
@@ -21,5 +33,8 @@ const loanRepaymentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+loanRepaymentSchema.index({ reference: 1 }, { unique: true, sparse: true });
+loanRepaymentSchema.index({ needsRefund: 1 });
 
 export default mongoose.model("LoanRepayment", loanRepaymentSchema);

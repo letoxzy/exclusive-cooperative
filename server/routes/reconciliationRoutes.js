@@ -1,8 +1,10 @@
 import express from "express";
 import SavingsTransaction from "../models/SavingsTransaction.js";
+import LoanRepayment from "../models/LoanRepayment.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
 import { creditPaystackSavingsPayment } from "../utils/paystackSavingsSettlement.js";
+import { creditPaystackLoanRepayment } from "../utils/loanRepaymentSettlement.js";
 import { audit } from "../utils/audit.js";
 
 const router = express.Router();
@@ -68,6 +70,14 @@ router.get("/paystack", async (req, res) => {
       .lean();
     const byRef = new Map(ours.map((t) => [t.reference, t]));
 
+    // Loan repayments are recorded in their own collection. A repayment is
+    // "matched" when what we applied plus anything flagged for refund equals
+    // what Paystack collected.
+    const loanOurs = await LoanRepayment.find({ reference: { $in: refs } })
+      .select("reference amount overpaidAmount status")
+      .lean();
+    const loanByRef = new Map(loanOurs.map((t) => [t.reference, t]));
+
     const missingInSystem = [];
     const amountMismatch = [];
     let matched = 0;
@@ -81,6 +91,33 @@ router.get("/paystack", async (req, res) => {
         continue;
       }
       paystackTotalKobo += Number(r.amount || 0);
+      if (r.metadata?.type === "loan_repayment") {
+        const loanMine = loanByRef.get(r.reference);
+        if (!loanMine) {
+          missingInSystem.push({
+            reference: r.reference,
+            amount: Number(r.amount || 0) / 100,
+            paidAt: r.paid_at || r.paidAt || null,
+            email: r.customer?.email || "",
+            userId: r.metadata.userId,
+            kind: "loan_repayment",
+          });
+        } else if (
+          Math.round((Number(loanMine.amount || 0) + Number(loanMine.overpaidAmount || 0)) * 100) !==
+            Number(r.amount || 0) &&
+          Math.round(Number(loanMine.overpaidAmount || 0) * 100) !== Number(r.amount || 0)
+        ) {
+          amountMismatch.push({
+            reference: r.reference,
+            paystackAmount: Number(r.amount || 0) / 100,
+            recordedAmount: loanMine.amount,
+          });
+        } else {
+          matched++;
+        }
+        continue;
+      }
+
       const mine = byRef.get(r.reference);
       if (!mine || mine.status !== "approved") {
         missingInSystem.push({
@@ -111,9 +148,20 @@ router.get("/paystack", async (req, res) => {
     })
       .select("reference amount createdAt")
       .lean();
-    const notInPaystack = recorded
-      .filter((t) => !paystackRefs.has(t.reference))
-      .map((t) => ({ reference: t.reference, amount: t.amount, recordedAt: t.createdAt }));
+    const recordedLoan = await LoanRepayment.find({
+      method: "paystack",
+      createdAt: { $gte: win.from, $lte: win.to },
+    })
+      .select("reference amount overpaidAmount createdAt")
+      .lean();
+    const notInPaystack = [
+      ...recorded.map((t) => ({ reference: t.reference, amount: t.amount, recordedAt: t.createdAt })),
+      ...recordedLoan.map((t) => ({
+        reference: t.reference,
+        amount: Number(t.amount || 0) + Number(t.overpaidAmount || 0),
+        recordedAt: t.createdAt,
+      })),
+    ].filter((t) => !paystackRefs.has(t.reference));
 
     res.json({
       window: { from: win.from, to: win.to },
@@ -156,6 +204,28 @@ router.post("/paystack/credit", async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         message: "This payment has no member attached, so it cannot be credited automatically.",
+      });
+    }
+
+    // A loan repayment is applied to its loan, never credited as savings.
+    if (body.data.metadata?.type === "loan_repayment") {
+      const loanResult = await creditPaystackLoanRepayment({
+        userId,
+        loanId: body.data.metadata?.loanId,
+        amount: Number(body.data.amount || 0) / 100,
+        reference,
+      });
+
+      await audit(req, "reconciliation.credit", "LoanRepayment", reference, {
+        userId,
+        amount: loanResult.amount,
+        overpaidAmount: loanResult.overpaidAmount,
+        alreadyProcessed: loanResult.alreadyProcessed,
+      });
+
+      return res.json({
+        status: loanResult.alreadyProcessed ? "already_processed" : "credited",
+        amount: loanResult.amount,
       });
     }
 

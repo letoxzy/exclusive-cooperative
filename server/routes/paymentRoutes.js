@@ -2,15 +2,23 @@ import express from "express";
 import crypto from "crypto";
 import SavingsTransaction from "../models/SavingsTransaction.js";
 import Membership from "../models/Membership.js";
+import Loan from "../models/Loan.js";
+import LoanRepayment from "../models/LoanRepayment.js";
+import mongoose from "mongoose";
 import { protect } from "../middleware/authMiddleware.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { getContributionStatus } from "../utils/contributionRules.js";
 import { creditPaystackSavingsPayment } from "../utils/paystackSavingsSettlement.js";
+import { creditPaystackLoanRepayment } from "../utils/loanRepaymentSettlement.js";
 
 const router = express.Router();
 const PAYSTACK_BASE = "https://api.paystack.co";
 
 const MIN_CONTRIBUTION = 10000;
+
+// Smallest online loan repayment (the final balance may be smaller).
+const MIN_LOAN_REPAYMENT = 100;
+const round2 = (n) => Math.round(Number(n) * 100) / 100;
 
 // App deep-link schemes we are willing to send a member back to after paying.
 // "exp"/"exps" are Expo Go (development); production builds use the app scheme.
@@ -179,6 +187,7 @@ router.post(
             callback_url: callbackUrl,
             metadata: {
               userId: req.user._id.toString(),
+              type: "savings",
               platform: mobile ? "mobile" : "web",
             },
           }),
@@ -205,6 +214,88 @@ router.post(
     }
   }
 );
+
+// POST /api/payments/paystack/loan-repayment/initialize
+// { loanId, amount, mobile?, returnUrl? }
+// Starts a Paystack checkout for a loan repayment. The member's balance is
+// only changed after Paystack confirms the payment (verify or webhook).
+router.post("/paystack/loan-repayment/initialize", protect, async (req, res) => {
+  try {
+    const { loanId, mobile, returnUrl } = req.body || {};
+    const amount = round2(req.body?.amount);
+
+    if (!mongoose.isValidObjectId(loanId)) {
+      return res.status(400).json({ message: "Choose the loan you want to repay." });
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ message: "Enter a valid repayment amount." });
+    }
+
+    const loan = await Loan.findOne({ _id: loanId, user: req.user._id });
+    if (!loan) return res.status(404).json({ message: "Loan not found." });
+
+    if (!["active", "overdue"].includes(loan.status) || !(loan.outstandingBalance > 0)) {
+      return res.status(400).json({
+        message: "This loan has no balance to repay right now.",
+      });
+    }
+
+    const outstanding = round2(loan.outstandingBalance);
+    if (amount > outstanding) {
+      return res.status(400).json({
+        message: `That is more than you currently owe (\u20a6${outstanding.toLocaleString()}).`,
+      });
+    }
+    if (amount < MIN_LOAN_REPAYMENT && amount !== outstanding) {
+      return res.status(400).json({
+        message: `The smallest repayment is \u20a6${MIN_LOAN_REPAYMENT.toLocaleString()}, unless you are clearing your last balance.`,
+      });
+    }
+
+    // Mobile: Paystack returns to an https page on our API, which opens the
+    // app. Web: back to the website's payment page.
+    const appReturn = safeAppReturnUrl(returnUrl) || "exclusivecooperative://payment-callback";
+    const callbackUrl = mobile
+      ? `${publicApiBase(req)}/api/payments/paystack/mobile-return?r=${encodeURIComponent(appReturn)}`
+      : `${process.env.CLIENT_URL}/payment-callback`;
+
+    const response = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: req.user.email,
+        amount: Math.round(amount * 100),
+        currency: "NGN",
+        callback_url: callbackUrl,
+        metadata: {
+          userId: req.user._id.toString(),
+          loanId: loan._id.toString(),
+          type: "loan_repayment",
+          platform: mobile ? "mobile" : "web",
+          custom_fields: [
+            { display_name: "Payment for", variable_name: "payment_for", value: "Loan repayment" },
+          ],
+        },
+      }),
+    });
+
+    const data = await response.json();
+    if (!data.status) {
+      return res.status(400).json({ message: data.message || "Could not start payment" });
+    }
+
+    res.json({
+      authorizationUrl: data.data.authorization_url,
+      reference: data.data.reference,
+    });
+  } catch (err) {
+    console.error("Paystack loan repayment initialize error:", err);
+    res.status(500).json({ message: "Could not start payment. Please try again." });
+  }
+});
 
 // GET /api/payments/paystack/receipt/:reference
 // Returns receipt data for a successful Paystack savings payment owned by the member.
@@ -245,6 +336,24 @@ router.get("/paystack/verify/:reference", protect, requireApprovedMember, async 
   const { reference } = req.params;
 
   try {
+    // A loan repayment that was already recorded (the webhook usually beats
+    // the client here). Report it rather than re-verifying.
+    const existingLoanPayment = await LoanRepayment.findOne({ reference });
+    if (existingLoanPayment) {
+      if (String(existingLoanPayment.user) !== String(req.user._id)) {
+        return res.status(404).json({ message: "Payment not found." });
+      }
+      const loan = await Loan.findById(existingLoanPayment.loan).select("outstandingBalance status");
+      return res.json({
+        kind: "loan_repayment",
+        status: "already_processed",
+        amount: existingLoanPayment.amount,
+        overpaidAmount: existingLoanPayment.overpaidAmount || 0,
+        outstandingBalance: loan ? loan.outstandingBalance : null,
+        loanStatus: loan ? loan.status : null,
+      });
+    }
+
     // Someone may have already confirmed this exact payment (the webhook
     // usually beats the client here). Report it rather than re-verifying.
     const existing = await SavingsTransaction.findOne({ reference });
@@ -295,6 +404,25 @@ router.get("/paystack/verify/:reference", protect, requireApprovedMember, async 
 
     // Paystack returns the amount in kobo.
     const amount = data.data.amount / 100;
+
+    // Loan repayments are settled against the loan, never as savings.
+    if (data.data.metadata?.type === "loan_repayment") {
+      const loanResult = await creditPaystackLoanRepayment({
+        userId: req.user._id,
+        loanId: data.data.metadata?.loanId,
+        amount,
+        reference,
+      });
+
+      return res.json({
+        kind: "loan_repayment",
+        status: loanResult.alreadyProcessed ? "already_processed" : "success",
+        amount: loanResult.amount,
+        overpaidAmount: loanResult.overpaidAmount,
+        outstandingBalance: loanResult.outstandingBalance,
+        loanStatus: loanResult.loanStatus,
+      });
+    }
 
     const result = await creditPaystackSavingsPayment({
       userId: req.user._id,
@@ -378,6 +506,17 @@ router.post("/paystack/webhook", async (req, res) => {
 
     const amount = Number(data.amount || 0) / 100;
     if (!amount) return res.sendStatus(200);
+
+    // Loan repayments go to the loan, not to savings.
+    if (data.metadata?.type === "loan_repayment") {
+      await creditPaystackLoanRepayment({
+        userId,
+        loanId: data.metadata?.loanId,
+        amount,
+        reference: data.reference,
+      });
+      return res.sendStatus(200);
+    }
 
     await creditPaystackSavingsPayment({
       userId,

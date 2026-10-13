@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
@@ -26,17 +26,12 @@ function Dashboard() {
   const [repaymentLoading, setRepaymentLoading] = useState(false);
   const [repaymentError, setRepaymentError] = useState("");
   const [repaymentSuccess, setRepaymentSuccess] = useState("");
-  const [repaymentReceipt, setRepaymentReceipt] = useState(null);
-  const [repaymentReceiptPreview, setRepaymentReceiptPreview] = useState("");
-  const [copyAccountMessage, setCopyAccountMessage] = useState("");
   const [cooperativeSettings, setCooperativeSettings] = useState({
     loanMultiplier: 2,
     repaymentAccountName: "Exclusive Cooperative Multipurpose Society Limited",
     repaymentBank: "UBA",
     repaymentAccountNumber: "0123456789",
   });
-  const repaymentGalleryInputRef = useRef(null);
-  const repaymentCameraInputRef = useRef(null);
 
   const [showBalances, setShowBalances] = useState(true);
 
@@ -344,49 +339,32 @@ function Dashboard() {
   );
 
   useEffect(() => {
-    const active = loans.find((loan) => loan.status === "active");
+    const active = loans.find((loan) =>
+      ["active", "overdue"].includes(loan.status),
+    );
     if (active) loadRepayments(active._id);
   }, [loans, loadRepayments]);
 
-  const handleRepaymentReceiptChange = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setRepaymentReceipt(file);
-    setRepaymentReceiptPreview((previous) => {
-      if (previous) URL.revokeObjectURL(previous);
-      return URL.createObjectURL(file);
-    });
-    setRepaymentError("");
-    setRepaymentSuccess("");
-  };
-
-  useEffect(() => {
-    return () => {
-      if (repaymentReceiptPreview) URL.revokeObjectURL(repaymentReceiptPreview);
-    };
-  }, [repaymentReceiptPreview]);
-
-  const copyRepaymentAccount = async () => {
-    try {
-      await navigator.clipboard.writeText(cooperativeSettings.repaymentAccountNumber);
-      setCopyAccountMessage("Copied");
-      window.setTimeout(() => setCopyAccountMessage(""), 1800);
-    } catch {
-      setCopyAccountMessage("Copy failed");
-    }
-  };
+  /*
+   * ================================
+   * PAYSTACK LOAN REPAYMENT
+   *
+   * The member pays on Paystack; the loan balance is updated by the server as
+   * soon as the payment is confirmed (no receipt upload, no admin approval).
+   * ================================
+   */
+  const MIN_REPAYMENT = 100;
 
   const handleRepaymentSubmit = async (e, loanId) => {
     e.preventDefault();
     setRepaymentError("");
     setRepaymentSuccess("");
 
-    const value = Number(repaymentAmount);
+    const value = Math.round(Number(repaymentAmount) * 100) / 100;
     const outstanding = Number(currentLoan?.outstandingBalance || 0);
 
-    if (!value || value <= 0) {
-      setRepaymentError("Enter a valid repayment amount.");
+    if (!Number.isFinite(value) || value <= 0) {
+      setRepaymentError("Enter the amount you want to repay.");
       return;
     }
 
@@ -397,50 +375,25 @@ function Dashboard() {
       return;
     }
 
-    if (!repaymentReceipt) {
+    if (value < MIN_REPAYMENT && value !== outstanding) {
       setRepaymentError(
-        "Please upload your transfer receipt before submitting.",
+        `The smallest repayment is ${money(MIN_REPAYMENT)}, unless you are clearing your last balance.`,
       );
       return;
     }
 
     setRepaymentLoading(true);
-    try {
-      const apiBaseUrl =
-        import.meta.env.VITE_API_URL ||
-        "https://exclusive-cooperative-api.onrender.com/api";
-      const formData = new FormData();
-      formData.append("amount", String(value));
-      formData.append("receipt", repaymentReceipt);
 
-      const response = await fetch(`${apiBaseUrl}/loans/${loanId}/repayments`, {
+    try {
+      const data = await request("/payments/paystack/loan-repayment/initialize", {
         method: "POST",
-        credentials: "include",
-        body: formData,
+        token: user.token,
+        body: { loanId, amount: value },
       });
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(
-          data.message || data.error || "Failed to submit repayment.",
-        );
-      }
-
-      setRepaymentAmount("");
-      setRepaymentReceipt(null);
-      setRepaymentReceiptPreview("");
-      if (repaymentGalleryInputRef.current)
-        repaymentGalleryInputRef.current.value = "";
-      if (repaymentCameraInputRef.current)
-        repaymentCameraInputRef.current.value = "";
-      setRepaymentSuccess(
-        "Repayment submitted — an admin will review your transfer receipt and confirm it shortly.",
-      );
-      await loadRepayments(loanId);
-      await Promise.all([loadLoans(), loadTransactions()]);
+      window.location.href = data.authorizationUrl;
     } catch (err) {
-      setRepaymentError(err.message || "Failed to submit repayment.");
-    } finally {
+      setRepaymentError(err.message || "Could not start the payment.");
       setRepaymentLoading(false);
     }
   };
@@ -517,6 +470,40 @@ function Dashboard() {
   const outstandingLoanAmount = activeLoan
     ? Math.max(0, Number(activeLoan.outstandingBalance || 0))
     : 0;
+
+  // Repayment helpers: next unpaid instalment and quick-pick amounts.
+  const repayOutstanding = Number(currentLoan?.outstandingBalance || 0);
+  const nextInstallment = Array.isArray(currentLoan?.repaymentSchedule)
+    ? currentLoan.repaymentSchedule.find(
+        (item) =>
+          item?.status !== "paid" &&
+          Number(item?.amountDue || 0) > Number(item?.amountPaid || 0),
+      )
+    : null;
+  const nextInstallmentDue = nextInstallment
+    ? Math.round(
+        (Number(nextInstallment.amountDue) -
+          Number(nextInstallment.amountPaid || 0)) *
+          100,
+      ) / 100
+    : 0;
+  const nextInstallmentOverdue = Boolean(
+    nextInstallment?.dueDate && new Date(nextInstallment.dueDate) < new Date(),
+  );
+  const repayQuickChoices = [];
+  if (nextInstallmentDue > 0 && nextInstallmentDue < repayOutstanding) {
+    repayQuickChoices.push({ key: "next", label: "Next instalment", value: nextInstallmentDue });
+  }
+  const repayHalf = Math.round((repayOutstanding / 2) * 100) / 100;
+  if (repayHalf >= 100 && repayHalf !== nextInstallmentDue && repayHalf < repayOutstanding) {
+    repayQuickChoices.push({ key: "half", label: "Half", value: repayHalf });
+  }
+  if (repayOutstanding > 0) {
+    repayQuickChoices.push({ key: "full", label: "Clear loan", value: repayOutstanding });
+  }
+  const repayValue = Math.round(Number(repaymentAmount) * 100) / 100;
+  const repayValid =
+    Number.isFinite(repayValue) && repayValue > 0 && repayValue <= repayOutstanding;
 
   /*
    * ================================
@@ -936,7 +923,7 @@ function Dashboard() {
                 )}
               </div>
 
-              {currentLoan.status === "active" &&
+              {["active", "overdue"].includes(currentLoan.status) &&
                 currentLoan.outstandingBalance > 0 && (
                   <div className="repayment-section">
                     <div className="repayment-heading">
@@ -944,9 +931,10 @@ function Dashboard() {
                         <p className="repayment-eyebrow">Loan repayment</p>
                         <h3>Make a repayment</h3>
                         <p className="dash-note">
-                          Transfer your repayment to the cooperative account,
-                          then upload the transfer receipt for admin
-                          confirmation.
+                          Pay securely with Paystack by card, bank transfer or
+                          USSD. Your loan updates automatically as soon as the
+                          payment goes through. No receipt upload and no
+                          waiting for approval.
                         </p>
                       </div>
                       <div className="repayment-outstanding">
@@ -955,33 +943,49 @@ function Dashboard() {
                       </div>
                     </div>
 
-                    <div className="repayment-bank-card">
-                      <div className="repayment-bank-icon">▥</div>
-                      <div className="repayment-bank-content">
-                        <p className="repayment-bank-label">
-                          Transfer repayment to
-                        </p>
-                        <strong>{cooperativeSettings.repaymentAccountName}</strong>
-                        <div className="repayment-bank-row">
-                          <span>Bank</span>
-                          <b>{cooperativeSettings.repaymentBank}</b>
+                    {Number(currentLoan.totalRepayment) > 0 && (
+                      <div className="repay-progress-block">
+                        <div className="repay-progress-track">
+                          <div
+                            className="repay-progress-fill"
+                            style={{ width: `${loanRepaidPercent}%` }}
+                          />
                         </div>
-                        <div className="repayment-bank-row repayment-account-row">
-                          <span>Account number</span>
-                          <div>
-                            <b>{cooperativeSettings.repaymentAccountNumber}</b>
-                            <button
-                              type="button"
-                              className="copy-account-btn"
-                              onClick={copyRepaymentAccount}
-                              aria-label="Copy repayment account number"
-                            >
-                              {copyAccountMessage || "Copy"}
-                            </button>
-                          </div>
+                        <div className="repay-progress-meta">
+                          <span>
+                            {money(currentLoan.amountPaid)} paid of{" "}
+                            {money(currentLoan.totalRepayment)}
+                          </span>
+                          <span>{loanRepaidPercent}%</span>
                         </div>
                       </div>
-                    </div>
+                    )}
+
+                    {nextInstallment && (
+                      <div
+                        className={`repay-due-card ${nextInstallmentOverdue ? "overdue" : ""}`}
+                      >
+                        <strong>
+                          {nextInstallmentOverdue
+                            ? "Overdue instalment"
+                            : "Next instalment"}
+                          : {money(nextInstallmentDue)}
+                        </strong>
+                        <span>
+                          {nextInstallmentOverdue ? "Was due" : "Due"}{" "}
+                          {new Date(nextInstallment.dueDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
+
+                    {Number(currentLoan.overdueChargeTotal || 0) > 0 && (
+                      <p className="repay-overdue-note">
+                        Your balance includes{" "}
+                        {money(currentLoan.overdueChargeTotal)} in overdue
+                        charges. Repaying sooner stops more charges being
+                        added.
+                      </p>
+                    )}
 
                     <form
                       className="repayment-form-new"
@@ -993,7 +997,7 @@ function Dashboard() {
                         className="repayment-field-label"
                         htmlFor="repayment-amount"
                       >
-                        Repayment amount
+                        How much do you want to pay?
                       </label>
                       <div className="repayment-amount-input-wrap">
                         <span>₦</span>
@@ -1002,75 +1006,57 @@ function Dashboard() {
                           type="number"
                           min="1"
                           max={currentLoan.outstandingBalance}
-                          step="1"
+                          step="0.01"
+                          inputMode="decimal"
                           placeholder="0.00"
                           value={repaymentAmount}
-                          onChange={(e) => setRepaymentAmount(e.target.value)}
+                          onChange={(e) => {
+                            setRepaymentAmount(e.target.value);
+                            setRepaymentError("");
+                          }}
+                          disabled={repaymentLoading}
                         />
                       </div>
 
-                      <div className="repayment-field-label receipt-label">
-                        Transfer receipt
+                      <div className="repay-chips">
+                        {repayQuickChoices.map((choice) => (
+                          <button
+                            key={choice.key}
+                            type="button"
+                            className={`repay-chip ${repayValue === choice.value ? "selected" : ""}`}
+                            onClick={() => {
+                              setRepaymentAmount(String(choice.value));
+                              setRepaymentError("");
+                            }}
+                            disabled={repaymentLoading}
+                          >
+                            <span>{choice.label}</span>
+                            <strong>{money(choice.value)}</strong>
+                          </button>
+                        ))}
                       </div>
-                      <div
-                        className={`repayment-upload-card ${repaymentReceipt ? "has-receipt" : ""}`}
-                      >
-                        {repaymentReceiptPreview ? (
-                          <div className="receipt-preview-wrap">
-                            <img
-                              src={repaymentReceiptPreview}
-                              alt="Transfer receipt preview"
-                              className="receipt-preview"
-                            />
-                            <div className="receipt-file-name">
-                              {repaymentReceipt.name}
-                            </div>
+
+                      {repayValid && (
+                        <div className="repay-summary">
+                          <div>
+                            <span>You pay</span>
+                            <strong>{money(repayValue)}</strong>
                           </div>
-                        ) : (
-                          <>
-                            <div className="repayment-upload-icon">▤</div>
-                            <strong>Upload your transfer receipt</strong>
-                            <p>
-                              Use a clear screenshot or photo showing the
-                              payment details.
-                            </p>
-                          </>
-                        )}
-
-                        <div className="repayment-upload-actions">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              repaymentGalleryInputRef.current?.click()
-                            }
-                          >
-                            Gallery
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              repaymentCameraInputRef.current?.click()
-                            }
-                          >
-                            Camera
-                          </button>
+                          <div>
+                            <span>Balance after payment</span>
+                            <strong>
+                              {money(
+                                Math.max(
+                                  0,
+                                  Math.round(
+                                    (repayOutstanding - repayValue) * 100,
+                                  ) / 100,
+                                ),
+                              )}
+                            </strong>
+                          </div>
                         </div>
-                        <input
-                          ref={repaymentGalleryInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleRepaymentReceiptChange}
-                          hidden
-                        />
-                        <input
-                          ref={repaymentCameraInputRef}
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleRepaymentReceiptChange}
-                          hidden
-                        />
-                      </div>
+                      )}
 
                       {repaymentError && (
                         <p className="form-error">{repaymentError}</p>
@@ -1085,9 +1071,15 @@ function Dashboard() {
                         disabled={repaymentLoading}
                       >
                         {repaymentLoading
-                          ? "Submitting..."
-                          : "Submit Repayment"}
+                          ? "Opening Paystack..."
+                          : repayValid
+                            ? `Pay ${money(repayValue)} with Paystack`
+                            : "Pay with Paystack"}
                       </button>
+                      <p className="repay-secure-note">
+                        🔒 Payments are processed securely by Paystack. We never
+                        see your card details.
+                      </p>
                     </form>
 
                     {repayments.length > 0 && (
@@ -1096,12 +1088,21 @@ function Dashboard() {
                         <ul className="requests-ul repayment-history">
                           {repayments.map((r) => (
                             <li key={r._id}>
-                              <span>{money(r.amount)}</span>
+                              <span>
+                                {money(r.overpaidAmount && r.status === "rejected" ? r.overpaidAmount : r.amount)}
+                                <small className="repay-method">
+                                  {r.method === "paystack" ? " · Paystack" : " · Transfer"}
+                                </small>
+                              </span>
                               <span className={`status-badge ${r.status}`}>
-                                {r.status}
+                                {r.needsRefund && r.status === "rejected"
+                                  ? "refund due"
+                                  : r.status === "approved"
+                                    ? "paid"
+                                    : r.status}
                               </span>
                               <span className="req-date">
-                                {new Date(r.createdAt).toLocaleDateString()}
+                                {new Date(r.approvedAt || r.createdAt).toLocaleDateString()}
                               </span>
                             </li>
                           ))}

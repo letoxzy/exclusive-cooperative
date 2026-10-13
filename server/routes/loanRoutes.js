@@ -477,6 +477,15 @@ router.get("/:id", protect, async (req, res) => {
 */
 router.post("/:id/repayments", protect, uploadReceipt.single("receipt"), async (req, res) => {
   try {
+    // Members now repay online through Paystack. This receipt-upload route is
+    // kept only so older app versions keep working; set
+    // ALLOW_MANUAL_LOAN_REPAYMENT=false to switch it off once everyone has updated.
+    if (String(process.env.ALLOW_MANUAL_LOAN_REPAYMENT || "true").toLowerCase() === "false") {
+      return res.status(410).json({
+        message: "Bank-transfer repayment has been replaced. Please update the app and use Pay online.",
+      });
+    }
+
     const { amount } = req.body;
     const requestedAmount = Number(amount);
 

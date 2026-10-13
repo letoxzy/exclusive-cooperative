@@ -10,6 +10,9 @@ import LoanRepayment from "../models/LoanRepayment.js";
 import Withdrawal from "../models/Withdrawal.js";
 import { DividendEntry } from "../models/Dividend.js";
 import { protect } from "../middleware/authMiddleware.js";
+import AccountDeletionRequest from "../models/AccountDeletionRequest.js";
+import { memberDeletionBlockers, deleteMemberAccount } from "../utils/memberDeletion.js";
+import { audit } from "../utils/audit.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { validatePassword } from "../utils/passwordPolicy.js";
 import {
@@ -301,6 +304,178 @@ router.patch("/me/password", protect, async (req, res) => {
     res.status(500).json({
       message: "Failed to update password",
     });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Account deletion (required by Google Play: members must be able to delete
+// their account from inside the app).
+// ---------------------------------------------------------------------------
+
+// Checks the member's password with the same lockout protection as sign-in.
+// Returns the user when the password is right; otherwise sends the response
+// and returns null.
+async function confirmPasswordOrReply(req, res) {
+  const password = String(req.body?.password || "");
+  if (!password) {
+    res.status(400).json({ message: "Enter your password to confirm." });
+    return null;
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    res.status(404).json({ message: "User no longer exists" });
+    return null;
+  }
+
+  const securityState = getSecurityState(user);
+  if (securityState.permanent) {
+    res.status(403).json({
+      code: "ACCOUNT_SECURITY_LOCKED",
+      message: "Your account has been locked for security after repeated failed attempts. Please contact the cooperative to unlock your account.",
+    });
+    return null;
+  }
+  if (securityState.locked) {
+    res.status(429).json({
+      code: "ACCOUNT_TEMPORARILY_LOCKED",
+      message: `Too many incorrect attempts. Please try again in ${Math.ceil((new Date(securityState.lockedUntil).getTime() - Date.now()) / 60000)} minutes.`,
+      lockedUntil: securityState.lockedUntil,
+    });
+    return null;
+  }
+
+  const matches = await user.matchPassword(password);
+  if (!matches) {
+    const result = await recordSecurityFailure(user);
+    if (result.permanent) {
+      await notifyPermanentSecurityLock(user);
+      res.status(403).json({
+        code: "ACCOUNT_SECURITY_LOCKED",
+        message: "Your account has been locked for security after repeated failed attempts. Please contact the cooperative to unlock your account.",
+      });
+    } else if (result.locked) {
+      res.status(429).json({
+        code: "ACCOUNT_TEMPORARILY_LOCKED",
+        message: `Too many incorrect attempts. Your account is locked for ${result.lockMinutes} minutes.`,
+        lockedUntil: result.lockedUntil,
+      });
+    } else {
+      res.status(401).json({ message: "That password is not correct." });
+    }
+    return null;
+  }
+
+  await recordSecuritySuccess(user);
+  return user;
+}
+
+// GET /api/users/me/deletion-status
+// What the delete-account screen shows: can it be done now, and if not why.
+router.get("/me/deletion-status", protect, async (req, res) => {
+  try {
+    if (req.user.role === "admin") {
+      return res.json({ canDeleteNow: false, isAdmin: true, blockers: [], pendingRequest: null });
+    }
+
+    const [blockers, pending] = await Promise.all([
+      memberDeletionBlockers(req.user, { self: true }),
+      AccountDeletionRequest.findOne({ user: req.user._id, status: "pending" })
+        .select("createdAt reason")
+        .lean(),
+    ]);
+
+    res.json({
+      canDeleteNow: blockers.length === 0,
+      blockers,
+      pendingRequest: pending || null,
+    });
+  } catch (err) {
+    console.error("Deletion status error:", err);
+    res.status(500).json({ message: "Could not check your account right now." });
+  }
+});
+
+// POST /api/users/me/delete-account   { password }
+// Deletes the member's account straight away when nothing is outstanding.
+router.post("/me/delete-account", protect, async (req, res) => {
+  try {
+    if (req.user.role === "admin") {
+      return res.status(403).json({ message: "Administrator accounts cannot be deleted here." });
+    }
+
+    const user = await confirmPasswordOrReply(req, res);
+    if (!user) return;
+
+    const blockers = await memberDeletionBlockers(user, { self: true });
+    if (blockers.length > 0) {
+      return res.status(409).json({
+        code: "DELETION_BLOCKED",
+        message:
+          "Your account cannot be deleted yet: " + blockers.join("; ") + ". You can send a request to the cooperative office instead.",
+        blockers,
+      });
+    }
+
+    await audit(req, "member.self-delete", "User", user._id, {
+      email: user.email,
+      fullName: user.fullName,
+    });
+
+    // Close any open request for this account; it is now done.
+    await AccountDeletionRequest.updateMany(
+      { user: user._id, status: "pending" },
+      { $set: { status: "completed", handledAt: new Date(), adminNote: "Member deleted the account in the app." } }
+    );
+
+    await deleteMemberAccount(user._id);
+
+    res.json({ message: "Your account has been deleted." });
+  } catch (err) {
+    console.error("Self delete error:", err);
+    res.status(500).json({ message: "We could not delete your account. Please try again." });
+  }
+});
+
+// POST /api/users/me/deletion-request   { password, reason? }
+// For members who still have money or a loan: asks the office to handle it.
+router.post("/me/deletion-request", protect, async (req, res) => {
+  try {
+    if (req.user.role === "admin") {
+      return res.status(403).json({ message: "Administrator accounts cannot be deleted here." });
+    }
+
+    const user = await confirmPasswordOrReply(req, res);
+    if (!user) return;
+
+    const existing = await AccountDeletionRequest.findOne({ user: user._id, status: "pending" });
+    if (existing) {
+      return res.status(409).json({
+        message: "You already have a deletion request waiting for the cooperative office.",
+      });
+    }
+
+    const blockers = await memberDeletionBlockers(user, { self: true });
+    const request = await AccountDeletionRequest.create({
+      user: user._id,
+      email: user.email,
+      fullName: user.fullName || "",
+      reason: String(req.body?.reason || "").trim().slice(0, 500),
+      source: "app",
+      blockers,
+    });
+
+    await audit(req, "deletion-request.create", "AccountDeletionRequest", request._id, {
+      blockers,
+    });
+
+    res.status(201).json({
+      message:
+        "Your request has been sent. The cooperative office will settle your account with you and then delete it.",
+    });
+  } catch (err) {
+    console.error("Deletion request error:", err);
+    res.status(500).json({ message: "We could not send your request. Please try again." });
   }
 });
 

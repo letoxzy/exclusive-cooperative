@@ -72,6 +72,10 @@ function AuditLogPanel({ token }) {
             <option value="reconciliation.credit">Reconciliation credit</option>
             <option value="member.shareholding">Shareholding changed</option>
             <option value="member.delete">Member deleted</option>
+            <option value="member.self-delete">Member deleted own account</option>
+            <option value="deletion-request.create">Deletion requested</option>
+            <option value="deletion-request.complete">Deletion request completed</option>
+            <option value="deletion-request.reject">Deletion request declined</option>
             <option value="loan-eligibility.approve">Loan verification approved</option>
             <option value="loan-eligibility.reject">Loan verification rejected</option>
             <option value="loan-eligibility.allow-reapply">Loan verification reapply allowed</option>

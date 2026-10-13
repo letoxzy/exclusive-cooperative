@@ -22,6 +22,7 @@ import AdminActionModal from "../components/admin/AdminActionModal";
 import GalleryManagement from "../components/admin/GalleryManagement";
 import LedgerPanel from "../components/admin/LedgerPanel";
 import AuditLogPanel from "../components/admin/AuditLogPanel";
+import DeletionRequestsPanel from "../components/admin/DeletionRequestsPanel";
 import ReconciliationPanel from "../components/admin/ReconciliationPanel";
 import KycReviewModal from "../components/admin/KycReviewModal";
 
@@ -3598,6 +3599,9 @@ function AdminDashboard() {
 
       case "reconciliation":
         return <ReconciliationPanel token={user.token} />;
+
+      case "deletions":
+        return <DeletionRequestsPanel token={user.token} />;
 
       case "audit":
         return <AuditLogPanel token={user.token} />;

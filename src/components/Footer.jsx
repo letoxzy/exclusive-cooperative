@@ -22,8 +22,8 @@ function Footer() {
           <Link to="/membership">Membership</Link>
           <Link to="/savings">Savings</Link>
           <Link to="/loans">Loans</Link>
-          <Link to="/download">Download App</Link>
           <Link to="/contact">Contact</Link>
+          <Link to="/delete-account">Delete account</Link>
         </div>
 
         <div className="footer-col">

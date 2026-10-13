@@ -22,6 +22,8 @@ import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
 import { runAtomic } from "../utils/atomic.js";
+import { memberDeletionBlockers, deleteMemberAccount } from "../utils/memberDeletion.js";
+import AccountDeletionRequest from "../models/AccountDeletionRequest.js";
 import { applyPaymentToLoan } from "../utils/loanRepaymentSettlement.js";
 import { audit } from "../utils/audit.js";
 import { makerCheckerEnabled, sameAdmin } from "../utils/fourEyes.js";
@@ -344,45 +346,6 @@ router.patch("/users/:id/security-unlock", async (req, res) => {
   ============================
 */
 
-// Reasons a member account must not be deleted yet (empty list = safe).
-async function memberDeletionBlockers(member) {
-  const id = member._id;
-  const reasons = [];
-
-  const paid = await Withdrawal.aggregate([
-    { $match: { user: id, status: "success", source: "savings" } },
-    { $group: { _id: null, total: { $sum: "$totalDeduction" } } },
-  ]);
-  // savingsBalance is the gross of all contributions; successful savings
-  // withdrawals are tracked separately, so what the member is still owed is:
-  const savingsOwed =
-    Math.round((Number(member.savingsBalance || 0) - Number(paid[0]?.total || 0)) * 100) / 100;
-  if (savingsOwed > 0) {
-    reasons.push(`they still hold \u20a6${savingsOwed.toLocaleString()} in savings`);
-  }
-  if (Number(member.withdrawalReserved || 0) > 0) {
-    reasons.push("a withdrawal is reserved against their savings");
-  }
-
-  const [openLoan, owing, processing, pendingSavings, pendingRepayment, pendingDividend] =
-    await Promise.all([
-      Loan.exists({ user: id, status: { $in: ["pending", "approved", "active", "overdue", "defaulted"] } }),
-      Loan.exists({ user: id, outstandingBalance: { $gt: 0 } }),
-      Withdrawal.exists({ user: id, status: "processing" }),
-      SavingsTransaction.exists({ user: id, status: "pending" }),
-      LoanRepayment.exists({ user: id, status: "pending" }),
-      DividendEntry.exists({ user: id, status: "pending" }),
-    ]);
-
-  if (openLoan || owing) reasons.push("they have an open loan or loan application");
-  if (processing) reasons.push("a withdrawal is still processing");
-  if (pendingSavings) reasons.push("a savings payment is awaiting approval");
-  if (pendingRepayment) reasons.push("a loan repayment is awaiting approval");
-  if (pendingDividend) reasons.push("an unpaid dividend is owed to them");
-
-  return reasons;
-}
-
 // PATCH /api/admin/users/:id/shareholding
 // Updates a member's total cooperative shareholding value.
 router.patch("/users/:id/shareholding", async (req, res) => {
@@ -488,15 +451,7 @@ router.delete("/users/:id", async (req, res) => {
       shareholding: Number(member.shareholding || 0),
     });
 
-    await Membership.deleteMany({
-      user: member._id,
-    });
-
-    await Notification.deleteMany({
-      user: member._id,
-    });
-
-    await User.findByIdAndDelete(member._id);
+    await deleteMemberAccount(member._id);
 
     return res.json({
       message: "Member account and membership record deleted successfully.",
@@ -508,6 +463,138 @@ router.delete("/users/:id", async (req, res) => {
     return res.status(500).json({
       message: "Failed to delete member account.",
     });
+  }
+});
+
+/*
+  ============================
+  ACCOUNT DELETION REQUESTS
+  ============================
+*/
+
+// GET /api/admin/deletion-requests?status=pending
+// Requests from the app and from the public "delete my account" web page.
+router.get("/deletion-requests", async (req, res) => {
+  try {
+    const filter = req.query.status ? { status: String(req.query.status) } : {};
+    const requests = await AccountDeletionRequest.find(filter)
+      .populate("user", "fullName email savingsBalance role")
+      .populate("handledBy", "fullName")
+      .sort("-createdAt")
+      .limit(200)
+      .lean();
+
+    // For pending requests, show what (if anything) still blocks deletion now.
+    for (const request of requests) {
+      request.currentBlockers = [];
+      if (request.status === "pending" && request.user?._id) {
+        const member = await User.findById(request.user._id);
+        request.currentBlockers = member ? await memberDeletionBlockers(member) : [];
+        request.accountExists = Boolean(member);
+      } else if (request.status === "pending") {
+        request.accountExists = false;
+      }
+    }
+
+    res.json(requests);
+  } catch (err) {
+    console.error("List deletion requests error:", err);
+    res.status(500).json({ message: "Could not load deletion requests." });
+  }
+});
+
+// PATCH /api/admin/deletion-requests/:id   { action: "complete" | "reject", note? }
+// "complete" deletes the account (same safety checks as deleting a member).
+// "reject" needs a note explaining why; the member is told.
+router.patch("/deletion-requests/:id", async (req, res) => {
+  try {
+    const { action } = req.body || {};
+    const note = String(req.body?.note || "").trim().slice(0, 500);
+
+    const request = await AccountDeletionRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ message: "Request not found." });
+    if (request.status !== "pending") {
+      return res.status(400).json({ message: "This request has already been handled." });
+    }
+
+    if (action === "reject") {
+      if (note.length < 3) {
+        return res.status(400).json({ message: "Please write the reason so the member understands." });
+      }
+
+      const claimed = await AccountDeletionRequest.findOneAndUpdate(
+        { _id: request._id, status: "pending" },
+        { $set: { status: "rejected", handledBy: req.user._id, handledAt: new Date(), adminNote: note } },
+        { new: true }
+      );
+      if (!claimed) return res.status(409).json({ message: "This request has already been handled." });
+
+      await audit(req, "deletion-request.reject", "AccountDeletionRequest", claimed._id, {
+        email: claimed.email,
+        note,
+      });
+
+      if (claimed.user) {
+        try {
+          await createNotificationAndPush({
+            user: claimed.user,
+            type: "membership",
+            title: "Account deletion request",
+            message: `The cooperative could not delete your account yet: ${note}`,
+          });
+        } catch (notificationError) {
+          console.error("Deletion rejected but notification failed:", notificationError.message);
+        }
+      }
+      return res.json(claimed);
+    }
+
+    if (action !== "complete") {
+      return res.status(400).json({ message: "Invalid action. Use complete or reject." });
+    }
+
+    // Delete the account if one exists and nothing is outstanding.
+    let deletedUser = false;
+    if (request.user) {
+      const member = await User.findById(request.user);
+      if (member) {
+        if (member.role === "admin") {
+          return res.status(403).json({ message: "Administrator accounts cannot be deleted here." });
+        }
+        const blockers = await memberDeletionBlockers(member);
+        if (blockers.length > 0) {
+          return res.status(409).json({
+            message: "This account cannot be deleted yet: " + blockers.join("; ") + ". Settle these first.",
+            blockers,
+          });
+        }
+        await audit(req, "member.delete", "User", member._id, {
+          email: member.email,
+          fullName: member.fullName,
+          savingsBalance: Number(member.savingsBalance || 0),
+          shareholding: Number(member.shareholding || 0),
+          viaRequest: String(request._id),
+        });
+        await deleteMemberAccount(member._id);
+        deletedUser = true;
+      }
+    }
+
+    const done = await AccountDeletionRequest.findOneAndUpdate(
+      { _id: request._id, status: "pending" },
+      { $set: { status: "completed", handledBy: req.user._id, handledAt: new Date(), adminNote: note } },
+      { new: true }
+    );
+
+    await audit(req, "deletion-request.complete", "AccountDeletionRequest", request._id, {
+      email: request.email,
+      accountDeleted: deletedUser,
+    });
+
+    res.json({ request: done, accountDeleted: deletedUser });
+  } catch (err) {
+    console.error("Process deletion request error:", err);
+    res.status(500).json({ message: "Could not process this deletion request." });
   }
 });
 

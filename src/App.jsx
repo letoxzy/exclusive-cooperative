@@ -26,6 +26,7 @@ const PaymentCallback = lazy(() => import("./pages/PaymentCallback"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const LoanApplication = lazy(() => import("./pages/LoanApplication"));
 const FullLoanApplication = lazy(() => import("./pages/FullLoanApplication"));
+const DeleteAccount = lazy(() => import("./pages/DeleteAccount"));
 
 function App() {
   const location = useLocation();
@@ -84,6 +85,8 @@ function App() {
             />
 
             <Route path="/contact" element={<Contact />} />
+
+            <Route path="/delete-account" element={<DeleteAccount />} />
 
             <Route path="/login" element={<Login />} />
 

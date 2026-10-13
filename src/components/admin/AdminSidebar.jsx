@@ -16,6 +16,7 @@ import {
   FaBook,
   FaBalanceScale,
   FaClipboardList,
+  FaUserSlash,
 } from "react-icons/fa";
 
 import logo from "../../assets/logo.png";
@@ -90,6 +91,11 @@ const menuItems = [
     id: "reconciliation",
     label: "Reconciliation",
     icon: FaBalanceScale,
+  },
+  {
+    id: "deletions",
+    label: "Deletion Requests",
+    icon: FaUserSlash,
   },
   {
     id: "audit",

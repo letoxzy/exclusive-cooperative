@@ -23,6 +23,8 @@ function Footer() {
           <Link to="/savings">Savings</Link>
           <Link to="/loans">Loans</Link>
           <Link to="/contact">Contact</Link>
+          <Link to="/privacy">Privacy policy</Link>
+          <Link to="/terms">Terms</Link>
           <Link to="/delete-account">Delete account</Link>
         </div>
 

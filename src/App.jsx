@@ -27,6 +27,8 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const LoanApplication = lazy(() => import("./pages/LoanApplication"));
 const FullLoanApplication = lazy(() => import("./pages/FullLoanApplication"));
 const DeleteAccount = lazy(() => import("./pages/DeleteAccount"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Terms = lazy(() => import("./pages/Terms"));
 
 function App() {
   const location = useLocation();
@@ -87,6 +89,8 @@ function App() {
             <Route path="/contact" element={<Contact />} />
 
             <Route path="/delete-account" element={<DeleteAccount />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
 
             <Route path="/login" element={<Login />} />
 

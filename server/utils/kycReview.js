@@ -18,7 +18,10 @@ export const REJECTION_CATEGORIES = [
 const FINAL_BY_DEFAULT = new Set(["suspected_fraud", "duplicate_bvn"]);
 
 export const reapplyCooldownHours = () => {
-  const n = Number(process.env.KYC_REAPPLY_COOLDOWN_HOURS);
+  const raw = String(process.env.KYC_REAPPLY_COOLDOWN_HOURS ?? "").trim();
+  // A blank value must mean "use the default", not 0 hours.
+  if (!raw) return 24;
+  const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : 24;
 };
 

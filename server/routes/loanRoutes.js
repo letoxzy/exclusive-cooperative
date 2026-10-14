@@ -1,3 +1,4 @@
+import { requireAppPin } from "../middleware/requireAppPin.js";
 import express from "express";
 import multer from "multer";
 import Loan from "../models/Loan.js";
@@ -278,7 +279,7 @@ router.get("/eligibility", protect, requireApprovedMember, async (req, res) => {
     purpose: "Business expansion"
   }
 */
-router.post("/", protect, requireApprovedMember, idempotent("loans:create"), async (req, res) => {
+router.post("/", protect, requireApprovedMember, requireAppPin("LOAN_REQUIRE_PIN"), idempotent("loans:create"), async (req, res) => {
   try {
     const {
       loanType,

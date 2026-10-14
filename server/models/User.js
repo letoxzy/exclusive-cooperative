@@ -48,6 +48,16 @@ const userSchema = new mongoose.Schema(
     // Amount reserved by withdrawal requests that are still processing.
     // This does not reduce savingsBalance until Paystack confirms success.
     withdrawalReserved: { type: Number, default: 0 },
+    // Set by the office (Admin > Deletions) when a member is leaving: lets them
+    // withdraw ALL their savings, ignoring the 40% / once-a-month rule, until
+    // expiresAt. Cleared on revoke, expiry or account deletion.
+    fullWithdrawalGrant: {
+      active: { type: Boolean, default: false },
+      grantedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      grantedAt: { type: Date, default: null },
+      expiresAt: { type: Date, default: null },
+      request: { type: mongoose.Schema.Types.ObjectId, ref: "AccountDeletionRequest", default: null },
+    },
 
     role: {
       type: String,

@@ -686,6 +686,22 @@ function Withdrawals() {
               </div>
             )}
 
+            {data.fullWithdrawalGranted && (
+              <div className="withdrawal-lock-notice">
+                <div>
+                  <strong>The cooperative has approved a full withdrawal</strong>
+                  <p>
+                    You can withdraw all your remaining savings (up to ₦
+                    {Number(data.availableAmount || 0).toLocaleString()}) until{" "}
+                    {data.fullWithdrawalExpiresAt
+                      ? new Date(data.fullWithdrawalExpiresAt).toLocaleDateString()
+                      : "the approval expires"}
+                    . The monthly 40% limit does not apply.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {data.monthlyWithdrawalUsed && (
               <div className="withdrawal-lock-notice">
                 <div>

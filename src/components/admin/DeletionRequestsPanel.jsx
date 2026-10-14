@@ -54,6 +54,30 @@ function DeletionRequestsPanel({ token }) {
     }
   };
 
+  const setAccess = async (item, action) => {
+    const who = item.user?.fullName || item.email;
+    const text =
+      action === "grant"
+        ? `Allow ${who} to withdraw ALL their savings (${money(item.savingsOwed)})? They will be able to withdraw it from the app or website now, ignoring the 40% monthly limit.`
+        : `Stop ${who} from withdrawing all their savings?`;
+    if (!window.confirm(text)) return;
+
+    setBusyId(item._id);
+    setError("");
+    try {
+      await request(`/admin/deletion-requests/${item._id}/withdrawal-access`, {
+        method: "POST",
+        token,
+        body: { action },
+      });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId("");
+    }
+  };
+
   const reject = async (item) => {
     setBusyId(item._id);
     setError("");
@@ -82,7 +106,9 @@ function DeletionRequestsPanel({ token }) {
           <p className="admin-subtitle">
             Members asking to close their account. Confirm who they are before
             deleting. An account with savings or a loan cannot be deleted until
-            it is settled.
+            it is settled. To pay out savings, press "Allow full withdrawal":
+            the member can then withdraw everything from the app or website, and
+            once the balance is zero you can delete the account.
           </p>
         </div>
         <button type="button" className="admin-refresh-btn" onClick={load}>
@@ -138,6 +164,18 @@ function DeletionRequestsPanel({ token }) {
                         <>
                           <br />
                           Savings: {money(item.user.savingsBalance)}
+                        </>
+                      )}
+                      {item.status === "pending" && item.accountExists && (
+                        <>
+                          <br />
+                          Still owed to member: <strong>{money(item.savingsOwed)}</strong>
+                          {item.fullWithdrawal?.active && (
+                            <>
+                              <br />
+                              <em>Full withdrawal open until {when(item.fullWithdrawal.expiresAt)}</em>
+                            </>
+                          )}
                         </>
                       )}
                     </td>
@@ -204,6 +242,20 @@ function DeletionRequestsPanel({ token }) {
                           </div>
                         ) : (
                           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {item.accountExists && Number(item.savingsOwed) > 0 && (
+                              <button
+                                type="button"
+                                className="admin-refresh-btn"
+                                disabled={busyId === item._id}
+                                onClick={() =>
+                                  setAccess(item, item.fullWithdrawal?.active ? "revoke" : "grant")
+                                }
+                              >
+                                {item.fullWithdrawal?.active
+                                  ? "Stop full withdrawal"
+                                  : "Allow full withdrawal"}
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="admin-refresh-btn"

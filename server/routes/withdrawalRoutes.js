@@ -11,6 +11,7 @@ import { protect } from "../middleware/authMiddleware.js";
 import { idempotent } from "../middleware/idempotency.js";
 import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
+import { activeFullWithdrawalGrant, savingsOwed } from "../utils/fullWithdrawalGrant.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
 
 
@@ -341,9 +342,15 @@ router.get(
       const currentMonthWithdrawalLimit =
         currentMonthContribution * WITHDRAWAL_PERCENTAGE;
 
-      const availableAmount = monthlySavingsWithdrawal
-        ? 0
-        : Math.max(0, currentMonthWithdrawalLimit - reserved);
+      // Office-approved exit: the member may withdraw ALL remaining savings.
+      const fullGrant = activeFullWithdrawalGrant(req.user);
+      const owedNow = fullGrant ? await savingsOwed(req.user) : 0;
+
+      const availableAmount = fullGrant
+        ? Math.max(0, owedNow - reserved)
+        : monthlySavingsWithdrawal
+          ? 0
+          : Math.max(0, currentMonthWithdrawalLimit - reserved);
 
       const activeLoan = await Loan.findOne({
         user: req.user._id,
@@ -380,8 +387,10 @@ router.get(
         currentMonthWithdrawalLimit,
         availableAmount,
         reservedAmount: reserved,
-        monthlyWithdrawalUsed: Boolean(monthlySavingsWithdrawal),
+        monthlyWithdrawalUsed: fullGrant ? false : Boolean(monthlySavingsWithdrawal),
         monthlyWithdrawal: monthlySavingsWithdrawal || null,
+        fullWithdrawalGranted: Boolean(fullGrant),
+        fullWithdrawalExpiresAt: fullGrant?.expiresAt || null,
         withdrawalCycle,
         hasOutstandingLoan: outstandingLoan > 0,
         outstandingLoan,
@@ -538,6 +547,7 @@ router.post(
       let loanForWithdrawal = null;
       let monthlySavingsWithdrawal = null;
       let reservationCreated = false;
+      let fullGrantUsed = false;
 
       if (source === "savings") {
         const outstandingLoan = await Loan.findOne({
@@ -551,6 +561,45 @@ router.post(
           });
         }
 
+        const fullGrant = activeFullWithdrawalGrant(freshMember);
+
+        if (fullGrant) {
+          // Office-approved exit: any amount up to what is still owed in savings.
+          const owed = await savingsOwed(freshMember);
+          const reservedNow = Math.max(0, Number(freshMember.withdrawalReserved || 0));
+          const room = Math.max(0, Math.round((owed - reservedNow) * 100) / 100);
+
+          if (amount > room) {
+            return res.status(400).json({
+              message: room > 0
+                ? `You can withdraw up to ₦${room.toLocaleString()} of your remaining savings.`
+                : "You have no savings left to withdraw.",
+            });
+          }
+
+          // The filter pins the current reserved amount, so two simultaneous
+          // requests cannot both reserve the same money.
+          const reservedUser = await User.findOneAndUpdate(
+            {
+              _id: freshMember._id,
+              withdrawalReserved: freshMember.withdrawalReserved || 0,
+              "fullWithdrawalGrant.active": true,
+              "fullWithdrawalGrant.expiresAt": { $gt: new Date() },
+            },
+            { $inc: { withdrawalReserved: amount } },
+            { new: true }
+          );
+          if (!reservedUser) {
+            return res.status(409).json({
+              message: "Your withdrawal balance changed. Refresh and try again.",
+            });
+          }
+          reservationCreated = true;
+          fullGrantUsed = true;
+        }
+      }
+
+      if (source === "savings" && !fullGrantUsed) {
         const { start: monthStart, end: monthEnd } = getMonthBounds();
         const withdrawalCycle = getWithdrawalCycleKey();
 
@@ -640,7 +689,7 @@ router.post(
         }
 
         reservationCreated = true;
-      } else {
+      } else if (source === "loan") {
         loanForWithdrawal = await Loan.findOneAndUpdate(
           {
             user: freshMember._id,
@@ -696,7 +745,8 @@ router.post(
           accountNumberLast4: accountNumber.slice(-4),
           recipientCode: recipient.recipient_code,
           reference,
-          withdrawalCycle: source === "savings" ? getWithdrawalCycleKey() : null,
+          // An office-approved exit withdrawal is outside the monthly cycle.
+          withdrawalCycle: source === "savings" && !fullGrantUsed ? getWithdrawalCycleKey() : null,
           status: "processing",
         });
 
@@ -774,6 +824,7 @@ router.post(
                 ),
           monthlyWithdrawalUsed:
             source === "savings" &&
+            !fullGrantUsed &&
             (withdrawal.status === "success" || withdrawal.status === "processing"),
           withdrawalReserved: Number(finalUser?.withdrawalReserved || 0),
           loanFunds: finalLoan

@@ -1,3 +1,4 @@
+import { activeFullWithdrawalGrant, grantDays, savingsOwed } from "../utils/fullWithdrawalGrant.js";
 import express from "express";
 import crypto from "crypto";
 import multer from "multer";
@@ -491,6 +492,13 @@ router.get("/deletion-requests", async (req, res) => {
         const member = await User.findById(request.user._id);
         request.currentBlockers = member ? await memberDeletionBlockers(member) : [];
         request.accountExists = Boolean(member);
+        if (member) {
+          request.savingsOwed = await savingsOwed(member);
+          const g = activeFullWithdrawalGrant(member);
+          request.fullWithdrawal = g
+            ? { active: true, expiresAt: g.expiresAt, grantedAt: g.grantedAt }
+            : { active: false };
+        }
       } else if (request.status === "pending") {
         request.accountExists = false;
       }
@@ -500,6 +508,103 @@ router.get("/deletion-requests", async (req, res) => {
   } catch (err) {
     console.error("List deletion requests error:", err);
     res.status(500).json({ message: "Could not load deletion requests." });
+  }
+});
+
+// POST /api/admin/deletion-requests/:id/withdrawal-access   { action: "grant" | "revoke" }
+// Lets a leaving member withdraw ALL their savings (ignores the 40% / once a
+// month rule) for a limited time, through the normal withdrawal screen.
+router.post("/deletion-requests/:id/withdrawal-access", async (req, res) => {
+  try {
+    const action = String(req.body?.action || "");
+    if (!["grant", "revoke"].includes(action)) {
+      return res.status(400).json({ message: "Invalid action. Use grant or revoke." });
+    }
+
+    const request = await AccountDeletionRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ message: "Request not found." });
+    if (request.status !== "pending") {
+      return res.status(400).json({ message: "This request has already been handled." });
+    }
+    if (!request.user) {
+      return res.status(400).json({ message: "No member account is linked to this request." });
+    }
+
+    const member = await User.findById(request.user);
+    if (!member) return res.status(404).json({ message: "The member account no longer exists." });
+    if (member.role === "admin") {
+      return res.status(403).json({ message: "Administrator accounts cannot be changed here." });
+    }
+
+    if (action === "revoke") {
+      await User.updateOne(
+        { _id: member._id },
+        { $set: { "fullWithdrawalGrant.active": false, "fullWithdrawalGrant.expiresAt": null } }
+      );
+      await audit(req, "withdrawal-access.revoke", "User", member._id, {
+        email: member.email,
+        request: String(request._id),
+      });
+      return res.json({ ok: true, fullWithdrawal: { active: false } });
+    }
+
+    const owed = await savingsOwed(member);
+    if (owed <= 0) {
+      return res.status(409).json({ message: "This member has no savings left to withdraw." });
+    }
+    // A member who still owes the cooperative must settle the loan first.
+    const owing = await Loan.exists({
+      user: member._id,
+      $or: [
+        { status: { $in: ["pending", "approved", "active", "overdue", "defaulted"] } },
+        { outstandingBalance: { $gt: 0 } },
+      ],
+    });
+    if (owing) {
+      return res.status(409).json({
+        message: "This member has an open loan or loan application. It must be settled before savings can be withdrawn.",
+      });
+    }
+
+    const days = grantDays();
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    await User.updateOne(
+      { _id: member._id },
+      {
+        $set: {
+          fullWithdrawalGrant: {
+            active: true,
+            grantedBy: req.user._id,
+            grantedAt: new Date(),
+            expiresAt,
+            request: request._id,
+          },
+        },
+      }
+    );
+
+    await audit(req, "withdrawal-access.grant", "User", member._id, {
+      email: member.email,
+      savingsOwed: owed,
+      expiresAt,
+      request: String(request._id),
+    });
+
+    try {
+      await createNotificationAndPush({
+        user: member._id,
+        type: "withdrawal",
+        title: "You can now withdraw your savings",
+        message: `The cooperative has approved the withdrawal of all your savings (₦${owed.toLocaleString()}). Open Savings > Withdraw within ${days} days. After that you can delete your account.`,
+      });
+    } catch (notificationError) {
+      console.error("Grant saved but notification failed:", notificationError.message);
+    }
+
+    return res.json({ ok: true, savingsOwed: owed, fullWithdrawal: { active: true, expiresAt } });
+  } catch (err) {
+    console.error("Withdrawal access error:", err);
+    res.status(500).json({ message: "Could not update withdrawal access." });
   }
 });
 
@@ -528,6 +633,13 @@ router.patch("/deletion-requests/:id", async (req, res) => {
         { new: true }
       );
       if (!claimed) return res.status(409).json({ message: "This request has already been handled." });
+
+      if (claimed.user) {
+        await User.updateOne(
+          { _id: claimed.user },
+          { $set: { "fullWithdrawalGrant.active": false, "fullWithdrawalGrant.expiresAt": null } }
+        );
+      }
 
       await audit(req, "deletion-request.reject", "AccountDeletionRequest", claimed._id, {
         email: claimed.email,

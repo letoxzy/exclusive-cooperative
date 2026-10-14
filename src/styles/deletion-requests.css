@@ -1,0 +1,358 @@
+/* Admin > Deletion Requests */
+.del-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 22px 0 14px;
+}
+
+.del-toolbar h3 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 18px;
+}
+
+.del-select {
+  min-height: 42px;
+  padding: 0 38px 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--white)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%23075c3b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+    no-repeat right 14px center;
+  color: var(--navy);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.del-select:focus-visible {
+  outline: 3px solid rgba(201, 162, 39, 0.35);
+  outline-offset: 2px;
+  border-color: var(--gold);
+}
+
+.del-list {
+  display: grid;
+  gap: 16px;
+}
+
+.del-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--gold);
+  border-radius: 16px;
+  background: var(--white);
+  box-shadow: 0 8px 24px rgba(16, 42, 31, 0.05);
+}
+
+.del-card.completed {
+  border-left-color: var(--navy);
+}
+
+.del-card.rejected {
+  border-left-color: #c0392b;
+}
+
+.del-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.del-avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--navy);
+  color: var(--gold);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.del-who {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+
+.del-who strong {
+  color: var(--navy);
+  font-size: 17px;
+  line-height: 1.3;
+}
+
+.del-who span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 14px;
+  text-overflow: ellipsis;
+}
+
+.del-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.del-chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--light);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.del-badge {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.del-badge.pending {
+  background: #fdf1c7;
+  color: #8a5a00;
+}
+
+.del-badge.completed {
+  background: #dff3e8;
+  color: #0b6b43;
+}
+
+.del-badge.rejected {
+  background: #fde4e1;
+  color: #a12c20;
+}
+
+.del-when {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.del-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.del-stats > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--light);
+}
+
+.del-stats > div.highlight {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.del-stats span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.del-stats strong {
+  color: var(--navy);
+  font-size: 17px;
+}
+
+.del-stats strong.on {
+  color: #0b6b43;
+  font-size: 14px;
+}
+
+.del-note {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fdf1c7;
+  color: #8a5a00;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.del-section p {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.del-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.del-blockers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.del-blockers li {
+  padding: 6px 12px;
+  border: 1px solid #f3c5c1;
+  border-radius: 999px;
+  background: #fff2f1;
+  color: #a12c20;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.del-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.del-btn {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--navy);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.05s;
+}
+
+.del-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.del-btn:focus-visible {
+  outline: 3px solid rgba(201, 162, 39, 0.35);
+  outline-offset: 2px;
+}
+
+.del-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.del-btn.primary {
+  border-color: var(--navy);
+  background: var(--navy);
+  color: var(--white);
+}
+
+.del-btn.primary:hover:not(:disabled) {
+  background: #064a31;
+}
+
+.del-btn.outline:hover:not(:disabled),
+.del-btn.ghost:hover:not(:disabled) {
+  border-color: var(--navy);
+  background: var(--light);
+}
+
+.del-btn.danger {
+  border-color: #c0392b;
+  background: #c0392b;
+  color: #fff;
+}
+
+.del-btn.danger:hover:not(:disabled) {
+  background: #a12c20;
+}
+
+.del-btn.danger-outline {
+  border-color: #f3c5c1;
+  background: #fff2f1;
+  color: #a12c20;
+}
+
+.del-btn.danger-outline:hover:not(:disabled) {
+  border-color: #c0392b;
+}
+
+.del-reject {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.del-reject label {
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.del-reject textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.del-reject textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.2);
+}
+
+.del-reject .del-actions {
+  padding-top: 4px;
+  border-top: 0;
+}
+
+@media (max-width: 700px) {
+  .del-head {
+    flex-wrap: wrap;
+  }
+
+  .del-meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .del-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .del-actions .del-btn {
+    flex: 1 1 100%;
+  }
+}

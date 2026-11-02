@@ -130,6 +130,7 @@ app.use("/api/kyc", kycRoutes);
 app.use("/api/withdrawals", withdrawalRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/gallery", galleryRoutes);
+app.use("/api/ussd", ussdRoutes);
 
 app.get("/", (req, res) =>
   res.send("Exclusive Cooperative API is running")

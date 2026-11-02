@@ -20,7 +20,7 @@ import reconciliationRoutes from "./routes/reconciliationRoutes.js";
 import { appConfigHandler, appGate } from "./middleware/appGate.js";
 import { startLoanOverdueScheduler } from "./services/loanOverdueService.js";
 import { ensureChartOfAccounts } from "./services/ledger.js";
-
+import ussdRoutes from "./routes/ussdRoutes.js";
 
 connectDB().then(async () => {
   startLoanOverdueScheduler();

@@ -56,7 +56,6 @@ export async function processContributionReminders({ dryRun = false, now = new D
 
         const already = await Notification.exists({
           user: member._id,
-          type: "savings",
           "data.kind": "contribution-reminder",
           "data.period": status.periodKey,
         });
@@ -71,7 +70,9 @@ export async function processContributionReminders({ dryRun = false, now = new D
 
         await createNotificationAndPush({
           user: member._id,
-          type: "savings",
+          // "announcement" shows under Activities (with a bell) in the app,
+          // instead of cluttering the Transactions tab.
+          type: "announcement",
           title: "Contribution Reminder",
           message:
             `You have not made your ${status.frequency.toLowerCase()} contribution ` +

@@ -99,7 +99,9 @@ function allowedByKind(data) {
 export async function notifyMemberBySms({ user, type, title, message, data }) {
   try {
     if (!enabled()) return;
-    if (!allowedTypes().has(String(type))) return;
+    // Reminders are gated by frequency (allowedByKind below), not by type.
+    const isReminder = data?.kind === "contribution-reminder";
+    if (!isReminder && !allowedTypes().has(String(type))) return;
     if (/submitted/i.test(String(title || ""))) return;
     if (!allowedByKind(data)) return;
 

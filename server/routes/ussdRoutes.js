@@ -6,6 +6,10 @@ import User from "../models/User.js";
 import Membership from "../models/Membership.js";
 import Loan from "../models/Loan.js";
 import SavingsTransaction from "../models/SavingsTransaction.js";
+import LoanRepayment from "../models/LoanRepayment.js";
+import Withdrawal from "../models/Withdrawal.js";
+import CooperativeSetting from "../models/CooperativeSetting.js";
+import { DividendEntry } from "../models/Dividend.js";
 import {
   getSecurityState,
   recordSecurityFailure,
@@ -27,6 +31,9 @@ import {
  *        "123456*1"    -> savings balance   (END)
  *        "123456*2"    -> loan status       (END)
  *        "123456*3"    -> last contributions (END)
+ *        "123456*4"    -> repayment schedule (END)
+ *        "123456*5"    -> mini statement     (END)
+ *        "123456*6"    -> loan eligibility   (END)
  *
  * The member is identified by phone number (Membership.phone) and proven by
  * the same 6-digit app PIN + the same failed-attempt lockout used by the app.
@@ -64,15 +71,6 @@ const safeEqual = (a, b) => {
 
 // AT sends application/x-www-form-urlencoded; server.js only parses JSON.
 router.use(express.urlencoded({ extended: false }));
-router.use((req, res, next) => {
-  console.log(
-    "[ussd] request, phone ending",
-    last10(req.body?.phoneNumber).slice(-4),
-    "text length",
-    String(req.body?.text ?? "").length
-  );
-  next();
-});
 
 // USSD callbacks are not signed, so the callback URL carries a secret token.
 // Fails closed: with no USSD_CALLBACK_TOKEN configured, nothing is served.
@@ -83,7 +81,6 @@ router.use((req, res, next) => {
     return end(res, "Service unavailable. Please try again later.");
   }
   if (!safeEqual(req.query.token || "", expected)) {
-    console.warn("[ussd] token mismatch");
     return res.status(403).type("text/plain").send("Forbidden");
   }
   next();
@@ -211,6 +208,85 @@ async function contributionsText(userId) {
   return ["Last contributions:", ...rows.map((r) => `${shortDate(r.createdAt)}  ${naira(r.amount)}`)].join("\n");
 }
 
+
+async function scheduleText(userId) {
+  const loan = await Loan.findOne({
+    user: userId,
+    status: { $in: ["active", "overdue", "defaulted"] },
+  }).sort({ createdAt: -1 });
+
+  if (!loan) return "You have no active loan.";
+
+  const open = (loan.repaymentSchedule || [])
+    .filter((i) => i.status !== "paid")
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+    .slice(0, 3);
+
+  if (!open.length) return `No installments left.\nOwing: ${naira(loan.outstandingBalance)}`;
+
+  return [
+    "Next installments:",
+    ...open.map(
+      (i) =>
+        `${shortDate(i.dueDate)}  ${naira(Math.max(0, i.amountDue - (i.amountPaid || 0)))}` +
+        (i.status === "overdue" ? " (overdue)" : "")
+    ),
+    `Owing: ${naira(loan.outstandingBalance)}`,
+  ].join("\n");
+}
+
+async function statementText(userId) {
+  const [savings, repayments, withdrawals, dividends] = await Promise.all([
+    SavingsTransaction.find({ user: userId, status: "approved" })
+      .sort({ createdAt: -1 }).limit(5).select("amount createdAt").lean(),
+    LoanRepayment.find({ user: userId, status: "approved" })
+      .sort({ createdAt: -1 }).limit(5).select("amount approvedAt createdAt").lean(),
+    Withdrawal.find({ user: userId, status: "success" })
+      .sort({ createdAt: -1 }).limit(5).select("amount paidAt createdAt").lean(),
+    DividendEntry.find({ user: userId, status: "paid" })
+      .sort({ createdAt: -1 }).limit(5).select("dividendAmount paidDate createdAt").lean(),
+  ]);
+
+  const rows = [
+    ...savings.map((r) => ({ d: r.createdAt, sign: "+", amt: r.amount, label: "Savings" })),
+    ...repayments.map((r) => ({ d: r.approvedAt || r.createdAt, sign: "-", amt: r.amount, label: "Loan repay" })),
+    ...withdrawals.map((r) => ({ d: r.paidAt || r.createdAt, sign: "-", amt: r.amount, label: "Withdrawal" })),
+    ...dividends.map((r) => ({ d: r.paidDate || r.createdAt, sign: "+", amt: r.dividendAmount, label: "Dividend" })),
+  ]
+    .sort((a, b) => new Date(b.d) - new Date(a.d))
+    .slice(0, 5);
+
+  if (!rows.length) return "No transactions yet.";
+
+  return [
+    "Mini statement:",
+    ...rows.map(
+      (r) =>
+        `${shortDate(r.d)} ${r.sign}${Number(r.amt || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })} ${r.label}`
+    ),
+  ].join("\n");
+}
+
+async function eligibilityText(member) {
+  // Same rule as GET /api/loans/eligibility: savings x loan multiplier.
+  const settings = await CooperativeSetting.findOne().select("loanMultiplier").lean();
+  const multiplier = Number(settings?.loanMultiplier ?? 2);
+  const eligible = Number(member.savingsBalance || 0) * multiplier;
+
+  const openLoan = await Loan.findOne({
+    user: member._id,
+    status: { $in: ["pending", "approved", "active", "overdue"] },
+  }).select("status");
+
+  let line;
+  if (!member.isLoanEligible) line = "Your loan application is not yet approved. Apply in the app.";
+  else if (openLoan) line = "You already have an open loan.";
+  else if (eligible <= 0) line = "Save more to qualify for a loan.";
+  else line = "You can apply in the mobile app.";
+
+  return `Loan limit: ${naira(eligible)}\n${line}`;
+}
+
 // ---- main handler ---------------------------------------------------------
 
 router.post("/", async (req, res) => {
@@ -240,7 +316,10 @@ router.post("/", async (req, res) => {
     const choice = parts[1];
     if (choice === undefined) {
       const first = String(member.fullName || "Member").split(" ")[0];
-      return con(res, `Hello ${first}\n1. Savings balance\n2. Loan status\n3. Last contributions\n0. Exit`);
+      return con(
+        res,
+        `Hello ${first}\n1. Savings balance\n2. Loan status\n3. Last contributions\n4. Repayment schedule\n5. Mini statement\n6. Loan eligibility\n0. Exit`
+      );
     }
 
     switch (choice) {
@@ -250,6 +329,12 @@ router.post("/", async (req, res) => {
         return end(res, await loanText(member._id));
       case "3":
         return end(res, await contributionsText(member._id));
+      case "4":
+        return end(res, await scheduleText(member._id));
+      case "5":
+        return end(res, await statementText(member._id));
+      case "6":
+        return end(res, await eligibilityText(member));
       case "0":
         return end(res, "Thank you for using Exclusive Cooperative.");
       default:

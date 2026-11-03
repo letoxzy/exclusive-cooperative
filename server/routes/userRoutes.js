@@ -15,6 +15,7 @@ import { memberDeletionBlockers, deleteMemberAccount } from "../utils/memberDele
 import { audit } from "../utils/audit.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { validatePassword } from "../utils/passwordPolicy.js";
+import { alertSecurityChange } from "../utils/securityAlerts.js";
 import {
   getSecurityState,
   recordSecurityFailure,
@@ -95,10 +96,12 @@ router.patch("/me/security/pin", protect, async (req, res) => {
 
     if (!user) return res.status(404).json({ message: "User no longer exists" });
 
+    const hadPin = Boolean(user.appPinHash);
     user.appPinHash = await bcrypt.hash(pin, 12);
     user.appPinFailedAttempts = 0;
     user.appPinLockedUntil = null;
     await user.save();
+    void alertSecurityChange(user._id, hadPin ? "pin-changed" : "pin-created");
 
     res.json({ message: "App PIN saved successfully.", pinConfigured: true });
   } catch (err) {
@@ -294,6 +297,7 @@ router.patch("/me/password", protect, async (req, res) => {
     user.mustChangePassword = false;
 
     await user.save();
+    void alertSecurityChange(user._id, "password-changed");
 
     res.json({
       message: "Password updated successfully",

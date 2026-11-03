@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import { sendPushNotification } from "./pushNotification.js";
+import { notifyMemberBySms } from "./smsNotify.js";
 
 /**
  * Create the persistent in-app notification and send the same event
@@ -9,6 +10,9 @@ import { sendPushNotification } from "./pushNotification.js";
  * Push failures are intentionally non-fatal: the database notification
  * must still be created even when a device token is stale or Expo is
  * temporarily unavailable.
+ *
+ * The SMS copy (when enabled) is fire-and-forget for the same reason: it
+ * can never delay or break the action that triggered the notification.
  */
 export async function createNotificationAndPush({
   user,
@@ -44,6 +48,9 @@ export async function createNotificationAndPush({
   } catch (pushError) {
     console.error("Push notification delivery failed:", pushError);
   }
+
+  // Not awaited on purpose. notifyMemberBySms never throws.
+  notifyMemberBySms({ user, type, title, message, data });
 
   return notification;
 }

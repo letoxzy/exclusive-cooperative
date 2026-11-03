@@ -19,11 +19,13 @@ import galleryRoutes from "./routes/galleryRoutes.js";
 import reconciliationRoutes from "./routes/reconciliationRoutes.js";
 import { appConfigHandler, appGate } from "./middleware/appGate.js";
 import { startLoanOverdueScheduler } from "./services/loanOverdueService.js";
+import { startContributionReminderScheduler } from "./services/contributionReminderService.js";
 import { ensureChartOfAccounts } from "./services/ledger.js";
 import ussdRoutes from "./routes/ussdRoutes.js";
 
 connectDB().then(async () => {
   startLoanOverdueScheduler();
+  startContributionReminderScheduler();
   if (process.env.LEDGER_ENABLED === "true") {
     console.warn(
       "[ledger] LEDGER_ENABLED=true. The accounting ledger has NOT been fully tested against " +

@@ -8,7 +8,8 @@
     "seed:admin": "node seedAdmin.js",
     "ledger:backfill": "node scripts/backfillLedger.js",
     "ledger:verify": "node scripts/verifyLedger.js",
-    "dividends:freeze-interest": "node scripts/freezeRepaymentInterest.js"
+    "dividends:freeze-interest": "node scripts/freezeRepaymentInterest.js",
+    "reminders:dry-run": "node scripts/contributionRemindersDryRun.js"
   },
   "dependencies": {
     "africastalking": "^0.8.4",

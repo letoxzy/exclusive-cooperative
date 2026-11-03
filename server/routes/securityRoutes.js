@@ -2,6 +2,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { alertSecurityChange } from "../utils/securityAlerts.js";
 import {
   getSecurityState,
   recordSecurityFailure,
@@ -102,6 +103,7 @@ router.post("/pin", protect, async (req, res) => {
 
   member.appPinHash = await bcrypt.hash(String(pin), 12);
   await member.save();
+  void alertSecurityChange(member._id, hadPin ? "pin-changed" : "pin-created");
 
   res.json({
     message: hadPin ? "PIN changed successfully." : "PIN created successfully.",

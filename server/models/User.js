@@ -107,6 +107,17 @@ const userSchema = new mongoose.Schema(
       default: "system",
     },
 
+    // Members can switch SMS copies of their notifications off.
+    smsNotifications: { type: Boolean, default: true },
+
+    // Hashed fingerprints of devices that have signed in, used for the
+    // "new sign-in" alert. Hidden from normal queries.
+    knownDevices: {
+      type: [{ _id: false, id: String, label: String, firstSeen: Date, lastSeen: Date }],
+      default: [],
+      select: false,
+    },
+
     // Expo push tokens are stored on the account so security notifications
     // can reach the member even when the app is not open.
     pushTokens: [

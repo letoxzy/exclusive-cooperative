@@ -4,6 +4,8 @@ import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { validatePassword } from "../utils/passwordPolicy.js";
+import { recordLoginDevice } from "../utils/deviceTracker.js";
+import { alertSecurityChange } from "../utils/securityAlerts.js";
 import {
   getSecurityState,
   recordSecurityFailure,
@@ -198,6 +200,7 @@ router.post("/reset-password/:token", async (req, res) => {
     user.passwordResetToken = null;
     user.passwordResetExpires = null;
     await user.save();
+    void alertSecurityChange(user._id, "password-reset");
 
     res.json({ message: "Your password has been reset successfully. You can now log in." });
   } catch (err) {
@@ -282,6 +285,7 @@ router.post("/login", async (req, res) => {
 
     const token = generateToken(user._id);
     setAuthCookie(res, token);
+    void recordLoginDevice(user, req);
 
     res.json({
       _id: user._id,

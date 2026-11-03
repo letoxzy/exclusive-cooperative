@@ -33,7 +33,11 @@ import {
  *        "123456*3"    -> last contributions (END)
  *        "123456*4"    -> repayment schedule (END)
  *        "123456*5"    -> mini statement     (END)
- *        "123456*6"    -> loan eligibility   (END)
+ *        "123456*6"    -> loan eligibility
+ *
+ * Every result stays open with "0. Main menu". Inputs are replayed in order,
+ * so "123456*1*0*3" means: savings, back to the menu, last contributions.
+ * "0" on the main menu ends the session.
  *
  * The member is identified by phone number (Membership.phone) and proven by
  * the same 6-digit app PIN + the same failed-attempt lockout used by the app.
@@ -43,7 +47,15 @@ const router = express.Router();
 
 // ---- helpers --------------------------------------------------------------
 
-const send = (res, body) => res.type("text/plain").send(body);
+// A USSD screen must stay under ~182 characters; cut at a line break, never
+// in the middle of a line.
+const MAX_SCREEN = 182;
+const clip = (body, limit = MAX_SCREEN) => {
+  if (body.length <= limit) return body;
+  const cut = body.lastIndexOf("\n", limit);
+  return body.slice(0, cut > 0 ? cut : limit);
+};
+const send = (res, body) => res.type("text/plain").send(clip(body));
 const con = (res, msg) => send(res, `CON ${msg}`);
 const end = (res, msg) => send(res, `END ${msg}`);
 
@@ -313,33 +325,53 @@ router.post("/", async (req, res) => {
     if (!check.member) return end(res, check.message);
     const { member } = check;
 
-    const choice = parts[1];
-    if (choice === undefined) {
-      const first = String(member.fullName || "Member").split(" ")[0];
-      return con(
+    const first = String(member.fullName || "Member").split(" ")[0];
+    const menu = () =>
+      con(
         res,
         `Hello ${first}\n1. Savings balance\n2. Loan status\n3. Last contributions\n4. Repayment schedule\n5. Mini statement\n6. Loan eligibility\n0. Exit`
       );
+
+    // Replay everything typed after the PIN to find the current screen.
+    let view = "menu"; // "menu" or the number of the result being shown
+    for (const input of parts.slice(1)) {
+      if (view === "menu") {
+        if (input === "0") return end(res, "Thank you for using Exclusive Cooperative.");
+        if (!["1", "2", "3", "4", "5", "6"].includes(input)) {
+          return end(res, "Invalid choice. Dial again.");
+        }
+        view = input;
+      } else if (input === "0") {
+        view = "menu"; // "0. Main menu" on a result screen
+      } else {
+        return end(res, "Invalid choice. Dial again.");
+      }
     }
 
-    switch (choice) {
+    if (view === "menu") return menu();
+
+    let body;
+    switch (view) {
       case "1":
-        return end(res, savingsText(member));
+        body = savingsText(member);
+        break;
       case "2":
-        return end(res, await loanText(member._id));
+        body = await loanText(member._id);
+        break;
       case "3":
-        return end(res, await contributionsText(member._id));
+        body = await contributionsText(member._id);
+        break;
       case "4":
-        return end(res, await scheduleText(member._id));
+        body = await scheduleText(member._id);
+        break;
       case "5":
-        return end(res, await statementText(member._id));
-      case "6":
-        return end(res, await eligibilityText(member));
-      case "0":
-        return end(res, "Thank you for using Exclusive Cooperative.");
+        body = await statementText(member._id);
+        break;
       default:
-        return end(res, "Invalid choice. Dial again.");
+        body = await eligibilityText(member);
     }
+    // Keep the back option even if the result had to be shortened.
+    return con(res, `${clip(body, MAX_SCREEN - 13)}\n0. Main menu`);
   } catch (err) {
     console.error("[ussd] error:", err);
     return end(res, "Something went wrong. Please try again later.");

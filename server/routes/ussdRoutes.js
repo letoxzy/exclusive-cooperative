@@ -64,6 +64,15 @@ const safeEqual = (a, b) => {
 
 // AT sends application/x-www-form-urlencoded; server.js only parses JSON.
 router.use(express.urlencoded({ extended: false }));
+router.use((req, res, next) => {
+  console.log(
+    "[ussd] request, phone ending",
+    last10(req.body?.phoneNumber).slice(-4),
+    "text length",
+    String(req.body?.text ?? "").length
+  );
+  next();
+});
 
 // USSD callbacks are not signed, so the callback URL carries a secret token.
 // Fails closed: with no USSD_CALLBACK_TOKEN configured, nothing is served.
@@ -74,6 +83,7 @@ router.use((req, res, next) => {
     return end(res, "Service unavailable. Please try again later.");
   }
   if (!safeEqual(req.query.token || "", expected)) {
+    console.warn("[ussd] token mismatch");
     return res.status(403).type("text/plain").send("Forbidden");
   }
   next();

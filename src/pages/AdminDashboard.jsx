@@ -19,6 +19,7 @@ import MembershipModal from "../components/admin/MembershipModal";
 import AddExistingMemberModal from "../components/admin/AddExistingMemberModal";
 import AdminNotifications from "../components/admin/AdminNotifications";
 import AdminActionModal from "../components/admin/AdminActionModal";
+import AdminNoticeModal from "../components/admin/AdminNoticeModal";
 import GalleryManagement from "../components/admin/GalleryManagement";
 import LedgerPanel from "../components/admin/LedgerPanel";
 import AuditLogPanel from "../components/admin/AuditLogPanel";
@@ -38,6 +39,7 @@ function AdminDashboard() {
 
   const [requests, setRequests] = useState([]);
   const [members, setMembers] = useState([]);
+  const [ussdCodeNotice, setUssdCodeNotice] = useState(null);
   const [applications, setApplications] = useState([]);
   const [loans, setLoans] = useState([]);
   const [loanEligibilityApplications, setLoanEligibilityApplications] =
@@ -685,6 +687,22 @@ function AdminDashboard() {
           ),
         );
         setActionModal(null);
+      }
+
+      if (actionModal.type === "ussd-activation") {
+        const issued = await request(
+          `/admin/members/${actionModal.member._id}/ussd-activation`,
+          {
+            method: "POST",
+            token: user.token,
+          },
+        );
+
+        setUssdCodeNotice({
+          name: actionModal.member.fullName || actionModal.member.email,
+          code: issued.code,
+          phoneEnding: issued.phoneEnding,
+        });
       }
 
       if (actionModal.type === "delete-member") {
@@ -2014,6 +2032,19 @@ function AdminDashboard() {
     });
   };
 
+  const handleUssdActivation = (member) => {
+    if (!member?._id || member.role === "admin") return;
+
+    setActionModal({
+      type: "ussd-activation",
+      member,
+      title: "Create USSD Activation Code",
+      description: `This creates a one-time code for ${member.fullName || member.email}. Give it to the member in person only after checking their ID. They dial the USSD code from their registered phone, enter the code, and choose their own 6-digit PIN. If they already have a PIN, it will be replaced. The code is valid for 48 hours and is shown only once.`,
+      confirmText: "Create Code",
+      danger: false,
+    });
+  };
+
   const handleBlockToggle = (member) => {
     const blocked = Boolean(member.isBlocked);
     setActionModal({
@@ -2294,6 +2325,14 @@ function AdminDashboard() {
                           <span className="muted">Protected</span>
                         ) : (
                           <div className="member-action-stack">
+                            <button
+                              type="button"
+                              className="admin-secondary-btn"
+                              onClick={() => handleUssdActivation(m)}
+                              title={`Create a USSD activation code for ${m.fullName || "member"}`}
+                            >
+                              USSD Code
+                            </button>
                             {m.securityLockedPermanently ? (
                               <button
                                 type="button"
@@ -3691,6 +3730,17 @@ function AdminDashboard() {
           onSubmit={handleActionModalSubmit}
         />
       )}
+
+      <AdminNoticeModal
+        open={Boolean(ussdCodeNotice)}
+        title="USSD activation code"
+        message={
+          ussdCodeNotice
+            ? `${ussdCodeNotice.name}: ${ussdCodeNotice.code}. Valid for 48 hours and shown only once. The member dials the USSD code from the phone ending ${ussdCodeNotice.phoneEnding}, enters this code, then chooses a new 6-digit PIN.`
+            : ""
+        }
+        onClose={() => setUssdCodeNotice(null)}
+      />
 
       <AddExistingMemberModal
         open={showAddExistingMember}

@@ -16,6 +16,8 @@ import {
   recordSecuritySuccess,
   notifyPermanentSecurityLock,
 } from "../utils/accountSecurity.js";
+import { checkActivation, completeActivation, isWeakPin } from "../utils/ussdActivation.js";
+import { alertSecurityChange } from "../utils/securityAlerts.js";
 
 /**
  * USSD (Africa's Talking) - read-only member menu.
@@ -38,6 +40,12 @@ import {
  * Every result stays open with "0. Main menu". Inputs are replayed in order,
  * so "123456*1*0*3" means: savings, back to the menu, last contributions.
  * "0" on the main menu ends the session.
+ *
+ * Members with no PIN yet (e.g. button-phone members) start with an 8-digit
+ * activation code from the office instead of a PIN:
+ *   "48291736"                 -> code checked, asks for a new PIN
+ *   "48291736*739402"          -> asks to confirm
+ *   "48291736*739402*739402"   -> PIN saved
  *
  * The member is identified by phone number (Membership.phone) and proven by
  * the same 6-digit app PIN + the same failed-attempt lockout used by the app.
@@ -145,7 +153,7 @@ async function verifyPin(userId, pin) {
     return { message: "Your account is unavailable. Please contact the cooperative." };
   }
   if (!member.appPinHash) {
-    return { message: "Set your 6-digit PIN in the mobile app first, then dial again." };
+    return { message: "You have no PIN yet. Ask the cooperative office for an activation code, or set a PIN in the mobile app." };
   }
 
   const state = getSecurityState(member);
@@ -299,6 +307,46 @@ async function eligibilityText(member) {
   return `Loan limit: ${naira(eligible)}\n${line}`;
 }
 
+// ---- first-time PIN setup with an office activation code --------------------
+
+async function handleActivation(res, phoneNumber, parts) {
+  const failed = "Activation failed. Check your code or visit the cooperative office.";
+
+  const userId = await findUserIdByPhone(phoneNumber);
+  if (!userId) return end(res, failed);
+
+  const member = await User.findById(userId).select(
+    "+securityFailedAttempts +securityLockLevel +securityLockedUntil +securityLockedPermanently"
+  );
+  if (!member || member.isBlocked || !member.isApprovedMember) {
+    return end(res, "Your account is unavailable. Please contact the cooperative.");
+  }
+  // An activation code does not bypass an account lock; the office unlocks first.
+  const state = getSecurityState(member);
+  if (state.permanent || state.locked) {
+    return end(res, "Your account is locked. Please contact the cooperative.");
+  }
+
+  const check = await checkActivation(member._id, parts[0]);
+  if (!check.ok) return end(res, check.message);
+
+  if (parts.length === 1) return con(res, "Code accepted.\nChoose a new 6-digit PIN:");
+
+  const pin = parts[1];
+  if (!/^\d{6}$/.test(pin) || isWeakPin(pin)) {
+    return end(res, "That PIN is not allowed. Use 6 digits and nothing obvious like 123456. Dial again.");
+  }
+  if (parts.length === 2) return con(res, "Confirm your new PIN:");
+
+  if (parts.length > 3 || parts[2] !== pin) {
+    return end(res, "The PINs did not match. Dial again and re-enter your code.");
+  }
+
+  await completeActivation(member._id, pin);
+  void alertSecurityChange(member._id, check.hadPin ? "pin-changed" : "pin-created");
+  return end(res, "Your PIN is set. Dial again and enter your PIN to use the service.");
+}
+
 // ---- main handler ---------------------------------------------------------
 
 router.post("/", async (req, res) => {
@@ -308,8 +356,10 @@ router.post("/", async (req, res) => {
     const parts = text === "" ? [] : text.split("*");
 
     if (parts.length === 0) {
-      return con(res, "Exclusive Cooperative\nEnter your 6-digit PIN:");
+      return con(res, "Exclusive Cooperative\nEnter your 6-digit PIN\n(or 8-digit activation code):");
     }
+
+    if (/^\d{8}$/.test(parts[0])) return await handleActivation(res, phoneNumber, parts);
 
     const pin = parts[0];
     if (!/^\d{6}$/.test(pin)) {

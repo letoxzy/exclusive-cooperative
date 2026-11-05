@@ -27,6 +27,8 @@ import { memberDeletionBlockers, deleteMemberAccount } from "../utils/memberDele
 import AccountDeletionRequest from "../models/AccountDeletionRequest.js";
 import { applyPaymentToLoan } from "../utils/loanRepaymentSettlement.js";
 import { audit } from "../utils/audit.js";
+import { issueActivation } from "../utils/ussdActivation.js";
+import { normalizeNgPhone } from "../sms.js";
 import { makerCheckerEnabled, sameAdmin } from "../utils/fourEyes.js";
 import { collectInterestRows, repaymentPortions } from "../utils/dividendBasis.js";
 import { summarizeInterest, allocatePool } from "../utils/dividendMath.js";
@@ -338,6 +340,69 @@ router.patch("/users/:id/security-unlock", async (req, res) => {
     return res.status(500).json({
       message: "Failed to unlock account security.",
     });
+  }
+});
+
+// POST /api/admin/members/:id/ussd-activation
+// Issues a one-time code so a member without a smartphone can choose their own
+// USSD PIN. The code is returned ONCE here; only its hash is stored. Issuing
+// one for a member who already has a PIN is an in-person PIN reset.
+router.post("/members/:id/ussd-activation", async (req, res) => {
+  try {
+    const member = await User.findById(req.params.id).select(
+      "fullName email role isApprovedMember isBlocked"
+    );
+
+    if (!member) {
+      return res.status(404).json({ message: "Member account not found." });
+    }
+    if (member.role === "admin") {
+      return res.status(403).json({ message: "Administrator accounts cannot use USSD." });
+    }
+    if (!member.isApprovedMember || member.isBlocked) {
+      return res.status(400).json({
+        message: "Only approved, unblocked members can be activated for USSD.",
+      });
+    }
+
+    const membership = await Membership.findOne({
+      user: member._id,
+      status: "approved",
+    }).select("phone");
+    const phone = normalizeNgPhone(membership?.phone);
+    if (!phone) {
+      return res.status(400).json({
+        message:
+          "This member has no valid phone number on their membership. Correct the phone number first.",
+      });
+    }
+
+    const { code, expiresAt } = await issueActivation(member._id);
+
+    await audit(req, "member.ussd_activation_issued", "User", member._id, {
+      member: member.email,
+      phoneEnding: phone.slice(-4),
+      expiresAt,
+    });
+
+    // Tell the member, so a code they never asked for does not go unnoticed.
+    try {
+      await createNotificationAndPush({
+        user: member._id,
+        type: "security",
+        title: "USSD Activation Code Issued",
+        message:
+          "The cooperative office issued a code for you to set up your PIN on USSD. If you did not ask for this, contact the cooperative immediately.",
+      });
+    } catch (notificationError) {
+      console.error("USSD activation notification failed:", notificationError);
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({ code, expiresAt, phoneEnding: phone.slice(-4) });
+  } catch (err) {
+    console.error("USSD activation error:", err);
+    return res.status(500).json({ message: "Failed to issue the activation code." });
   }
 });
 

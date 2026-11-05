@@ -110,6 +110,12 @@ const userSchema = new mongoose.Schema(
     // Members can switch SMS copies of their notifications off.
     smsNotifications: { type: Boolean, default: true },
 
+    // One-time code issued by the office so a member without a smartphone can
+    // set their own PIN over USSD. Only a hash is stored.
+    ussdActivationHash: { type: String, select: false },
+    ussdActivationExpires: { type: Date, select: false },
+    ussdActivationFailures: { type: Number, default: 0, select: false },
+
     // Hashed fingerprints of devices that have signed in, used for the
     // "new sign-in" alert. Hidden from normal queries.
     knownDevices: {

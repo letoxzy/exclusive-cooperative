@@ -50,6 +50,9 @@ function webLabel(ua) {
   return os ? `${browser} on ${os}` : browser;
 }
 
+/** "phone" for the mobile app, "browser" for the website (used for the icon). */
+export const deviceKind = (label) => (/ on |browser/i.test(String(label || "")) ? "browser" : "phone");
+
 export function describeDevice(req) {
   const header = String(req.get("X-App-Platform") || "").toLowerCase();
   const platform = header === "android" || header === "ios" ? header : "web";

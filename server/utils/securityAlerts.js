@@ -29,6 +29,11 @@ const ALERTS = {
     title: "Password Reset",
     message: () => `Your account password was reset. ${CONTACT}`,
   },
+  "other-devices-signed-out": {
+    title: "Other Devices Signed Out",
+    message: () =>
+      "All your other devices were signed out of your account. If this was not you, change your password and contact the cooperative immediately.",
+  },
   "new-device": {
     title: "New Sign-in",
     message: ({ label, when }) =>

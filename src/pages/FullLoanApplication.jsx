@@ -26,7 +26,7 @@ function FullLoanApplication() {
   const [consent, setConsent] = useState(false);
   const [widgetNotice, setWidgetNotice] = useState("");
 
-  const DOJAH_WIDGET_URL = import.meta.env.DOJAH_WIDGET_ID || "";
+  const DOJAH_WIDGET_URL = import.meta.env.VITE_DOJAH_WIDGET_URL || "";
 
   const load = useCallback(async () => {
     if (!user) return;

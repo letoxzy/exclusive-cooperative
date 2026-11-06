@@ -116,6 +116,15 @@ const userSchema = new mongoose.Schema(
     ussdActivationExpires: { type: Date, select: false },
     ussdActivationFailures: { type: Number, default: 0, select: false },
 
+    // Email sign-in verification code (see utils/loginOtp.js). Only a keyed
+    // hash of the 6-digit code is stored; all fields are hidden by default.
+    loginOtpHash: { type: String, default: null, select: false },
+    loginOtpNonce: { type: String, default: null, select: false },
+    loginOtpExpires: { type: Date, default: null, select: false },
+    loginOtpAttempts: { type: Number, default: 0, select: false },
+    loginOtpSentAt: { type: Date, default: null, select: false },
+    loginOtpResends: { type: Number, default: 0, select: false },
+
     // Hashed fingerprints of devices that have signed in, used for the
     // "new sign-in" alert. Hidden from normal queries.
     knownDevices: {

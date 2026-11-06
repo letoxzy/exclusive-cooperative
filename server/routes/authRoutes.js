@@ -5,6 +5,20 @@ import generateToken from "../utils/generateToken.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { validatePassword } from "../utils/passwordPolicy.js";
 import { recordLoginDevice } from "../utils/deviceTracker.js";
+import {
+  OTP_LENGTH,
+  OTP_MAX_ATTEMPTS,
+  OTP_MAX_RESENDS,
+  OTP_RESEND_COOLDOWN_MS,
+  OTP_EXPIRY_MS,
+  clearLoginOtp,
+  codeMatches,
+  createLoginOtp,
+  loginOtpRequiredFor,
+  otpChallengeResponse,
+  readChallenge,
+  sendLoginOtpEmail,
+} from "../utils/loginOtp.js";
 import { alertSecurityChange } from "../utils/securityAlerts.js";
 import {
   getSecurityState,
@@ -209,6 +223,25 @@ router.post("/reset-password/:token", async (req, res) => {
   }
 });
 
+// The JSON the website and mobile app receive once a member is fully signed in.
+const buildLoginPayload = (user, token) => ({
+  _id: user._id,
+  fullName: user.fullName,
+  email: user.email,
+  role: user.role,
+  savingsBalance: user.savingsBalance,
+  contributionFrequency: user.contributionFrequency,
+  avatarUrl: user.avatarUrl,
+  isApprovedMember: user.isApprovedMember,
+  mustChangePassword: user.mustChangePassword,
+  isBlocked: user.isBlocked,
+  hasAppPin: Boolean(user.appPinHash),
+  autoLockSeconds: user.autoLockSeconds,
+  biometricEnabled: user.biometricEnabled,
+  createdAt: user.createdAt,
+  token,
+});
+
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
@@ -279,6 +312,29 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    // Step 2 of sign-in: the password was right, so email a one-time code and
+    // stop here. No session (cookie/token) is issued until /login/verify.
+    if (loginOtpRequiredFor(user)) {
+      const otp = await createLoginOtp(user._id);
+
+      try {
+        await sendLoginOtpEmail({
+          email: user.email,
+          name: user.fullName,
+          code: otp.code,
+        });
+      } catch (emailError) {
+        await clearLoginOtp(user._id, otp.nonce);
+        console.error("Login OTP email failed:", emailError.message);
+        return res.status(503).json({
+          code: "OTP_EMAIL_FAILED",
+          message: "We could not send your verification code right now. Please try again shortly.",
+        });
+      }
+
+      return res.json(otpChallengeResponse(user.email, otp.challengeToken));
+    }
+
     if (user.role !== "admin") {
       await recordSecuritySuccess(user);
     }
@@ -287,25 +343,171 @@ router.post("/login", async (req, res) => {
     setAuthCookie(res, token);
     void recordLoginDevice(user, req);
 
-    res.json({
-      _id: user._id,
-      fullName: user.fullName,
-      email: user.email,
-      role: user.role,
-      savingsBalance: user.savingsBalance,
-      contributionFrequency: user.contributionFrequency,
-      avatarUrl: user.avatarUrl,
-      isApprovedMember: user.isApprovedMember,
-      mustChangePassword: user.mustChangePassword,
-      isBlocked: user.isBlocked,
-      hasAppPin: Boolean(user.appPinHash),
-      autoLockSeconds: user.autoLockSeconds,
-      biometricEnabled: user.biometricEnabled,
-      createdAt: user.createdAt,
-      token,
-    });
+    res.json(buildLoginPayload(user, token));
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+const OTP_USER_FIELDS =
+  "+loginOtpHash +loginOtpNonce +loginOtpExpires +loginOtpAttempts +loginOtpSentAt +loginOtpResends " +
+  "+securityFailedAttempts +securityLockLevel +securityLockedUntil";
+
+const otpExpired = (res) =>
+  res.status(401).json({
+    code: "OTP_CHALLENGE_EXPIRED",
+    message: "Your verification session has expired. Please log in again.",
+  });
+
+const otpAccountBlocked = (user, res) => {
+  if (user.isBlocked) {
+    res.status(403).json({
+      code: "ACCOUNT_BLOCKED",
+      message: "Your account has been blocked by an administrator. Please contact the cooperative.",
+    });
+    return true;
+  }
+  if (user.securityLockedPermanently) {
+    res.status(403).json({
+      code: "ACCOUNT_SECURITY_LOCKED",
+      message: "Your account has been locked for security. Please contact the cooperative to unlock your account.",
+    });
+    return true;
+  }
+  return false;
+};
+
+// POST /api/auth/login/verify — { challengeToken, code } -> real session
+router.post("/login/verify", async (req, res) => {
+  try {
+    const challenge = readChallenge(req.body?.challengeToken);
+    const code = String(req.body?.code || "").replace(/\D/g, "");
+
+    if (!challenge) return otpExpired(res);
+
+    if (code.length !== OTP_LENGTH) {
+      return res.status(400).json({
+        code: "OTP_INVALID",
+        message: `Enter the ${OTP_LENGTH}-digit code.`,
+      });
+    }
+
+    // Count this attempt in the database BEFORE checking the code, so many
+    // parallel guesses cannot sneak past the attempt limit.
+    const user = await User.findOneAndUpdate(
+      { _id: challenge.uid, loginOtpNonce: challenge.nonce },
+      { $inc: { loginOtpAttempts: 1 } },
+      { new: true }
+    ).select(OTP_USER_FIELDS);
+
+    if (!user || !user.loginOtpHash || !user.loginOtpExpires || user.loginOtpExpires <= new Date()) {
+      return otpExpired(res);
+    }
+
+    if (otpAccountBlocked(user, res)) return;
+
+    if (user.loginOtpAttempts > OTP_MAX_ATTEMPTS) {
+      await clearLoginOtp(user._id, challenge.nonce);
+      return res.status(429).json({
+        code: "OTP_TOO_MANY_ATTEMPTS",
+        message: "Too many incorrect codes. Please log in again.",
+      });
+    }
+
+    if (!codeMatches(user, challenge.nonce, code)) {
+      const attemptsLeft = Math.max(OTP_MAX_ATTEMPTS - user.loginOtpAttempts, 0);
+
+      if (attemptsLeft === 0) {
+        await clearLoginOtp(user._id, challenge.nonce);
+        return res.status(429).json({
+          code: "OTP_TOO_MANY_ATTEMPTS",
+          message: "Too many incorrect codes. Please log in again.",
+        });
+      }
+
+      return res.status(401).json({
+        code: "OTP_INVALID",
+        message: `Incorrect code. ${attemptsLeft} ${attemptsLeft === 1 ? "attempt" : "attempts"} left.`,
+        attemptsLeft,
+      });
+    }
+
+    // Single use: only the request that clears the code may continue.
+    const consumed = await clearLoginOtp(user._id, challenge.nonce);
+    if (!consumed.modifiedCount) return otpExpired(res);
+
+    if (user.role !== "admin") {
+      await recordSecuritySuccess(user);
+    }
+
+    const token = generateToken(user._id);
+    setAuthCookie(res, token);
+    void recordLoginDevice(user, req);
+
+    res.json(buildLoginPayload(user, token));
+  } catch (err) {
+    console.error("Login verify error:", err);
+    res.status(500).json({ message: "Unable to verify the code right now" });
+  }
+});
+
+// POST /api/auth/login/resend — { challengeToken } -> new code + new challengeToken
+router.post("/login/resend", async (req, res) => {
+  try {
+    const challenge = readChallenge(req.body?.challengeToken);
+    if (!challenge) return otpExpired(res);
+
+    const user = await User.findOne({
+      _id: challenge.uid,
+      loginOtpNonce: challenge.nonce,
+    }).select(OTP_USER_FIELDS);
+
+    if (!user || !user.loginOtpHash) return otpExpired(res);
+    if (otpAccountBlocked(user, res)) return;
+
+    const waitMs =
+      (user.loginOtpSentAt ? user.loginOtpSentAt.getTime() : 0) +
+      OTP_RESEND_COOLDOWN_MS -
+      Date.now();
+
+    if (waitMs > 0) {
+      return res.status(429).json({
+        code: "OTP_RESEND_WAIT",
+        message: "Please wait before requesting another code.",
+        retryAfterSeconds: Math.ceil(waitMs / 1000),
+      });
+    }
+
+    const resends = Number(user.loginOtpResends || 0);
+    if (resends >= OTP_MAX_RESENDS) {
+      await clearLoginOtp(user._id, challenge.nonce);
+      return res.status(429).json({
+        code: "OTP_TOO_MANY_RESENDS",
+        message: "Too many codes requested. Please log in again.",
+      });
+    }
+
+    const otp = await createLoginOtp(user._id, { resends: resends + 1 });
+
+    try {
+      await sendLoginOtpEmail({ email: user.email, name: user.fullName, code: otp.code });
+    } catch (emailError) {
+      await clearLoginOtp(user._id, otp.nonce);
+      console.error("Login OTP resend failed:", emailError.message);
+      return res.status(503).json({
+        code: "OTP_EMAIL_FAILED",
+        message: "We could not send a new code right now. Please log in again.",
+      });
+    }
+
+    res.json({
+      challengeToken: otp.challengeToken,
+      expiresInSeconds: Math.round(OTP_EXPIRY_MS / 1000),
+      resendAfterSeconds: Math.round(OTP_RESEND_COOLDOWN_MS / 1000),
+    });
+  } catch (err) {
+    console.error("Login resend error:", err);
+    res.status(500).json({ message: "Unable to resend the code right now" });
   }
 });
 

@@ -25,6 +25,8 @@ async function request(path, { method = "GET", body, token, isFormData } = {}) {
     error.code = data.code;
     error.lockedUntil = data.lockedUntil;
     error.status = res.status;
+    error.retryAfterSeconds = data.retryAfterSeconds;
+    error.attemptsLeft = data.attemptsLeft;
     throw error;
   }
   return data;

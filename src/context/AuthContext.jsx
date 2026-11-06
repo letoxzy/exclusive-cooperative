@@ -19,9 +19,24 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const data = await request("/auth/login", { method: "POST", body: { email, password } });
+    // When email verification is on, the password step only returns a
+    // challenge. The member is NOT signed in until verifyLogin succeeds.
+    if (data.otpRequired) return data;
     setUser({ ...data, token: "cookie" });
     return data;
   };
+
+  const verifyLogin = async (challengeToken, code) => {
+    const data = await request("/auth/login/verify", {
+      method: "POST",
+      body: { challengeToken, code },
+    });
+    setUser({ ...data, token: "cookie" });
+    return data;
+  };
+
+  const resendLoginCode = (challengeToken) =>
+    request("/auth/login/resend", { method: "POST", body: { challengeToken } });
 
   const register = async (fullName, email, password) => {
     const data = await request("/auth/register", {
@@ -49,7 +64,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyLogin, resendLoginCode, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -58,6 +58,12 @@ function Login() {
     try {
       const data = await login(form.email, form.password);
 
+      // Password accepted -> a code was emailed; continue on the code page.
+      if (data.otpRequired) {
+        navigate("/verify-login", { state: data });
+        return;
+      }
+
       if (data.mustChangePassword) {
         navigate("/change-password", { replace: true });
         return;

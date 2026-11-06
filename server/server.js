@@ -55,24 +55,26 @@ try {
   console.warn("helmet not installed - run `npm install` to enable security headers.");
 }
 
+
 const allowedOrigins = [
   "http://localhost:5173",
   "https://exclusive-cooperative.vercel.app",
   "https://exclusivecooperative.com",
-  "https://www.exclusivecooperative.com"
+  "https://www.exclusivecooperative.com",
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
+      console.log("[CORS] Incoming origin:", origin || "No origin");
+
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
-      console.error("[CORS BLOCKED] Origin received:", origin);
-      console.error("[CORS ALLOWED] Origins:", allowedOrigins);
+      console.error("[CORS BLOCKED] Rejected origin:", origin);
 
-      return callback(new Error("Not allowed by CORS"));
+      return callback(null, false);
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -83,10 +85,10 @@ app.use(
       "X-App-Platform",
     ],
     exposedHeaders: ["Idempotent-Replay", "Retry-After"],
-    // Required so the website can send/receive the httpOnly auth cookie.
     credentials: true,
   })
 );
+
 
 app.use(cookieParser());
 

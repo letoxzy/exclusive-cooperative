@@ -238,10 +238,10 @@ function FullLoanApplication() {
         setWidgetNotice(
           "Steps finished. Tap \u201cI've completed verification\u201d to confirm."
         ),
-      onError: () =>
-        setWidgetNotice(
-          "Something went wrong in the verification. Please try again."
-        ),
+      onError: (err) => {
+        console.error("Dojah widget error:", err);
+        setWidgetNotice("Something went wrong in the verification. Please try again.");
+      },
     }).catch((err) => setWidgetNotice(err.message));
 
     return () => {

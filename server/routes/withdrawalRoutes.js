@@ -13,6 +13,7 @@ import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { activeFullWithdrawalGrant, savingsOwed } from "../utils/fullWithdrawalGrant.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
+import { namesMatch } from "../services/dojahService.js";
 
 
 const router = express.Router();
@@ -50,6 +51,12 @@ async function paystack(path, options = {}) {
 
   return payload.data;
 }
+
+// Money may only be paid to a bank account in the member's own name.
+// Anything else must go through the cooperative office.
+const ACCOUNT_NAME_MISMATCH_MESSAGE =
+  "This account name does not match your membership name. " +
+  "Use a bank account in your own name, or contact the cooperative office.";
 
 // Member contributions are displayed at 100% in Savings Balance.
 // Only 40% of the current month's approved contributions is eligible for
@@ -281,6 +288,12 @@ router.post(
           accountNumber
         )}&bank_code=${encodeURIComponent(bankCode)}`
       );
+
+      if (!namesMatch(data.account_name, req.user.fullName)) {
+        return res.status(400).json({
+          message: ACCOUNT_NAME_MISMATCH_MESSAGE,
+        });
+      }
 
       res.json({
         accountNumber: data.account_number,
@@ -542,6 +555,11 @@ router.post(
       const freshMember = await User.findById(req.user._id);
       if (!freshMember) {
         return res.status(404).json({ message: "Member account not found." });
+      }
+
+      // Checked before any money is reserved, for savings and loan funds alike.
+      if (!namesMatch(resolved.account_name, freshMember.fullName)) {
+        return res.status(400).json({ message: ACCOUNT_NAME_MISMATCH_MESSAGE });
       }
 
       let loanForWithdrawal = null;

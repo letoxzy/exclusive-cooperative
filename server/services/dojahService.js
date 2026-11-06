@@ -1,40 +1,41 @@
-/*
-  Dojah helpers
-  -------------
-  - getVerificationDetails(): fetches the authoritative result of an
-    EasyOnboard verification from Dojah using its reference id.
-  - parseVerification():      turns Dojah's nested response into a flat,
-    predictable object (defensive: any field can be missing).
-  - compareIdentity():        compares what Dojah returned with the member's
-    cooperative record so the administrator can see what matches.
 
-  Sandbox vs live is decided ONLY by DOJAH_BASE_URL:
-    https://sandbox.dojah.io  -> sandbox (dummy identity data)
-    https://api.dojah.io      -> live
-*/
+/*
+ * Dojah helpers
+ *
+ * - Fetches authoritative EasyOnboard verification results.
+ * - Parses Dojah responses defensively.
+ * - Compares verified identity information with cooperative records.
+ *
+ * Production is the default. Set DOJAH_BASE_URL to
+ * https://sandbox.dojah.io only when intentionally testing.
+ */
 
 const DOJAH_BASE_URL = (
-  process.env.DOJAH_BASE_URL || "https://sandbox.dojah.io"
-).replace(/\/$/, "");
+  process.env.DOJAH_BASE_URL || "https://api.dojah.io"
+).replace(/\/+$/, "");
 
 export function isSandbox() {
   return /sandbox/i.test(DOJAH_BASE_URL);
 }
 
 function getHeaders() {
-  if (!process.env.DOJAH_APP_ID || !process.env.DOJAH_SECRET_KEY) {
-    throw new Error("Dojah credentials are not configured on the backend.");
+  const appId = process.env.DOJAH_APP_ID;
+  const secretKey = process.env.DOJAH_SECRET_KEY;
+
+  if (!appId || !secretKey) {
+    throw new Error("Dojah production credentials are not configured.");
   }
 
   return {
-    AppId: process.env.DOJAH_APP_ID,
-    Authorization: process.env.DOJAH_SECRET_KEY,
+    AppId: appId,
+    Authorization: secretKey,
     Accept: "application/json",
   };
 }
 
 export async function getVerificationDetails(referenceId) {
   const value = String(referenceId || "").trim();
+
   if (!value) {
     throw new Error("A Dojah verification reference is required.");
   }
@@ -52,24 +53,35 @@ export async function getVerificationDetails(referenceId) {
       signal: controller.signal,
     });
 
-    const data = await response.json().catch(() => ({}));
+    const contentType = response.headers.get("content-type") || "";
+    const data = contentType.includes("application/json")
+      ? await response.json()
+      : {};
 
     if (!response.ok) {
       const error = new Error(
-        data?.message || data?.error || `Dojah returned HTTP ${response.status}.`
+        data?.message ||
+        data?.error ||
+        `Dojah returned HTTP ${response.status}.`
       );
+
       error.status = response.status;
       error.providerData = data;
       throw error;
     }
 
+    if (!data || typeof data !== "object") {
+      throw new Error("Dojah returned an invalid verification response.");
+    }
+
     return data;
   } catch (err) {
     if (err.name === "AbortError") {
-      const timeoutError = new Error("Dojah took too long to respond.");
-      timeoutError.status = 504;
-      throw timeoutError;
+      const error = new Error("Dojah took too long to respond.");
+      error.status = 504;
+      throw error;
     }
+
     throw err;
   } finally {
     clearTimeout(timeout);
@@ -77,13 +89,14 @@ export async function getVerificationDetails(referenceId) {
 }
 
 /* ---------------------------------------------------------------
-   Small helpers
+   General helpers
 ---------------------------------------------------------------- */
 
-const text = (value) => (value === undefined || value === null ? "" : String(value).trim());
+const text = (value) =>
+  value === undefined || value === null ? "" : String(value).trim();
 
 export const last4 = (value) => {
-  const digits = text(value).replace(/\s/g, "");
+  const digits = text(value).replace(/\D/g, "");
   return digits.length >= 4 ? digits.slice(-4) : "";
 };
 
@@ -99,10 +112,13 @@ const normaliseText = (value) =>
     .toLowerCase();
 
 function nameTokens(value) {
-  const tokens = normaliseText(value)
-    .split(/[^a-z]+/)
-    .filter((token) => token.length >= 2);
-  return [...new Set(tokens)];
+  return [
+    ...new Set(
+      normaliseText(value)
+        .split(/[^a-z]+/)
+        .filter((token) => token.length >= 2)
+    ),
+  ];
 }
 
 function editDistanceAtMostOne(a, b) {
@@ -115,94 +131,134 @@ function editDistanceAtMostOne(a, b) {
 
   while (i < a.length && j < b.length) {
     if (a[i] === b[j]) {
-      i += 1;
-      j += 1;
+      i++;
+      j++;
       continue;
     }
-    edits += 1;
+
+    edits++;
     if (edits > 1) return false;
-    if (a.length > b.length) i += 1;
-    else if (b.length > a.length) j += 1;
+
+    if (a.length > b.length) i++;
+    else if (b.length > a.length) j++;
     else {
-      i += 1;
-      j += 1;
+      i++;
+      j++;
     }
   }
 
   return edits + (a.length - i) + (b.length - j) <= 1;
 }
 
-// "Mohammed" vs "Muhammed" should count as the same name part.
 function sameNamePart(a, b) {
   if (a === b) return true;
-  return Math.min(a.length, b.length) >= 5 && editDistanceAtMostOne(a, b);
+
+  return (
+    Math.min(a.length, b.length) >= 5 &&
+    editDistanceAtMostOne(a, b)
+  );
 }
 
-/*
-  Order-insensitive name comparison. Nigerian names are often written in a
-  different order, or with/without a middle name, so we do not require an
-  exact string match. The shorter name must be fully contained in the longer
-  one, and at least two name parts must match (unless a name has only one).
-*/
 export function namesMatch(a, b) {
   const first = nameTokens(a);
   const second = nameTokens(b);
+
   if (!first.length || !second.length) return false;
 
-  const [small, large] = first.length <= second.length ? [first, second] : [second, first];
-  const shared = small.filter((token) => large.some((other) => sameNamePart(token, other))).length;
+  const [small, large] =
+    first.length <= second.length
+      ? [first, second]
+      : [second, first];
+
+  const shared = small.filter((token) =>
+    large.some((other) => sameNamePart(token, other))
+  ).length;
 
   return shared === small.length && shared >= Math.min(2, small.length);
 }
 
 const pad = (n) => String(n).padStart(2, "0");
-const isoDate = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
 
-// Returns YYYY-MM-DD, or "" when the value cannot be understood.
+const isoDate = (y, m, d) =>
+  `${y}-${pad(m)}-${pad(d)}`;
+
 export function normaliseDate(value) {
   const raw = text(value);
   if (!raw) return "";
 
   let match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
-  if (match) return isoDate(match[1], match[2], match[3]);
 
-  // Nigerian convention is day first: 20-05-1990 or 20/05/1990
+  if (match) {
+    return isoDate(match[1], match[2], match[3]);
+  }
+
+  // Nigerian date convention: DD-MM-YYYY.
   match = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
-  if (match) return isoDate(match[3], match[2], match[1]);
+
+  if (match) {
+    return isoDate(match[3], match[2], match[1]);
+  }
 
   const parsed = new Date(raw);
+
   if (Number.isNaN(parsed.getTime())) return "";
-  return isoDate(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
+
+  return isoDate(
+    parsed.getFullYear(),
+    parsed.getMonth() + 1,
+    parsed.getDate()
+  );
 }
 
-const phoneKey = (value) => text(value).replace(/\D/g, "").slice(-10);
+const phoneKey = (value) =>
+  text(value).replace(/\D/g, "").slice(-10);
 
 /* ---------------------------------------------------------------
-   Parsing Dojah's "Get verification" response
+   Status helpers
 ---------------------------------------------------------------- */
 
-const TRUE_WORDS = ["true", "success", "successful", "completed", "verified", "passed"];
-const FALSE_WORDS = ["false", "failed", "fail", "declined", "rejected"];
-const isTrue = (value) => value === true || TRUE_WORDS.includes(text(value).toLowerCase());
-const isFalse = (value) => value === false || FALSE_WORDS.includes(text(value).toLowerCase());
+const TRUE_WORDS = [
+  "true",
+  "success",
+  "successful",
+  "completed",
+  "verified",
+  "passed",
+];
 
-function pickBvnEntity(bvnResult) {
-  if (!bvnResult || typeof bvnResult !== "object") return null;
-  if (bvnResult.entity && typeof bvnResult.entity === "object") return bvnResult.entity;
-  if (bvnResult.data?.entity && typeof bvnResult.data.entity === "object") return bvnResult.data.entity;
-  if (bvnResult.first_name || bvnResult.firstName) return bvnResult;
-  return null;
+const FALSE_WORDS = [
+  "false",
+  "failed",
+  "fail",
+  "declined",
+  "rejected",
+];
+
+const isTrue = (value) =>
+  value === true || TRUE_WORDS.includes(text(value).toLowerCase());
+
+const isFalse = (value) =>
+  value === false || FALSE_WORDS.includes(text(value).toLowerCase());
+
+function getStatus(block) {
+  if (!block || typeof block !== "object") return "";
+
+  return text(
+    block.status ||
+    block.verification_status ||
+    block.verificationStatus
+  ).toLowerCase();
 }
 
-// Looks through a government-data block for the person record, wherever Dojah
-// nested it (BVN, NIN or another government ID all look alike).
 function findPersonRecord(node, depth = 0) {
-  if (!node || typeof node !== "object" || depth > 5) return null;
+  if (!node || typeof node !== "object" || depth > 6) return null;
 
   if (!Array.isArray(node)) {
     const hasFirst = node.first_name || node.firstName;
     const hasLast = node.last_name || node.lastName;
+
     if (hasFirst && hasLast) return node;
+
     if (node.full_name || node.fullname) return node;
   }
 
@@ -210,104 +266,197 @@ function findPersonRecord(node, depth = 0) {
     const found = findPersonRecord(value, depth + 1);
     if (found) return found;
   }
+
   return null;
+}
+
+function pickPersonRecord(block) {
+  if (!block || typeof block !== "object") return null;
+
+  return (
+    block.entity ||
+    block.data?.entity ||
+    findPersonRecord(block.data || block)
+  );
 }
 
 function toImageDataUrl(value) {
   const raw = text(value);
+
   if (!raw) return "";
+
   if (raw.startsWith("data:image")) return raw;
+
   if (/^https?:\/\//i.test(raw)) return raw;
-  // Dojah returns the BVN photo as raw base64 (JPEG).
+
   return `data:image/jpeg;base64,${raw}`;
 }
+
+/* ---------------------------------------------------------------
+   Parse Dojah verification response
+---------------------------------------------------------------- */
 
 export function parseVerification(raw) {
   let root = raw && typeof raw === "object" ? raw : {};
 
-  // Some Dojah endpoints wrap the payload in "entity".
-  if (root.entity && typeof root.entity === "object" && !root.verification_status && !root.data) {
+  if (
+    root.entity &&
+    typeof root.entity === "object" &&
+    !root.verification_status &&
+    !root.data
+  ) {
     root = root.entity;
   }
 
-  const checks = root.data && typeof root.data === "object" ? root.data : {};
+  const checks =
+    root.data && typeof root.data === "object"
+      ? root.data
+      : {};
 
-  const status = text(root.verification_status || root.verificationStatus).toLowerCase();
+  const status = text(
+    root.verification_status ||
+    root.verificationStatus ||
+    root.status
+  ).toLowerCase();
 
-  // ---- BVN (government data) ----
-  const governmentBlock = checks.government_data;
-  const govData = governmentBlock?.data;
-  const bvnResult =
-    govData?.bvn ?? (govData && (govData.entity || govData.first_name) ? govData : undefined);
-  // If the member used another government ID (for example a NIN), the person
-  // record is still found inside the government block.
-  const entity = pickBvnEntity(bvnResult) || findPersonRecord(govData);
-  // Passed when Dojah found the record (or marked the step as passed) and did
-  // not mark it as failed.
+  // Government identity information.
+  const governmentBlock = checks.government_data || {};
+  const governmentData = governmentBlock.data || governmentBlock;
+
+  const bvnBlock =
+    governmentData.bvn ||
+    governmentData.BVN ||
+    null;
+
+  const bvnEntity = pickPersonRecord(bvnBlock);
+
+  const governmentEntity =
+    bvnEntity ||
+    pickPersonRecord(governmentBlock) ||
+    findPersonRecord(governmentData);
+
   const bvnPassed =
-    (!!entity || isTrue(bvnResult?.status) || isTrue(governmentBlock?.status)) &&
-    !isFalse(bvnResult?.status) &&
-    !isFalse(governmentBlock?.status);
+    Boolean(governmentEntity) ||
+    isTrue(getStatus(bvnBlock)) ||
+    isTrue(getStatus(governmentBlock));
 
-  const bvnFullName = entity
+  const bvnFullName = governmentEntity
     ? [
-        entity.first_name || entity.firstName,
-        entity.middle_name || entity.middleName,
-        entity.last_name || entity.lastName,
+        governmentEntity.first_name || governmentEntity.firstName,
+        governmentEntity.middle_name || governmentEntity.middleName,
+        governmentEntity.last_name || governmentEntity.lastName,
       ]
         .map(text)
         .filter(Boolean)
-        .join(" ") || text(entity.full_name || entity.fullname)
+        .join(" ") ||
+      text(governmentEntity.full_name || governmentEntity.fullname)
     : "";
 
-  // ---- ID document ----
+  // Government ID document.
   const idBlock = checks.id || {};
-  const idData = idBlock.data?.id_data || {};
-  const idFullName = [idData.first_name, idData.middle_name, idData.last_name]
+  const idData =
+    idBlock.data?.id_data ||
+    idBlock.data ||
+    {};
+
+  const idFullName = [
+    idData.first_name || idData.firstName,
+    idData.middle_name || idData.middleName,
+    idData.last_name || idData.lastName,
+  ]
     .map(text)
     .filter(Boolean)
     .join(" ");
 
-  // ---- Selfie / liveness ----
+  const idPassed = isTrue(getStatus(idBlock));
+
+  // Selfie and liveness are deliberately kept separate.
   const selfieBlock = checks.selfie || {};
-  const selfieUrl = text(selfieBlock.data?.selfie_url || root.selfie_url);
+  const selfieData = selfieBlock.data || {};
+
+  const selfieUrl = text(
+    selfieData.selfie_url ||
+    selfieData.image_url ||
+    root.selfie_url
+  );
+
+  const livenessBlock =
+    checks.liveness ||
+    checks.face_auth ||
+    checks.face ||
+    {};
+
+  const livenessPassed = isTrue(getStatus(livenessBlock));
+
+  const selfieCaptured =
+    Boolean(selfieUrl) ||
+    isTrue(getStatus(selfieBlock));
 
   return {
     referenceId: text(root.reference_id),
-    // Field names only (never values), so the server log can show the shape.
     topLevelKeys: Object.keys(root).slice(0, 25),
     status,
     message: text(root.message),
 
     bvn: {
       passed: bvnPassed,
-      // Full BVN is only used server-side to detect one BVN on two accounts.
-      number: text(entity?.bvn || entity?.nin),
+      number: text(
+        governmentEntity?.bvn ||
+        governmentEntity?.nin
+      ),
       fullName: bvnFullName,
-      dob: text(entity?.dob || entity?.date_of_birth || entity?.dateOfBirth),
-      gender: text(entity?.gender),
-      phone: text(entity?.phone_number1 || entity?.phone_number || entity?.phoneNumber || entity?.phone),
-      photo: toImageDataUrl(entity?.image || entity?.photo),
+      dob: text(
+        governmentEntity?.dob ||
+        governmentEntity?.date_of_birth ||
+        governmentEntity?.dateOfBirth
+      ),
+      gender: text(governmentEntity?.gender),
+      phone: text(
+        governmentEntity?.phone_number1 ||
+        governmentEntity?.phone_number ||
+        governmentEntity?.phoneNumber ||
+        governmentEntity?.phone
+      ),
+      photo: toImageDataUrl(
+        governmentEntity?.image ||
+        governmentEntity?.photo
+      ),
     },
 
     id: {
-      passed: isTrue(idBlock.status),
+      passed: idPassed,
       fullName: idFullName,
-      documentType: text(idData.document_type),
-      documentNumber: text(idData.document_number),
-      url: text(idBlock.data?.id_url || root.id_url),
+      documentType: text(
+        idData.document_type ||
+        idData.documentType
+      ),
+      documentNumber: text(
+        idData.document_number ||
+        idData.documentNumber
+      ),
+      url: text(
+        idBlock.data?.id_url ||
+        root.id_url
+      ),
       backUrl: text(root.back_url),
     },
 
     selfie: {
-      // Passed when Dojah says so, or a selfie was captured and not marked failed.
-      passed: !isFalse(selfieBlock.status) && (isTrue(selfieBlock.status) || !!selfieUrl),
+      passed: selfieCaptured,
+      captured: selfieCaptured,
       url: selfieUrl,
+    },
+
+    liveness: {
+      passed: livenessPassed,
     },
 
     location: {
       city: text(root.metadata?.ipinfo?.city),
-      region: text(root.metadata?.ipinfo?.region_name || root.metadata?.ipinfo?.region),
+      region: text(
+        root.metadata?.ipinfo?.region_name ||
+        root.metadata?.ipinfo?.region
+      ),
       country: text(root.metadata?.ipinfo?.country),
     },
 
@@ -317,30 +466,47 @@ export function parseVerification(raw) {
 }
 
 /* ---------------------------------------------------------------
-   Comparing Dojah's data with the member's cooperative record
+   Compare Dojah identity with cooperative record
 ---------------------------------------------------------------- */
 
-// `member` needs: fullName, dob, phone, gender (a Membership or the
-// applicantDetails snapshot both work).
 export function compareIdentity(details, member) {
   const bvn = details?.bvn || {};
   const id = details?.id || {};
 
-  const nameMatched = bvn.fullName ? namesMatch(member?.fullName, bvn.fullName) : false;
+  const verifiedName = bvn.fullName || id.fullName;
+  const nameMatched = verifiedName
+    ? namesMatch(member?.fullName, verifiedName)
+    : false;
+
+  const verifiedDob = bvn.dob || "";
 
   const memberDob = normaliseDate(member?.dob);
-  const bvnDob = normaliseDate(bvn.dob);
-  const dobMatched = memberDob && bvnDob ? memberDob === bvnDob : null;
+  const identityDob = normaliseDate(verifiedDob);
+
+  const dobMatched =
+    memberDob && identityDob
+      ? memberDob === identityDob
+      : null;
 
   const memberPhone = phoneKey(member?.phone);
-  const bvnPhone = phoneKey(bvn.phone);
-  const phoneMatched = memberPhone.length >= 7 && bvnPhone.length >= 7 ? memberPhone === bvnPhone : null;
+  const verifiedPhone = phoneKey(bvn.phone);
+
+  const phoneMatched =
+    memberPhone.length >= 7 && verifiedPhone.length >= 7
+      ? memberPhone === verifiedPhone
+      : null;
 
   const memberGender = normaliseText(member?.gender).charAt(0);
-  const bvnGender = normaliseText(bvn.gender).charAt(0);
-  const genderMatched = memberGender && bvnGender ? memberGender === bvnGender : null;
+  const verifiedGender = normaliseText(bvn.gender).charAt(0);
 
-  const idNameMatched = id.fullName ? namesMatch(member?.fullName, id.fullName) : null;
+  const genderMatched =
+    memberGender && verifiedGender
+      ? memberGender === verifiedGender
+      : null;
+
+  const idNameMatched = id.fullName
+    ? namesMatch(member?.fullName, id.fullName)
+    : null;
 
   return {
     nameMatched,
@@ -348,47 +514,78 @@ export function compareIdentity(details, member) {
     phoneMatched,
     genderMatched,
     idNameMatched,
-    // The automatic verdict: the name must match and the date of birth must
-    // not contradict. Phone / gender / ID name are shown to the admin as
-    // extra evidence but do not decide this on their own.
-    autoMatched: nameMatched && dobMatched !== false,
+
+    autoMatched:
+      nameMatched &&
+      dobMatched !== false,
   };
 }
 
-// Compact, photo-free record saved on the application for audit purposes.
-export function buildSnapshot(details, comparison, { duplicateBvn = false } = {}) {
+/* ---------------------------------------------------------------
+   Verification audit snapshot
+---------------------------------------------------------------- */
+
+export function buildSnapshot(
+  details,
+  comparison,
+  { duplicateBvn = false } = {}
+) {
   return {
     capturedAt: new Date(),
     sandbox: isSandbox(),
     duplicateBvn,
+
     bvn: {
       fullName: details.bvn.fullName,
       dob: details.bvn.dob,
       gender: details.bvn.gender,
       phoneLast4: last4(details.bvn.phone),
     },
+
     id: {
       fullName: details.id.fullName,
       documentType: details.id.documentType,
       documentLast4: last4(details.id.documentNumber),
     },
+
+    selfie: {
+      captured: details.selfie.captured,
+    },
+
+    liveness: {
+      passed: details.liveness.passed,
+    },
+
     comparison,
   };
 }
 
-/*
-  Describes the SHAPE of a Dojah response (field names and types, plus the
-  values of true/false flags) without any personal data, so it is safe to put
-  in a server log when a result cannot be understood.
-*/
+/* ---------------------------------------------------------------
+   Safe response-shape diagnostic
+---------------------------------------------------------------- */
+
 export function describeShape(value, depth = 0) {
   if (value === null) return "null";
-  if (Array.isArray(value)) return `[${value.length ? describeShape(value[0], depth + 1) : ""}]`;
+
+  if (Array.isArray(value)) {
+    return `[${value.length ? describeShape(value[0], depth + 1) : ""}]`;
+  }
+
   if (typeof value === "boolean") return String(value);
-  if (typeof value !== "object") return typeof value === "string" ? "str" : typeof value;
+
+  if (typeof value !== "object") {
+    return typeof value === "string"
+      ? "str"
+      : typeof value;
+  }
+
   if (depth >= 7) return "{…}";
+
   return `{${Object.entries(value)
     .slice(0, 20)
-    .map(([key, inner]) => `${key}:${describeShape(inner, depth + 1)}`)
+    .map(
+      ([key, inner]) =>
+        `${key}:${describeShape(inner, depth + 1)}`
+    )
     .join(",")}}`;
 }

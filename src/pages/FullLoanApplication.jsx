@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
+import { isDojahConfigured, openDojahWidget } from "../utils/dojahConnect";
 import "../styles/loan-application.css";
 import "../styles/full-loan-application.css";
 
@@ -25,8 +26,6 @@ function FullLoanApplication() {
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
   const [consent, setConsent] = useState(false);
   const [widgetNotice, setWidgetNotice] = useState("");
-
-  const DOJAH_WIDGET_URL = import.meta.env.VITE_DOJAH_WIDGET_URL || "";
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -102,7 +101,7 @@ function FullLoanApplication() {
     setPageError("");
     setNotice("");
 
-    if (!DOJAH_WIDGET_URL) {
+    if (!isDojahConfigured()) {
       setPageError(
         "Identity verification is temporarily unavailable. Please try again later."
       );
@@ -227,17 +226,29 @@ function FullLoanApplication() {
     }
   };
 
-  const widgetUrl = useMemo(() => {
-    if (!DOJAH_WIDGET_URL || !verificationReference) return DOJAH_WIDGET_URL;
+  // Opens Dojah's Connect widget inside the overlay once the server has issued
+  // a reference. The server still decides the result (see confirmVerification).
+  useEffect(() => {
+    if (!showKycWidget || !verificationReference) return undefined;
 
-    try {
-      const url = new URL(DOJAH_WIDGET_URL);
-      url.searchParams.set("reference_id", verificationReference);
-      return url.toString();
-    } catch {
-      return DOJAH_WIDGET_URL;
-    }
-  }, [DOJAH_WIDGET_URL, verificationReference]);
+    openDojahWidget({
+      container: "#dojah-embed",
+      referenceId: verificationReference,
+      onSuccess: () =>
+        setWidgetNotice(
+          "Steps finished. Tap \u201cI've completed verification\u201d to confirm."
+        ),
+      onError: () =>
+        setWidgetNotice(
+          "Something went wrong in the verification. Please try again."
+        ),
+    }).catch((err) => setWidgetNotice(err.message));
+
+    return () => {
+      const el = document.querySelector("#dojah-embed");
+      if (el) el.innerHTML = "";
+    };
+  }, [showKycWidget, verificationReference]);
 
   if (!user) {
     return (
@@ -518,12 +529,7 @@ function FullLoanApplication() {
               </div>
               <button type="button" className="kyc-close" onClick={closeWidget}>Close</button>
             </div>
-            <iframe
-              title="Identity verification"
-              src={widgetUrl}
-              className="kyc-widget-frame"
-              allow="camera; microphone; geolocation"
-            />
+            <div id="dojah-embed" className="kyc-widget-frame" />
             {widgetNotice && <div className="kyc-widget-notice">{widgetNotice}</div>}
             <div className="kyc-widget-footer">
               <button type="button" className="btn-secondary" onClick={closeWidget} disabled={kycLoading}>Return later</button>

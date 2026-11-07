@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import request from "../utils/api";
+import { unsubscribePush } from "../utils/webPush";
 
 const AuthContext = createContext(null);
 
@@ -48,6 +49,9 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    // Stop sending this account's notifications to this browser (needs the
+    // login cookie, so it must run before the logout request).
+    await unsubscribePush();
     try {
       await request("/auth/logout", { method: "POST" });
     } catch {

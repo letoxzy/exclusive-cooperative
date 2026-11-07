@@ -5,6 +5,7 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
+import PushPrompt from "./components/PushPrompt";
 
 // Lazy-loaded pages
 const Home = lazy(() => import("./pages/Home"));
@@ -40,6 +41,8 @@ function App() {
   return (
     <>
       {!isAdminPage && <Navbar />}
+
+      <PushPrompt />
 
       <div className={!isAdminPage ? "site-content" : ""}>
         <Suspense

@@ -1,5 +1,9 @@
-import webpush from "web-push";
+import * as webPushModule from "web-push";
 import User from "../models/User.js";
+
+// Works whether the installed web-push version is CommonJS (has a default
+// export) or ESM (named exports only).
+const webpush = webPushModule.default ?? webPushModule;
 
 /**
  * Browser (Web Push) notifications for the website.

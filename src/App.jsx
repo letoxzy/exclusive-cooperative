@@ -22,6 +22,7 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Settings = lazy(() => import("./pages/Settings"));
 const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 const Withdrawals = lazy(() => import("./pages/Withdrawals"));
 const PaymentCallback = lazy(() => import("./pages/PaymentCallback"));
@@ -120,6 +121,15 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Profile />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
                 </ProtectedRoute>
               }
             />

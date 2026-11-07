@@ -70,6 +70,17 @@ export async function subscribePush({ prompt = false } = {}) {
   return { ok: true };
 }
 
+/** True when this browser is already registered for notifications. */
+export async function isPushSubscribed() {
+  try {
+    if (!isPushSupported() || Notification.permission !== "granted") return false;
+    const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+    return Boolean(await registration?.pushManager.getSubscription());
+  } catch {
+    return false;
+  }
+}
+
 /** Detaches this browser from the account (used on log out). Never throws. */
 export async function unsubscribePush() {
   try {

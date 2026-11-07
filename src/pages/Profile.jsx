@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  FaChevronRight,
+  FaCog,
+  FaHandHoldingUsd,
+  FaHeadset,
+  FaThLarge,
+  FaWallet,
+} from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
-import { getPasswordChecks, isStrongPassword } from "../utils/passwordPolicy";
 import "../styles/profile.css";
+import "../styles/settings.css";
 import { useFlash } from "../context/ToastContext.jsx";
 
 const EMPTY_MEMBERSHIP = {
@@ -86,42 +95,11 @@ function Profile() {
   const [avatarError, setAvatarError] = useState("");
   useFlash(avatarError, "error");
 
-  // Password
-  const [pwForm, setPwForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-  const [pwSaving, setPwSaving] = useState(false);
-  const [pwMsg, setPwMsg] = useState("");
-  useFlash(pwMsg, "auto");
-  const [pwError, setPwError] = useState("");
-  useFlash(pwError, "error");
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // Withdrawal PIN
+  // Withdrawal PIN status (read-only here; managed in Settings)
   const [hasPin, setHasPin] = useState(false);
   const [pinLoading, setPinLoading] = useState(true);
-
-  const [pinForm, setPinForm] = useState({
-    pin: "",
-    confirmPin: "",
-  });
-
-  const [changePinForm, setChangePinForm] = useState({
-    currentPin: "",
-    newPin: "",
-    confirmPin: "",
-  });
-
-  const [pinSaving, setPinSaving] = useState(false);
-  const [pinMsg, setPinMsg] = useState("");
-  useFlash(pinMsg, "auto");
   const [pinError, setPinError] = useState("");
   useFlash(pinError, "error");
-  const [changePinOpen, setChangePinOpen] = useState(false);
 
   // Load membership
   useEffect(() => {
@@ -263,170 +241,19 @@ function Profile() {
     }
   };
 
-  const passwordChecks = getPasswordChecks(pwForm.newPassword);
-  const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
-  const passwordStrength =
-    passwordScore === 0
-      ? ""
-      : passwordScore <= 1
-        ? "Weak"
-        : passwordScore === 2
-          ? "Fair"
-          : passwordScore === 3
-            ? "Good"
-            : "Strong";
-
-  const handlePasswordChange = async (e) => {
-    e.preventDefault();
-
-    setPwMsg("");
-    setPwError("");
-
-    if (!isStrongPassword(pwForm.newPassword)) {
-      setPwError(
-        "New password must be at least 8 characters and include uppercase and lowercase letters, a number, and a special character."
-      );
-      return;
-    }
-
-    if (pwForm.newPassword !== pwForm.confirmPassword) {
-      setPwError("New passwords do not match.");
-      return;
-    }
-
-    try {
-      setPwSaving(true);
-
-      const result = await request("/users/me/password", {
-        method: "PATCH",
-        token: user.token,
-        body: {
-          currentPassword: pwForm.currentPassword,
-          newPassword: pwForm.newPassword,
-        },
-      });
-
-      setPwMsg(result.message || "Password updated successfully.");
-
-      setPwForm({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
-    } catch (err) {
-      setPwError(err.message);
-    } finally {
-      setPwSaving(false);
-    }
-  };
-
-  const handleCreatePin = async () => {
-    setPinMsg("");
-    setPinError("");
-
-    if (!/^\d{4}$/.test(pinForm.pin)) {
-      setPinError("Withdrawal PIN must contain exactly 4 digits.");
-      return;
-    }
-
-    if (pinForm.pin !== pinForm.confirmPin) {
-      setPinError("Withdrawal PINs do not match.");
-      return;
-    }
-
-    try {
-      setPinSaving(true);
-
-      const result = await request("/withdrawals/pin", {
-        method: "POST",
-        token: user.token,
-        body: {
-          pin: pinForm.pin,
-          confirmPin: pinForm.confirmPin,
-        },
-      });
-
-      setHasPin(true);
-
-      setPinForm({
-        pin: "",
-        confirmPin: "",
-      });
-
-      setPinMsg(result.message || "Withdrawal PIN created successfully.");
-    } catch (err) {
-      setPinError(err.message);
-    } finally {
-      setPinSaving(false);
-    }
-  };
-
-  const handleChangePin = async () => {
-    setPinMsg("");
-    setPinError("");
-
-    if (!/^\d{4}$/.test(changePinForm.currentPin)) {
-      setPinError("Current PIN must contain exactly 4 digits.");
-      return;
-    }
-
-    if (!/^\d{4}$/.test(changePinForm.newPin)) {
-      setPinError("New PIN must contain exactly 4 digits.");
-      return;
-    }
-
-    if (changePinForm.newPin !== changePinForm.confirmPin) {
-      setPinError("New withdrawal PINs do not match.");
-      return;
-    }
-
-    try {
-      setPinSaving(true);
-
-      const result = await request("/withdrawals/pin", {
-        method: "PATCH",
-        token: user.token,
-        body: {
-          currentPin: changePinForm.currentPin,
-          newPin: changePinForm.newPin,
-          confirmPin: changePinForm.confirmPin,
-        },
-      });
-
-      setChangePinOpen(false);
-
-      setChangePinForm({
-        currentPin: "",
-        newPin: "",
-        confirmPin: "",
-      });
-
-      setPinMsg(result.message || "Withdrawal PIN changed successfully.");
-    } catch (err) {
-      setPinError(err.message);
-    } finally {
-      setPinSaving(false);
-    }
-  };
-
-  const updatePinField = (field) => (e) => {
-    setPinForm((prev) => ({
-      ...prev,
-      [field]: e.target.value.replace(/\D/g, "").slice(0, 4),
-    }));
-  };
-
-  const updateChangePinField = (field) => (e) => {
-    setChangePinForm((prev) => ({
-      ...prev,
-      [field]: e.target.value.replace(/\D/g, "").slice(0, 4),
-    }));
-  };
-
   return (
     <main className="profile-page">
       {/* PROFILE HEADER */}
       <header className="profile-hero">
+        <div className="profile-hero-actions">
+          <Link to="/contact" className="icon-btn" title="Help & support" aria-label="Help & support">
+            <FaHeadset />
+          </Link>
+          <Link to="/settings" className="icon-btn" title="Settings" aria-label="Settings">
+            <FaCog />
+          </Link>
+        </div>
+
         <div
           className="avatar-wrap"
           onClick={handleAvatarClick}
@@ -505,7 +332,45 @@ function Profile() {
                 ? "PIN Enabled"
                 : "PIN Not Set"}
           </strong>
+          <Link to="/settings#security" className="overview-link">
+            Manage
+          </Link>
         </div>
+      </section>
+
+      {/* QUICK SHORTCUTS */}
+      <section className="profile-quick" aria-label="Shortcuts">
+        <Link to={user?.role === "admin" ? "/admin" : "/dashboard"} className="quick-tile">
+          <span className="quick-tile-icon"><FaThLarge /></span>
+          {user?.role === "admin" ? "Admin" : "Dashboard"}
+        </Link>
+        <Link to="/withdrawals" className="quick-tile">
+          <span className="quick-tile-icon"><FaWallet /></span>
+          Withdrawals
+        </Link>
+        <Link to="/loans/apply" className="quick-tile">
+          <span className="quick-tile-icon"><FaHandHoldingUsd /></span>
+          Apply for loan
+        </Link>
+      </section>
+
+      <section className="profile-links">
+        <Link to="/settings" className="link-row">
+          <span className="link-row-icon"><FaCog /></span>
+          <span className="link-row-text">
+            <strong>Settings</strong>
+            <small>Password, withdrawal PIN, notifications &amp; devices</small>
+          </span>
+          <FaChevronRight className="link-row-arrow" />
+        </Link>
+        <Link to="/contact" className="link-row">
+          <span className="link-row-icon"><FaHeadset /></span>
+          <span className="link-row-text">
+            <strong>Help &amp; support</strong>
+            <small>Questions about your account? Talk to us</small>
+          </span>
+          <FaChevronRight className="link-row-arrow" />
+        </Link>
       </section>
 
       {/* MEMBERSHIP DETAILS */}
@@ -584,354 +449,6 @@ function Profile() {
             </button>
           </form>
         )}
-      </section>
-
-      {/* SECURITY */}
-      <section className="profile-form-card security-card">
-        <div className="section-heading-row">
-          <div>
-            <p className="profile-section-eyebrow">SECURITY</p>
-
-            <h2>Account Security</h2>
-
-            <p className="section-help">
-              Manage your login password and withdrawal security PIN. Your
-              withdrawal PIN is separate from your login password and is used
-              only when authorizing withdrawals.
-            </p>
-          </div>
-
-          <div className="security-icon">✓</div>
-        </div>
-
-        {/* PASSWORD */}
-        <div className="security-section">
-          <div className="security-section-heading">
-            <div>
-              <h3>Login Password</h3>
-              <p>Change the password you use to sign in to your account.</p>
-            </div>
-          </div>
-
-          <form onSubmit={handlePasswordChange} className="stacked-form">
-            <div className="security-form-grid">
-              <div className="form-group">
-                <label htmlFor="currentPassword">Current Password</label>
-
-                <div className="profile-password-wrapper">
-                  <input
-                    id="currentPassword"
-                    type={showCurrentPassword ? "text" : "password"}
-                    required
-                    autoComplete="current-password"
-                    value={pwForm.currentPassword}
-                    onChange={(e) =>
-                      setPwForm((prev) => ({
-                        ...prev,
-                        currentPassword: e.target.value,
-                      }))
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="profile-password-toggle"
-                    onClick={() => setShowCurrentPassword((prev) => !prev)}
-                    aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
-                  >
-                    {showCurrentPassword ? "Hide" : "Show"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="newPassword">New Password</label>
-
-                <div className={`profile-password-wrapper ${passwordStrength === "Strong" ? "password-strong" : ""}`}>
-                  <input
-                    id="newPassword"
-                    type={showNewPassword ? "text" : "password"}
-                    required
-                    autoComplete="new-password"
-                    value={pwForm.newPassword}
-                    onChange={(e) =>
-                      setPwForm((prev) => ({
-                        ...prev,
-                        newPassword: e.target.value,
-                      }))
-                    }
-                    aria-describedby="profile-password-requirements"
-                  />
-                  <button
-                    type="button"
-                    className="profile-password-toggle"
-                    onClick={() => setShowNewPassword((prev) => !prev)}
-                    aria-label={showNewPassword ? "Hide new password" : "Show new password"}
-                  >
-                    {showNewPassword ? "Hide" : "Show"}
-                  </button>
-                </div>
-
-                {pwForm.newPassword && (
-                  <div className="password-strength" aria-live="polite">
-                    <div className="strength-header">
-                      <span>Password strength</span>
-                      <strong className={`strength-${passwordStrength.toLowerCase()}`}>
-                        {passwordStrength}
-                      </strong>
-                    </div>
-
-                    <div className="strength-bars" aria-hidden="true">
-                      {[1, 2, 3, 4].map((bar) => (
-                        <span
-                          key={bar}
-                          className={`strength-bar ${bar <= passwordScore ? `active strength-${passwordStrength.toLowerCase()}` : ""}`}
-                        />
-                      ))}
-                    </div>
-
-                    <ul id="profile-password-requirements" className="password-requirements">
-                      <li className={passwordChecks.length ? "met" : ""}>
-                        At least 8 characters
-                      </li>
-                      <li className={passwordChecks.upperLower ? "met" : ""}>
-                        Uppercase and lowercase letters
-                      </li>
-                      <li className={passwordChecks.number ? "met" : ""}>
-                        At least one number
-                      </li>
-                      <li className={passwordChecks.special ? "met" : ""}>
-                        At least one special character
-                      </li>
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="confirmNewPassword">Confirm New Password</label>
-
-                <div className="profile-password-wrapper">
-                  <input
-                    id="confirmNewPassword"
-                    type={showConfirmPassword ? "text" : "password"}
-                    required
-                    autoComplete="new-password"
-                    value={pwForm.confirmPassword}
-                    onChange={(e) =>
-                      setPwForm((prev) => ({
-                        ...prev,
-                        confirmPassword: e.target.value,
-                      }))
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="profile-password-toggle"
-                    onClick={() => setShowConfirmPassword((prev) => !prev)}
-                    aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}
-                  >
-                    {showConfirmPassword ? "Hide" : "Show"}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-
-
-            <button type="submit" className="btn-primary" disabled={pwSaving}>
-              {pwSaving ? "Updating..." : "Update Password"}
-            </button>
-          </form>
-        </div>
-
-        {/* WITHDRAWAL PIN */}
-        <div className="security-section withdrawal-security">
-          <div className="security-section-heading">
-            <div>
-              <h3>Withdrawal PIN</h3>
-
-              <p>
-                A separate 4-digit PIN used to authorize withdrawals from your
-                cooperative savings.
-              </p>
-            </div>
-
-            {!pinLoading && (
-              <span className={`pin-status ${hasPin ? "enabled" : "not-set"}`}>
-                {hasPin ? "PIN Enabled" : "Not Set"}
-              </span>
-            )}
-          </div>
-
-          {pinLoading ? (
-            <div className="security-loading">
-              Checking withdrawal security...
-            </div>
-          ) : !hasPin ? (
-            <div className="pin-create-box">
-              <div className="pin-create-header">
-                <span className="pin-check">+</span>
-
-                <div>
-                  <strong>Create your withdrawal PIN</strong>
-                  <p>
-                    You need a withdrawal PIN before you can request money from
-                    your savings.
-                  </p>
-                </div>
-              </div>
-
-              <div className="pin-form-grid">
-                <div className="form-group">
-                  <label htmlFor="withdrawalPin">4-Digit PIN</label>
-
-                  <input
-                    id="withdrawalPin"
-                    type="password"
-                    inputMode="numeric"
-                    maxLength="4"
-                    autoComplete="off"
-                    value={pinForm.pin}
-                    onChange={updatePinField("pin")}
-                    placeholder="••••"
-                    disabled={pinSaving}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="confirmWithdrawalPin">Confirm PIN</label>
-
-                  <input
-                    id="confirmWithdrawalPin"
-                    type="password"
-                    inputMode="numeric"
-                    maxLength="4"
-                    autoComplete="off"
-                    value={pinForm.confirmPin}
-                    onChange={updatePinField("confirmPin")}
-                    placeholder="••••"
-                    disabled={pinSaving}
-                  />
-                </div>
-              </div>
-
-
-
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleCreatePin}
-                disabled={pinSaving}
-              >
-                {pinSaving ? "Creating PIN..." : "Create Withdrawal PIN"}
-              </button>
-            </div>
-          ) : (
-            <div className="pin-enabled-box">
-              <div className="pin-enabled-content">
-                <div className="pin-success-icon">✓</div>
-
-                <div>
-                  <strong>Your withdrawal PIN is active</strong>
-                  <p>
-                    Your PIN is securely stored and is never visible to
-                    administrators.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="secondary-security-btn"
-                onClick={() => {
-                  setChangePinOpen((prev) => !prev);
-                  setPinError("");
-                  setPinMsg("");
-
-                  setChangePinForm({
-                    currentPin: "",
-                    newPin: "",
-                    confirmPin: "",
-                  });
-                }}
-              >
-                {changePinOpen ? "Cancel" : "Change Withdrawal PIN"}
-              </button>
-            </div>
-          )}
-
-          {/* CHANGE PIN */}
-          {hasPin && changePinOpen && (
-            <div className="pin-change-box">
-              <h4>Change Withdrawal PIN</h4>
-
-              <p>Enter your current PIN and create a new 4-digit PIN.</p>
-
-              <div className="pin-form-grid pin-change-grid">
-                <div className="form-group">
-                  <label htmlFor="currentWithdrawalPin">Current PIN</label>
-
-                  <input
-                    id="currentWithdrawalPin"
-                    type="password"
-                    inputMode="numeric"
-                    maxLength="4"
-                    autoComplete="off"
-                    value={changePinForm.currentPin}
-                    onChange={updateChangePinField("currentPin")}
-                    placeholder="••••"
-                    disabled={pinSaving}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="newWithdrawalPin">New PIN</label>
-
-                  <input
-                    id="newWithdrawalPin"
-                    type="password"
-                    inputMode="numeric"
-                    maxLength="4"
-                    autoComplete="off"
-                    value={changePinForm.newPin}
-                    onChange={updateChangePinField("newPin")}
-                    placeholder="••••"
-                    disabled={pinSaving}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="confirmNewWithdrawalPin">
-                    Confirm New PIN
-                  </label>
-
-                  <input
-                    id="confirmNewWithdrawalPin"
-                    type="password"
-                    inputMode="numeric"
-                    maxLength="4"
-                    autoComplete="off"
-                    value={changePinForm.confirmPin}
-                    onChange={updateChangePinField("confirmPin")}
-                    placeholder="••••"
-                    disabled={pinSaving}
-                  />
-                </div>
-              </div>
-
-
-
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleChangePin}
-                disabled={pinSaving}
-              >
-                {pinSaving ? "Changing PIN..." : "Update Withdrawal PIN"}
-              </button>
-            </div>
-          )}
-        </div>
       </section>
 
       {/* ACCOUNT INFORMATION */}

@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import "../styles/dashboard.css";
 import "../styles/dashboard-refresh.css";
+import { useFlash } from "../context/ToastContext.jsx";
 
 function Dashboard() {
   const { user, logout, refreshUser } = useAuth();
@@ -20,12 +21,15 @@ function Dashboard() {
   const [transactions, setTransactions] = useState([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState("");
+  useFlash(transactionsError, "error");
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [showAllRequests, setShowAllRequests] = useState(false);
   const [repaymentLoading, setRepaymentLoading] = useState(false);
   const [repaymentError, setRepaymentError] = useState("");
+  useFlash(repaymentError, "error");
   const [repaymentSuccess, setRepaymentSuccess] = useState("");
+  useFlash(repaymentSuccess, "success");
   const [cooperativeSettings, setCooperativeSettings] = useState({
     loanMultiplier: 2,
     repaymentAccountName: "Exclusive Cooperative Multipurpose Society Limited",
@@ -52,7 +56,9 @@ function Dashboard() {
   }, [showBalances, user?._id]);
 
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [success, setSuccess] = useState("");
+  useFlash(success, "success");
 
   const [payLoading, setPayLoading] = useState(false);
   const [loanLoading, setLoanLoading] = useState(true);
@@ -678,14 +684,12 @@ function Dashboard() {
                   </button>
                 </form>
 
-                {error && <p className="form-error">{error}</p>}
                 {contributionStatus?.canContribute === false && (
                   <p className="form-error">
                     Your {contributionStatus.frequency?.toLowerCase()}{" "}
                     contribution for this period has already been made.
                   </p>
                 )}
-                {success && <p className="form-success">{success}</p>}
               </>
             )}
           </section>
@@ -1058,12 +1062,6 @@ function Dashboard() {
                         </div>
                       )}
 
-                      {repaymentError && (
-                        <p className="form-error">{repaymentError}</p>
-                      )}
-                      {repaymentSuccess && (
-                        <p className="form-success">{repaymentSuccess}</p>
-                      )}
 
                       <button
                         className="repayment-submit-btn"
@@ -1278,9 +1276,6 @@ function Dashboard() {
               </div>
             </div>
 
-            {transactionsError && (
-              <p className="form-error">{transactionsError}</p>
-            )}
 
             {transactionsLoading ? (
               <p className="dash-note">Loading your transactions...</p>

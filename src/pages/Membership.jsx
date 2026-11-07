@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import "../styles/membership.css";
+import { useFlash } from "../context/ToastContext.jsx";
 
 const NIGERIAN_STATES = [
   "Abia",
@@ -105,6 +106,7 @@ function Membership() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [existingApp, setExistingApp] = useState(null);
@@ -841,7 +843,6 @@ function Membership() {
             </label>
           </section>
 
-          {error && <p className="form-error submit-error">{error}</p>}
 
           <div className="submit-row">
             <p className="fee-note">

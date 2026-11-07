@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FaXmark } from "react-icons/fa6";
 import request from "../../utils/api";
 import "../../styles/kyc-review.css";
+import { useFlash } from "../../context/ToastContext.jsx";
 
 const label = (value) =>
   String(value || "not started")
@@ -63,6 +64,7 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [acting, setActing] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -507,7 +509,6 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
 
         {view && isBlocked && (
           <footer className="kyc-review-footer">
-            {error && <div className="kyc-alert bad">{error}</div>}
             {unlocking ? (
               <div className="kyc-reject-box">
                 <label htmlFor="kyc-unlock-reason">
@@ -549,7 +550,6 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
 
         {view && isPending && (
           <footer className="kyc-review-footer">
-            {error && <div className="kyc-alert bad">{error}</div>}
 
             {needsConfirm && !rejecting && (
               <label className="kyc-confirm">

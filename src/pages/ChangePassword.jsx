@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { getPasswordChecks, isStrongPassword } from "../utils/passwordPolicy";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import "../styles/change-password.css";
+import { useFlash } from "../context/ToastContext.jsx";
 
 function ChangePassword() {
   const { user, refreshUser } = useAuth();
@@ -20,7 +21,9 @@ function ChangePassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [message, setMessage] = useState("");
+  useFlash(message, "auto");
   const [saving, setSaving] = useState(false);
 
   /* =========================
@@ -287,9 +290,7 @@ function ChangePassword() {
               MESSAGES
           ========================= */}
 
-          {error && <p className="form-error">{error}</p>}
 
-          {message && <p className="form-note">{message}</p>}
 
           {/* =========================
               SUBMIT

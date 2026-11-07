@@ -1,6 +1,7 @@
 import { useState } from "react";
 import request from "../../utils/api";
 import { naira, when } from "./adminFormat";
+import { useFlash } from "../../context/ToastContext.jsx";
 
 const toInput = (d) => d.toISOString().slice(0, 10);
 
@@ -13,6 +14,7 @@ function ReconciliationPanel({ token }) {
   const [loading, setLoading] = useState(false);
   const [crediting, setCrediting] = useState("");
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [notice, setNotice] = useState("");
 
   const run = async () => {
@@ -88,7 +90,6 @@ function ReconciliationPanel({ token }) {
         <p className="admin-subtitle">Up to 92 days at a time.</p>
       </section>
 
-      {error && <p className="form-error admin-error">{error}</p>}
       {notice && <p className="admin-subtitle">{notice}</p>}
 
       {result && (

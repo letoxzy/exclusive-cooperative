@@ -9,6 +9,7 @@ import {
 } from "react-icons/fa";
 import request from "../../utils/api";
 import "../../styles/gallery-management.css";
+import { useFlash } from "../../context/ToastContext.jsx";
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
@@ -39,7 +40,9 @@ function GalleryManagement({ token }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [message, setMessage] = useState("");
+  useFlash(message, "success");
   const [previewUrl, setPreviewUrl] = useState("");
 
   const loadItems = useCallback(async () => {
@@ -316,9 +319,7 @@ function GalleryManagement({ token }) {
         </div>
       </div>
 
-      {error && <div className="form-error gallery-admin-message">{error}</div>}
 
-      {message && <div className="gallery-success">{message}</div>}
 
       <section className="admin-card gallery-upload-card">
         <div className="gallery-admin-section-title">

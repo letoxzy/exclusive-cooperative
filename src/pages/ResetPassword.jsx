@@ -5,6 +5,7 @@ import request from "../utils/api";
 import { getPasswordChecks, isStrongPassword } from "../utils/passwordPolicy";
 import "../styles/login.css";
 import "../styles/reset-password.css";
+import { useFlash } from "../context/ToastContext.jsx";
 
 function ResetPassword() {
   const { token } = useParams();
@@ -14,7 +15,9 @@ function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [success, setSuccess] = useState("");
+  useFlash(success, "success");
   const [loading, setLoading] = useState(false);
 
   const passwordChecks = useMemo(() => getPasswordChecks(password), [password]);
@@ -179,8 +182,6 @@ function ResetPassword() {
             </div>
           </div>
 
-          {error && <p className="form-error">{error}</p>}
-          {success && <p className="form-success">{success}</p>}
 
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? "Updating password..." : "Reset Password"}

@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import request from "../utils/api";
 import "../styles/contact.css";
 import "../styles/delete-account.css";
+import { useFlash } from "../context/ToastContext.jsx";
 
 // Public page. Google Play requires a web address where anyone can ask for
 // their app account and data to be deleted without opening the app.
@@ -12,6 +13,7 @@ function DeleteAccount() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState("");
   const [error, setError] = useState("");
+  useFlash(error, "error");
 
   const update = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -118,7 +120,6 @@ function DeleteAccount() {
                 maxLength={500}
               />
 
-              {error && <p className="form-error">{error}</p>}
 
               <button type="submit" disabled={loading}>
                 {loading ? "Sending..." : "Request account deletion"}

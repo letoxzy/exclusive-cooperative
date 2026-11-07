@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import request from "../../utils/api";
 import { naira, when } from "./adminFormat";
+import { useFlash } from "../../context/ToastContext.jsx";
 
 const PAGE_SIZE = 25;
 
@@ -11,6 +12,7 @@ function LedgerPanel({ token }) {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  useFlash(error, "error");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,7 +54,6 @@ function LedgerPanel({ token }) {
         </button>
       </div>
 
-      {error && <p className="form-error admin-error">{error}</p>}
 
       {trial && (
         <div className="admin-stat-grid">

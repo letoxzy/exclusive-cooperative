@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import "../styles/register.css";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { getPasswordChecks, isStrongPassword } from "../utils/passwordPolicy";
+import { useFlash } from "../context/ToastContext.jsx";
 
 function Register() {
   const [form, setForm] = useState({
@@ -17,6 +18,7 @@ function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [error, setError] = useState("");
+  useFlash(error, "error");
 
   const passwordChecks = getPasswordChecks(form.password);
   const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
@@ -191,7 +193,6 @@ function Register() {
             </div>
           </div>
 
-          {error && <p className="form-error">{error}</p>}
 
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? "Creating account..." : "Create Account"}

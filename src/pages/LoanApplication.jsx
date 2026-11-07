@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import "../styles/loan-application.css";
+import { useFlash } from "../context/ToastContext.jsx";
 
 // Kept in sync with server/routes/loanRoutes.js — 3/6/12 month terms
 // with interest scaling 5% -> 10%. Interest-free members are always
@@ -24,6 +25,7 @@ function LoanApplication() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
@@ -142,7 +144,6 @@ function LoanApplication() {
           </p>
         </div>
 
-        {error && <div className="loan-form-message error">{error}</div>}
 
         {success && (
           <div className="loan-form-message success">

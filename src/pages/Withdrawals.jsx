@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import "../styles/withdrawals.css";
+import { useFlash } from "../context/ToastContext.jsx";
 
 const money = (value) => `₦${Number(value || 0).toLocaleString()}`;
 
@@ -62,6 +63,7 @@ function Withdrawals() {
   const [pinLoading, setPinLoading] = useState(true);
   const [pinSaving, setPinSaving] = useState(false);
   const [pinMessage, setPinMessage] = useState("");
+  useFlash(pinMessage, "auto");
 
   const [loading, setLoading] = useState(true);
   const [banksLoading, setBanksLoading] = useState(true);
@@ -69,8 +71,11 @@ function Withdrawals() {
   const [submitting, setSubmitting] = useState(false);
 
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [success, setSuccess] = useState("");
+  useFlash(success, "success");
   const [accountError, setAccountError] = useState("");
+  useFlash(accountError, "error");
   const [receiptLoading, setReceiptLoading] = useState("");
 
   const selectedBank = useMemo(
@@ -588,8 +593,6 @@ function Withdrawals() {
         </div>
       </div>
 
-      {error && <div className="withdrawal-alert error">{error}</div>}
-      {success && <div className="withdrawal-alert success">{success}</div>}
 
       <section className="withdrawal-balance-grid">
         <div className="withdrawal-balance-card savings-card">
@@ -840,7 +843,6 @@ function Withdrawals() {
             </div>
           </label>
 
-          {accountError && <p className="form-error">{accountError}</p>}
 
           {accountName && (
             <div className="verified-account">
@@ -891,11 +893,6 @@ function Withdrawals() {
                   {pinSaving ? "Creating..." : "Create PIN"}
                 </button>
               </div>
-              {pinMessage && (
-                <p className={pinMessage.toLowerCase().includes("success") ? "form-success" : "form-error"}>
-                  {pinMessage}
-                </p>
-              )}
             </div>
           ) : (
             <label>

@@ -26,6 +26,7 @@ import AuditLogPanel from "../components/admin/AuditLogPanel";
 import DeletionRequestsPanel from "../components/admin/DeletionRequestsPanel";
 import ReconciliationPanel from "../components/admin/ReconciliationPanel";
 import KycReviewModal from "../components/admin/KycReviewModal";
+import { useFlash, useFlashMessage, useToast } from "../context/ToastContext.jsx";
 
 const statusLabel = (value) =>
   String(value || "not started")
@@ -33,6 +34,7 @@ const statusLabel = (value) =>
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 function AdminDashboard() {
+  const toast = useToast();
   const { user, logout, refreshUser } = useAuth();
 
   const [activeSection, setActiveSection] = useState("overview");
@@ -63,6 +65,7 @@ function AdminDashboard() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [cooperativeSettings, setCooperativeSettings] = useState({
     loanMultiplier: 2,
     repaymentAccountName: "Exclusive Cooperative Multipurpose Society Limited",
@@ -73,6 +76,7 @@ function AdminDashboard() {
     useState(false);
   const [cooperativeSettingsMessage, setCooperativeSettingsMessage] =
     useState(null);
+  useFlashMessage(cooperativeSettingsMessage);
 
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -1498,7 +1502,7 @@ function AdminDashboard() {
 
       await loadWithdrawals();
 
-      alert(
+      toast.info(
         `Withdrawal status: ${
           result.status ||
           result.data?.status ||
@@ -1511,7 +1515,7 @@ function AdminDashboard() {
 
       setError(err.message);
 
-      alert(`Sync failed: ${err.message}`);
+      toast.error(`Sync failed: ${err.message}`);
     }
   };
 
@@ -3180,6 +3184,7 @@ function AdminDashboard() {
   const [settingsName, setSettingsName] = useState(user?.fullName || "");
   const [savingName, setSavingName] = useState(false);
   const [nameMessage, setNameMessage] = useState(null); // { type: "success" | "error", text }
+  useFlashMessage(nameMessage);
   // Tracks the value settingsName was last synced from, so a fresh user.fullName
   // (e.g. after refreshUser()) updates the field without fighting active typing.
   const [syncedFullName, setSyncedFullName] = useState(user?.fullName || "");
@@ -3224,6 +3229,7 @@ function AdminDashboard() {
   const [showPasswords, setShowPasswords] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState(null);
+  useFlashMessage(passwordMessage);
 
   const passwordChecks = getPasswordChecks(passwordForm.newPassword);
   const newPasswordStrong = isStrongPassword(passwordForm.newPassword);
@@ -3312,15 +3318,6 @@ function AdminDashboard() {
           </div>
 
           <form className="admin-settings-form" onSubmit={saveAdminName}>
-            {nameMessage && (
-              <div
-                className={
-                  nameMessage.type === "error" ? "form-error" : "form-success"
-                }
-              >
-                {nameMessage.text}
-              </div>
-            )}
 
             <div className="admin-form-grid">
               <label>
@@ -3375,17 +3372,6 @@ function AdminDashboard() {
           </div>
 
           <form className="admin-settings-form" onSubmit={savePassword}>
-            {passwordMessage && (
-              <div
-                className={
-                  passwordMessage.type === "error"
-                    ? "form-error"
-                    : "form-success"
-                }
-              >
-                {passwordMessage.text}
-              </div>
-            )}
 
             <div className="admin-form-grid">
               <label className="admin-form-full">
@@ -3481,17 +3467,6 @@ function AdminDashboard() {
             </div>
           </div>
 
-          {cooperativeSettingsMessage && (
-            <div
-              className={
-                cooperativeSettingsMessage.type === "error"
-                  ? "form-error"
-                  : "form-success"
-              }
-            >
-              {cooperativeSettingsMessage.text}
-            </div>
-          )}
 
           <div className="admin-settings-note">
             <strong>Manage the live cooperative settings</strong>
@@ -3694,7 +3669,6 @@ function AdminDashboard() {
         </header>
 
         <div className="admin-content">
-          {error && <div className="form-error admin-error">{error}</div>}
 
           {loading && <div className="admin-loading">Loading...</div>}
 

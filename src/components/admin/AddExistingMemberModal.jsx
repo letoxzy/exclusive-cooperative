@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useFlash } from "../../context/ToastContext.jsx";
 
 const NIGERIAN_STATES = [
   "Abia",
@@ -86,6 +87,7 @@ function AddExistingMemberModal({ open, onClose, onCreate }) {
   const [form, setForm] = useState(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [credentials, setCredentials] = useState(null);
 
   useEffect(() => {
@@ -1015,7 +1017,6 @@ Temporary Password: ${credentials.temporaryPassword}`
                 ERROR
             ========================= */}
 
-            {error && <p className="form-error">{error}</p>}
 
             {/* =========================
                 FOOTER

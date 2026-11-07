@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import { getPasswordChecks, isStrongPassword } from "../utils/passwordPolicy";
 import "../styles/profile.css";
+import { useFlash } from "../context/ToastContext.jsx";
 
 const EMPTY_MEMBERSHIP = {
   fullName: "",
@@ -77,10 +78,13 @@ function Profile() {
   const [membershipLoading, setMembershipLoading] = useState(true);
   const [membershipSaving, setMembershipSaving] = useState(false);
   const [membershipMsg, setMembershipMsg] = useState("");
+  useFlash(membershipMsg, "auto");
   const [membershipError, setMembershipError] = useState("");
+  useFlash(membershipError, "error");
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  useFlash(avatarError, "error");
 
   // Password
   const [pwForm, setPwForm] = useState({
@@ -90,7 +94,9 @@ function Profile() {
   });
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState("");
+  useFlash(pwMsg, "auto");
   const [pwError, setPwError] = useState("");
+  useFlash(pwError, "error");
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -112,7 +118,9 @@ function Profile() {
 
   const [pinSaving, setPinSaving] = useState(false);
   const [pinMsg, setPinMsg] = useState("");
+  useFlash(pinMsg, "auto");
   const [pinError, setPinError] = useState("");
+  useFlash(pinError, "error");
   const [changePinOpen, setChangePinOpen] = useState(false);
 
   // Load membership
@@ -470,7 +478,6 @@ function Profile() {
         </div>
       </header>
 
-      {avatarError && <div className="profile-alert error">{avatarError}</div>}
 
       {/* ACCOUNT OVERVIEW */}
       <section className="profile-overview">
@@ -564,9 +571,7 @@ function Profile() {
               ))}
             </div>
 
-            {membershipError && <p className="form-error">{membershipError}</p>}
 
-            {membershipMsg && <p className="form-note">{membershipMsg}</p>}
 
             <button
               type="submit"
@@ -731,9 +736,7 @@ function Profile() {
               </div>
             </div>
 
-            {pwError && <p className="form-error">{pwError}</p>}
 
-            {pwMsg && <p className="form-note">{pwMsg}</p>}
 
             <button type="submit" className="btn-primary" disabled={pwSaving}>
               {pwSaving ? "Updating..." : "Update Password"}
@@ -812,9 +815,7 @@ function Profile() {
                 </div>
               </div>
 
-              {pinError && <p className="form-error">{pinError}</p>}
 
-              {pinMsg && <p className="form-note">{pinMsg}</p>}
 
               <button
                 type="button"
@@ -918,9 +919,7 @@ function Profile() {
                 </div>
               </div>
 
-              {pinError && <p className="form-error">{pinError}</p>}
 
-              {pinMsg && <p className="form-note">{pinMsg}</p>}
 
               <button
                 type="button"

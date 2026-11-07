@@ -10,6 +10,7 @@ import {
 } from "../components/Icons";
 import "../styles/contact.css";
 import { Helmet } from "react-helmet-async";
+import { useFlash } from "../context/ToastContext.jsx";
 
 function Contact() {
   const [form, setForm] = useState({
@@ -21,6 +22,7 @@ function Contact() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  useFlash(error, "error");
 
   const update = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -201,7 +203,6 @@ function Contact() {
                 />
               </div>
 
-              {error && <p className="form-error">{error}</p>}
 
               <button type="submit" className="btn-primary" disabled={loading}>
                 {loading ? "Sending..." : "Send Message"}

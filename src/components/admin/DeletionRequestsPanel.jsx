@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import request from "../../utils/api";
 import { when } from "./adminFormat";
 import "../../styles/deletion-requests.css";
+import { useFlash } from "../../context/ToastContext.jsx";
 
 const money = (value) => `₦${Number(value || 0).toLocaleString()}`;
 
@@ -10,6 +11,7 @@ function DeletionRequestsPanel({ token }) {
   const [status, setStatus] = useState("pending");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [busyId, setBusyId] = useState("");
   const [rejectingId, setRejectingId] = useState("");
   const [note, setNote] = useState("");
@@ -117,7 +119,6 @@ function DeletionRequestsPanel({ token }) {
         </button>
       </div>
 
-      {error && <p className="form-error admin-error">{error}</p>}
 
       <div className="del-toolbar">
         <h3>Requests ({requests.length})</h3>

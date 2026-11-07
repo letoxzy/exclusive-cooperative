@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useFlash } from "../../context/ToastContext.jsx";
 
 const FIELD_GROUPS = [
   {
@@ -72,6 +73,7 @@ function MembershipModal({
   const [form, setForm] = useState(application);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  useFlash(error, "error");
 
   useEffect(() => {
     setForm(application);
@@ -175,7 +177,6 @@ function MembershipModal({
             </section>
           ))}
 
-          {error && <p className="form-error">{error}</p>}
         </div>
 
         <div className="modal-footer">

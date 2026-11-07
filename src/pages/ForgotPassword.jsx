@@ -3,11 +3,14 @@ import { Link } from "react-router-dom";
 import request from "../utils/api";
 import "../styles/login.css";
 import "../styles/forgot-password.css";
+import { useFlash } from "../context/ToastContext.jsx";
 
 function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  useFlash(message, "success");
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -52,8 +55,6 @@ function ForgotPassword() {
             />
           </div>
 
-          {error && <p className="form-error">{error}</p>}
-          {message && <p className="form-success">{message}</p>}
 
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? "Sending reset link..." : "Send Reset Link"}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useFlash } from "../context/ToastContext";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import "../styles/login.css";
 
@@ -8,6 +9,7 @@ function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  useFlash(error, "error");
   const [loading, setLoading] = useState(false);
   const [lockedUntil, setLockedUntil] = useState(null);
   const [lockRemaining, setLockRemaining] = useState(0);
@@ -129,10 +131,6 @@ function Login() {
           <div className="forgot-password-link">
             <Link to="/forgot-password">Forgot password?</Link>
           </div>
-
-          {error && lockRemaining === 0 && (
-            <p className="form-error">{error}</p>
-          )}
 
           {lockRemaining > 0 && (
             <p className="form-error">

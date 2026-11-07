@@ -61,6 +61,24 @@ const pageFor = (type, role) => {
 
 const clip = (value, max) => String(value || "").slice(0, max);
 
+// Chrome's spam protection looks at notification text, and "change your
+// password / contact us immediately" reads like phishing. The full warning
+// stays in the in-app notification and the email; the push carries the plain
+// facts and the member opens the site to act on them.
+const softenForPush = (type, text) => {
+  const plain = String(text || "");
+  if (type !== "security") return plain;
+
+  const softened = plain
+    .replace(/\s*If (this was not you|this was not|you did not)[^.]*\./gi, "")
+    .replace(/\s*Please contact[^.]*\./gi, "")
+    .replace(/\bimmediately\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return softened || "Open Exclusive Cooperative to review this account alert.";
+};
+
 /** Sends one notification to every browser the member has allowed. Never throws. */
 export async function sendWebPushToUser(userRef, { type, title, body }) {
   try {
@@ -73,7 +91,7 @@ export async function sendWebPushToUser(userRef, { type, title, body }) {
 
     const payload = JSON.stringify({
       title: clip(title, 100),
-      body: clip(body, 240),
+      body: clip(softenForPush(type, body), 240),
       url: pageFor(type, user.role),
     });
 

@@ -90,6 +90,10 @@ function allowedByKind(data) {
       .filter(Boolean);
     return frequencies.includes(String(data.frequency));
   }
+  if (data?.kind === "login") {
+    // A text for every login would be costly and noisy: opt in only.
+    return String(process.env.SMS_LOGIN_ALERTS ?? "false").toLowerCase() === "true";
+  }
   if (data?.kind === "new-device") {
     return String(process.env.SMS_NEW_DEVICE_ALERTS ?? "true").toLowerCase() !== "false";
   }

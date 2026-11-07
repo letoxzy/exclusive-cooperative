@@ -39,6 +39,13 @@ const ALERTS = {
     message: ({ label, when }) =>
       `New sign-in to your account on ${label} at ${when}. If this was not you, change your password and contact the cooperative immediately.`,
   },
+  login: {
+    title: ({ channel }) => (channel === "mobile" ? "Mobile App Login" : "Website Login"),
+    message: ({ name, channel, when, label }) =>
+      `Dear ${name || "Member"}, this is to notify you of a successful login on the Exclusive Cooperative ${
+        channel === "mobile" ? "mobile app" : "website"
+      } on ${when}${label ? ` (${label})` : ""}. If you did not initiate this session, change your password and contact the cooperative immediately.`,
+  },
 };
 
 export async function alertSecurityChange(userId, kind, details = {}) {
@@ -49,7 +56,7 @@ export async function alertSecurityChange(userId, kind, details = {}) {
     await createNotificationAndPush({
       user: userId,
       type: "security",
-      title: alert.title,
+      title: typeof alert.title === "function" ? alert.title(details) : alert.title,
       message: alert.message(details),
       data: { kind },
     });

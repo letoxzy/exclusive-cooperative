@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { alertSecurityChange } from "../utils/securityAlerts.js";
+import { describeDevice } from "../utils/deviceTracker.js";
+import { notifyPinLogin } from "../utils/loginAlerts.js";
 import {
   getSecurityState,
   recordSecurityFailure,
@@ -183,6 +185,10 @@ router.post("/pin/verify", protect, async (req, res) => {
     }
 
     await recordSecuritySuccess(member);
+
+    if (member.role !== "admin") {
+      void notifyPinLogin(member._id, req, describeDevice(req).label);
+    }
 
     res.json({ valid: true });
   } catch (err) {

@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import User from "../models/User.js";
-import { alertSecurityChange } from "./securityAlerts.js";
+import { notifyLogin } from "./loginAlerts.js";
 
 /**
  * "New sign-in" alerts.
@@ -70,16 +70,6 @@ export function describeDevice(req) {
   return { id, label };
 }
 
-const whenLagos = (date = new Date()) =>
-  new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Africa/Lagos",
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(date);
-
 export async function recordLoginDevice(user, req) {
   try {
     if (!user?._id || user.role === "admin") return;
@@ -95,6 +85,7 @@ export async function recordLoginDevice(user, req) {
         { _id: user._id, "knownDevices.id": id },
         { $set: { "knownDevices.$.lastSeen": now } }
       );
+      void notifyLogin(user, req, { label, newDevice: false });
       return;
     }
 
@@ -107,10 +98,9 @@ export async function recordLoginDevice(user, req) {
       }
     );
 
-    // First device ever recorded: just remember it.
-    if (devices.length === 0) return;
-
-    void alertSecurityChange(user._id, "new-device", { label, when: whenLagos(now) });
+    // The very first device ever recorded is a normal login, not a "new
+    // device" (so existing members are not scared once after deployment).
+    void notifyLogin(user, req, { label, newDevice: devices.length > 0 });
   } catch (err) {
     console.error("[device] could not record login device:", err?.message || err);
   }

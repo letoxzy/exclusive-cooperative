@@ -110,6 +110,10 @@ const userSchema = new mongoose.Schema(
     // Members can switch SMS copies of their notifications off.
     smsNotifications: { type: Boolean, default: true },
 
+    // "Sign out other devices": login tokens issued before this moment are
+    // rejected by the auth middleware.
+    sessionsValidAfter: { type: Date, default: null },
+
     // One-time code issued by the office so a member without a smartphone can
     // set their own PIN over USSD. Only a hash is stored.
     ussdActivationHash: { type: String, select: false },

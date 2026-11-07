@@ -48,6 +48,18 @@ export const protect = async (req, res, next) => {
       });
     }
 
+    // Tokens issued before "Sign out other devices" was used are no longer valid.
+    if (
+      req.user.sessionsValidAfter &&
+      decoded.iat &&
+      decoded.iat * 1000 < new Date(req.user.sessionsValidAfter).getTime()
+    ) {
+      return res.status(401).json({
+        code: "SESSION_ENDED",
+        message: "You were signed out of this device. Please log in again.",
+      });
+    }
+
     if (req.user.isBlocked) {
       return res.status(403).json({
         code: "ACCOUNT_BLOCKED",

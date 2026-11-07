@@ -22,6 +22,7 @@ import { startLoanOverdueScheduler } from "./services/loanOverdueService.js";
 import { startContributionReminderScheduler } from "./services/contributionReminderService.js";
 import { ensureChartOfAccounts } from "./services/ledger.js";
 import ussdRoutes from "./routes/ussdRoutes.js";
+import deviceRoutes from "./routes/deviceRoutes.js";
 
 connectDB().then(async () => {
   startLoanOverdueScheduler();
@@ -138,6 +139,7 @@ app.use("/api/withdrawals", withdrawalRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/gallery", galleryRoutes);
 app.use("/api/ussd", ussdRoutes);
+app.use("/api/devices", deviceRoutes);
 
 app.get("/", (req, res) =>
   res.send("Exclusive Cooperative API is running")

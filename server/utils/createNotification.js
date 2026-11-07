@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import { sendPushNotification } from "./pushNotification.js";
+import { sendWebPushToUser } from "./webPush.js";
 import { notifyMemberBySms } from "./smsNotify.js";
 
 /**
@@ -48,6 +49,9 @@ export async function createNotificationAndPush({
   } catch (pushError) {
     console.error("Push notification delivery failed:", pushError);
   }
+
+  // Browser notifications for the website. Never throws, never blocks.
+  void sendWebPushToUser(user, { type, title, body: message });
 
   // Not awaited on purpose. notifyMemberBySms never throws.
   notifyMemberBySms({ user, type, title, message, data });

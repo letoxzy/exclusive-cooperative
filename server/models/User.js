@@ -125,6 +125,22 @@ const userSchema = new mongoose.Schema(
     loginOtpSentAt: { type: Date, default: null, select: false },
     loginOtpResends: { type: Number, default: 0, select: false },
 
+    // Browsers that allowed website notifications (Web Push). Hidden by default.
+    webPushSubscriptions: {
+      type: [
+        {
+          _id: false,
+          endpoint: { type: String, required: true },
+          p256dh: { type: String, required: true },
+          auth: { type: String, required: true },
+          userAgent: { type: String, default: "" },
+          createdAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+      select: false,
+    },
+
     // Hashed fingerprints of devices that have signed in, used for the
     // "new sign-in" alert. Hidden from normal queries.
     knownDevices: {

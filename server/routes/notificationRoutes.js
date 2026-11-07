@@ -2,6 +2,7 @@ import express from "express";
 import Notification from "../models/Notification.js";
 import User from "../models/User.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { getVapidPublicKey, sendWebPushToUser } from "../utils/webPush.js";
 
 const router = express.Router();
 
@@ -67,6 +68,87 @@ router.delete("/device-token", protect, async (req, res) => {
     console.error("Device token removal error:", err);
     res.status(500).json({ message: "Failed to remove notification device." });
   }
+});
+
+// GET /api/notifications/web-push/public-key
+// The website needs this to ask the browser for notification permission.
+router.get("/web-push/public-key", (req, res) => {
+  res.json({ publicKey: getVapidPublicKey() });
+});
+
+// POST /api/notifications/web-push/subscribe
+// Save this browser's push subscription on the member's account.
+router.post("/web-push/subscribe", protect, async (req, res) => {
+  try {
+    const sub = req.body?.subscription || {};
+    const endpoint = String(sub.endpoint || "");
+    const p256dh = String(sub.keys?.p256dh || "");
+    const auth = String(sub.keys?.auth || "");
+
+    if (!/^https:\/\//.test(endpoint) || endpoint.length > 1000 || !p256dh || !auth) {
+      return res.status(400).json({ message: "A valid push subscription is required." });
+    }
+
+    // Replace this endpoint if it exists (it may have belonged to another
+    // account on a shared computer), then keep the 5 most recent browsers.
+    await User.updateMany(
+      { "webPushSubscriptions.endpoint": endpoint },
+      { $pull: { webPushSubscriptions: { endpoint } } }
+    );
+
+    await User.updateOne(
+      { _id: req.user._id },
+      {
+        $push: {
+          webPushSubscriptions: {
+            $each: [
+              {
+                endpoint,
+                p256dh,
+                auth,
+                userAgent: String(req.get("User-Agent") || "").slice(0, 200),
+                createdAt: new Date(),
+              },
+            ],
+            $slice: -5,
+          },
+        },
+      }
+    );
+
+    res.json({ message: "Website notifications turned on." });
+  } catch (err) {
+    console.error("Web push subscribe error:", err);
+    res.status(500).json({ message: "Failed to turn on website notifications." });
+  }
+});
+
+// DELETE /api/notifications/web-push/subscribe — { endpoint }
+router.delete("/web-push/subscribe", protect, async (req, res) => {
+  try {
+    const endpoint = String(req.body?.endpoint || "");
+    if (!endpoint) return res.status(400).json({ message: "Endpoint is required." });
+
+    await User.updateOne(
+      { _id: req.user._id },
+      { $pull: { webPushSubscriptions: { endpoint } } }
+    );
+
+    res.json({ message: "Website notifications turned off." });
+  } catch (err) {
+    console.error("Web push unsubscribe error:", err);
+    res.status(500).json({ message: "Failed to turn off website notifications." });
+  }
+});
+
+// POST /api/notifications/web-push/test — sends a confirmation notification
+router.post("/web-push/test", protect, async (req, res) => {
+  const result = await sendWebPushToUser(req.user._id, {
+    type: "announcement",
+    title: "Notifications are on",
+    body: "You will now get alerts from Exclusive Cooperative in this browser.",
+  });
+  res.json(result);
 });
 
 // GET /api/notifications

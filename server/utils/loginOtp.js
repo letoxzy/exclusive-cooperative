@@ -103,17 +103,23 @@ export const clearLoginOtp = (userId, nonce) =>
   });
 
 /**
- * Sends the code through EmailJS (same service as password reset).
- * Create a second EmailJS template and put its ID in EMAILJS_OTP_TEMPLATE_ID.
+ * Sends the code through EmailJS.
+ *
+ * The OTP template can live in a DIFFERENT EmailJS account from the password
+ * reset one (free plans only allow 2 templates). Everything EmailJS needs must
+ * come from the same account as the template, so set these on Render:
+ *   EMAILJS_OTP_TEMPLATE_ID   (required)
+ *   EMAILJS_OTP_SERVICE_ID    \
+ *   EMAILJS_OTP_PUBLIC_KEY     > from the account that owns the OTP template;
+ *   EMAILJS_OTP_PRIVATE_KEY   /  each falls back to the EMAILJS_* value if unset
  * Template variables: {{email}} {{name}} {{code}} {{expires_minutes}}
  */
 export async function sendLoginOtpEmail({ email, name, code }) {
-  const {
-    EMAILJS_SERVICE_ID,
-    EMAILJS_OTP_TEMPLATE_ID,
-    EMAILJS_PUBLIC_KEY,
-    EMAILJS_PRIVATE_KEY,
-  } = process.env;
+  const env = process.env;
+  const EMAILJS_SERVICE_ID = env.EMAILJS_OTP_SERVICE_ID || env.EMAILJS_SERVICE_ID;
+  const EMAILJS_PUBLIC_KEY = env.EMAILJS_OTP_PUBLIC_KEY || env.EMAILJS_PUBLIC_KEY;
+  const EMAILJS_PRIVATE_KEY = env.EMAILJS_OTP_PRIVATE_KEY || env.EMAILJS_PRIVATE_KEY;
+  const EMAILJS_OTP_TEMPLATE_ID = env.EMAILJS_OTP_TEMPLATE_ID;
 
   if (!EMAILJS_SERVICE_ID || !EMAILJS_OTP_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
     throw new Error("Login verification email is not configured");

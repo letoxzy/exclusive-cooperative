@@ -21,6 +21,10 @@ const ALERTS = {
     title: "App PIN Changed",
     message: () => `Your app PIN was changed. ${CONTACT}`,
   },
+  "withdrawal-pin-created": {
+    title: "Withdrawal PIN Created",
+    message: () => `A withdrawal PIN was set on your account. ${CONTACT}`,
+  },
   "password-changed": {
     title: "Password Changed",
     message: () => `Your account password was changed. ${CONTACT}`,

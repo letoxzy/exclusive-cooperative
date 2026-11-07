@@ -1,8 +1,11 @@
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
+import Membership from "../models/Membership.js";
+import SavingsTransaction from "../models/SavingsTransaction.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
 import { getContributionStatus, MINIMUM_CONTRIBUTION } from "../utils/contributionRules.js";
 import { reminderConfig, isReminderDue } from "../utils/reminderSchedule.js";
+import { gateAllowsContribution } from "../utils/contributionGate.js";
 
 /**
  * Contribution reminders.
@@ -26,7 +29,7 @@ const enabled = () =>
   String(process.env.CONTRIBUTION_REMINDERS_ENABLED || "").toLowerCase() === "true";
 
 export async function processContributionReminders({ dryRun = false, now = new Date() } = {}) {
-  const summary = { checked: 0, alreadyPaid: 0, alreadyReminded: 0, due: 0, sent: 0, byFrequency: {} };
+  const summary = { checked: 0, alreadyPaid: 0, blockedByPaymentRule: 0, alreadyReminded: 0, due: 0, sent: 0, byFrequency: {} };
   if (running) return { ...summary, busy: true };
   running = true;
 
@@ -53,6 +56,19 @@ export async function processContributionReminders({ dryRun = false, now = new D
           continue;
         }
         if (!isReminderDue(status.frequency, now, cfg)) continue;
+
+        // Never remind someone the app would then refuse (see contributionGate.js).
+        const [membership, lastContribution] = await Promise.all([
+          Membership.findOne({ user: member._id, status: "approved" }).select("frequency").lean(),
+          SavingsTransaction.findOne({ user: member._id, status: "approved" })
+            .sort("-createdAt")
+            .select("createdAt")
+            .lean(),
+        ]);
+        if (!gateAllowsContribution(membership?.frequency, lastContribution?.createdAt, now)) {
+          summary.blockedByPaymentRule += 1;
+          continue;
+        }
 
         const already = await Notification.exists({
           user: member._id,

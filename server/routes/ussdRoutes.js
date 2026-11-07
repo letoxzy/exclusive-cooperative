@@ -16,7 +16,15 @@ import {
   recordSecuritySuccess,
   notifyPermanentSecurityLock,
 } from "../utils/accountSecurity.js";
-import { checkActivation, completeActivation, isWeakPin } from "../utils/ussdActivation.js";
+import {
+  checkActivation,
+  completeActivation,
+  isWeakPin,
+  isWeakWithdrawalPin,
+} from "../utils/ussdActivation.js";
+import { runWithdrawal, withdrawalsEnabled } from "../utils/ussdWithdrawal.js";
+import { runTopUp, runRepayment, paymentsEnabled } from "../utils/ussdPayments.js";
+import { callInternal } from "../utils/internalApi.js";
 import { alertSecurityChange } from "../utils/securityAlerts.js";
 
 /**
@@ -40,12 +48,17 @@ import { alertSecurityChange } from "../utils/securityAlerts.js";
  * Every result stays open with "0. Main menu". Inputs are replayed in order,
  * so "123456*1*0*3" means: savings, back to the menu, last contributions.
  * "0" on the main menu ends the session.
+ * Options 7 (withdraw), 8 (top up) and 9 (repay loan) are extra screens, shown
+ * only when switched on (USSD_WITHDRAWALS_ENABLED / USSD_PAYMENTS_ENABLED).
  *
  * Members with no PIN yet (e.g. button-phone members) start with an 8-digit
  * activation code from the office instead of a PIN:
  *   "48291736"                 -> code checked, asks for a new PIN
  *   "48291736*739402"          -> asks to confirm
  *   "48291736*739402*739402"   -> PIN saved
+ * When USSD_WITHDRAWALS_ENABLED=true and the member has no withdrawal PIN yet,
+ * the same activation also asks for a 4-digit withdrawal PIN (twice) before
+ * saving; the PIN is created through the app's own /api/withdrawals/pin route.
  *
  * The member is identified by phone number (Membership.phone) and proven by
  * the same 6-digit app PIN + the same failed-attempt lockout used by the app.
@@ -63,7 +76,16 @@ const clip = (body, limit = MAX_SCREEN) => {
   const cut = body.lastIndexOf("\n", limit);
   return body.slice(0, cut > 0 ? cut : limit);
 };
-const send = (res, body) => res.type("text/plain").send(clip(body));
+// Plain text only: many handsets cannot show the naira sign (or curly quotes)
+// on a USSD screen, and your own routes' messages contain them.
+const plain = (body) =>
+  String(body)
+    .replace(/\u20a6\s*/g, "NGN ")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[^\x20-\x7E\n]/g, "");
+const send = (res, body) => res.type("text/plain").send(clip(plain(body)));
 const con = (res, msg) => send(res, `CON ${msg}`);
 const end = (res, msg) => send(res, `END ${msg}`);
 
@@ -316,7 +338,7 @@ async function handleActivation(res, phoneNumber, parts) {
   if (!userId) return end(res, failed);
 
   const member = await User.findById(userId).select(
-    "+securityFailedAttempts +securityLockLevel +securityLockedUntil +securityLockedPermanently"
+    "+securityFailedAttempts +securityLockLevel +securityLockedUntil +securityLockedPermanently +withdrawalPinHash"
   );
   if (!member || member.isBlocked || !member.isApprovedMember) {
     return end(res, "Your account is unavailable. Please contact the cooperative.");
@@ -338,13 +360,51 @@ async function handleActivation(res, phoneNumber, parts) {
   }
   if (parts.length === 2) return con(res, "Confirm your new PIN:");
 
-  if (parts.length > 3 || parts[2] !== pin) {
+  // Members who cannot use the app also choose their withdrawal PIN here, while
+  // their identity has just been checked in person at the office.
+  const needsWithdrawalPin = withdrawalsEnabled() && !member.withdrawalPinHash;
+
+  if (parts[2] !== pin || (!needsWithdrawalPin && parts.length > 3)) {
     return end(res, "The PINs did not match. Dial again and re-enter your code.");
+  }
+
+  let withdrawalPinCreated = false;
+  if (needsWithdrawalPin) {
+    if (parts.length === 3) {
+      return con(res, "Now choose a 4-digit WITHDRAWAL PIN.\nIt must differ from your login PIN:");
+    }
+    const withdrawalPin = parts[3];
+    if (isWeakWithdrawalPin(withdrawalPin, { appPin: pin, phone: phoneNumber })) {
+      return end(
+        res,
+        "That withdrawal PIN is not allowed. Use 4 digits, nothing obvious, and not part of your login PIN. Dial again."
+      );
+    }
+    if (parts.length === 4) return con(res, "Confirm your withdrawal PIN:");
+    if (parts.length > 5 || parts[4] !== withdrawalPin) {
+      return end(res, "The withdrawal PINs did not match. Dial again and re-enter your code.");
+    }
+
+    // Created through the same route the app uses (same rules and hashing). An
+    // "already exists" answer (409) is fine, which also makes retries safe.
+    const created = await callInternal(member._id, "POST", "/withdrawals/pin", {
+      body: { pin: withdrawalPin, confirmPin: withdrawalPin },
+    });
+    if (!created.ok && created.status !== 409) {
+      return end(res, "We could not set your withdrawal PIN. Your code is still valid. Please dial again.");
+    }
+    withdrawalPinCreated = created.status === 201;
   }
 
   await completeActivation(member._id, pin);
   void alertSecurityChange(member._id, check.hadPin ? "pin-changed" : "pin-created");
-  return end(res, "Your PIN is set. Dial again and enter your PIN to use the service.");
+  if (withdrawalPinCreated) void alertSecurityChange(member._id, "withdrawal-pin-created");
+  return end(
+    res,
+    needsWithdrawalPin
+      ? "Your PINs are set. Dial again and enter your 6-digit PIN to use the service."
+      : "Your PIN is set. Dial again and enter your PIN to use the service."
+  );
 }
 
 // ---- main handler ---------------------------------------------------------
@@ -352,6 +412,7 @@ async function handleActivation(res, phoneNumber, parts) {
 router.post("/", async (req, res) => {
   try {
     const phoneNumber = req.body?.phoneNumber;
+    const sessionId = String(req.body?.sessionId ?? "");
     const text = String(req.body?.text ?? "");
     const parts = text === "" ? [] : text.split("*");
 
@@ -379,14 +440,35 @@ router.post("/", async (req, res) => {
     const menu = () =>
       con(
         res,
-        `Hello ${first}\n1. Savings balance\n2. Loan status\n3. Last contributions\n4. Repayment schedule\n5. Mini statement\n6. Loan eligibility\n0. Exit`
+        `Hello ${first}\n1. Savings balance\n2. Loan status\n3. Contributions\n4. Repay schedule\n5. Mini statement\n6. Loan limit${
+          withdrawalsEnabled() ? "\n7. Withdraw" : ""
+        }${paymentsEnabled() ? "\n8. Top up\n9. Repay loan" : ""}\n0. Exit`
       );
 
     // Replay everything typed after the PIN to find the current screen.
     let view = "menu"; // "menu" or the number of the result being shown
-    for (const input of parts.slice(1)) {
+    const inputs = parts.slice(1);
+    for (let idx = 0; idx < inputs.length; idx += 1) {
+      const input = inputs[idx];
       if (view === "menu") {
         if (input === "0") return end(res, "Thank you for using Exclusive Cooperative.");
+        const wizard =
+          input === "7" && withdrawalsEnabled()
+            ? runWithdrawal
+            : input === "8" && paymentsEnabled()
+              ? runTopUp
+              : input === "9" && paymentsEnabled()
+                ? runRepayment
+                : null;
+        if (wizard) {
+          // Everything typed after the menu choice belongs to that feature's screens.
+          const outcome = await wizard(inputs.slice(idx + 1), { member, phoneNumber, sessionId });
+          if (outcome.back) {
+            idx += outcome.used; // skip what the wizard used; back on the main menu
+            continue;
+          }
+          return outcome.type === "con" ? con(res, outcome.text) : end(res, outcome.text);
+        }
         if (!["1", "2", "3", "4", "5", "6"].includes(input)) {
           return end(res, "Invalid choice. Dial again.");
         }

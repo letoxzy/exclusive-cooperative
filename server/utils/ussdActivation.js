@@ -97,3 +97,15 @@ export function isWeakPin(pin) {
   if (/^(\d{3})\1$/.test(p) || /^(\d{2})\1\1$/.test(p)) return true; // 123123, 121212
   return false;
 }
+
+/** True for withdrawal PINs (4 digits) that are trivially guessable or reuse other secrets. */
+export function isWeakWithdrawalPin(pin, { appPin, phone } = {}) {
+  const p = String(pin);
+  if (!/^\d{4}$/.test(p)) return true;
+  if (/^(\d)\1{3}$/.test(p)) return true; // 1111
+  if (SEQUENCE.includes(p) || REVERSE.includes(p)) return true; // 1234, 4321, 7890
+  if (/^(\d{2})\1$/.test(p)) return true; // 1212
+  if (appPin && (String(appPin).startsWith(p) || String(appPin).endsWith(p))) return true; // part of the login PIN
+  if (phone && String(phone).replace(/\D/g, "").endsWith(p)) return true; // last 4 digits of the phone
+  return false;
+}

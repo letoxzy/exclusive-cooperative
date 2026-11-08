@@ -54,9 +54,10 @@ async function getCooperativeSettings() {
   return settings;
 }
 
-const ALLOWED_LOAN_TYPES = ["emergency", "business", "personal"];
+// Exported so the USSD loan screens use the very same rules.
+export const ALLOWED_LOAN_TYPES = ["emergency", "business", "personal"];
 
-const ALLOWED_TERMS = [3, 6, 12];
+export const ALLOWED_TERMS = [3, 6, 12];
 
 const INTEREST_RATE_BY_TERM = {
   3: 5,
@@ -70,7 +71,7 @@ const BVN_REGEX = /^\d{11}$/;
 // (flat rate on the original amount, not compounding).
 // "interest-free" members are charged 0% regardless of term — they
 // also don't earn dividends (handled separately in dividend routes).
-function calculateLoanTerms(amount, months, membershipType) {
+export function calculateLoanTerms(amount, months, membershipType) {
   const interestRate =
     membershipType === "interest-free" ? 0 : INTEREST_RATE_BY_TERM[months];
 

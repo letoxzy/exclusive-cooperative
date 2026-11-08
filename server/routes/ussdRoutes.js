@@ -24,6 +24,7 @@ import {
 } from "../utils/ussdActivation.js";
 import { runWithdrawal, withdrawalsEnabled } from "../utils/ussdWithdrawal.js";
 import { runTopUp, runRepayment, paymentsEnabled } from "../utils/ussdPayments.js";
+import { loansEnabled, runLoanLimit } from "../utils/ussdLoan.js";
 import { callInternal } from "../utils/internalApi.js";
 import { alertSecurityChange } from "../utils/securityAlerts.js";
 
@@ -50,6 +51,8 @@ import { alertSecurityChange } from "../utils/securityAlerts.js";
  * "0" on the main menu ends the session.
  * Options 7 (withdraw), 8 (top up) and 9 (repay loan) are extra screens, shown
  * only when switched on (USSD_WITHDRAWALS_ENABLED / USSD_PAYMENTS_ENABLED).
+ * With USSD_LOANS_ENABLED=true, option 6 also lets an eligible member apply for
+ * a loan (type, amount, period, purpose, confirm).
  *
  * Members with no PIN yet (e.g. button-phone members) start with an 8-digit
  * activation code from the office instead of a PIN:
@@ -440,7 +443,7 @@ router.post("/", async (req, res) => {
     const menu = () =>
       con(
         res,
-        `Hello ${first}\n1. Savings balance\n2. Loan status\n3. Contributions\n4. Repay schedule\n5. Mini statement\n6. Loan limit${
+        `Hello ${first}\n1. Savings balance\n2. Loan status\n3. Contributions\n4. Repay schedule\n5. Mini statement\n6. Loan limit${loansEnabled() ? "/apply" : ""}${
           withdrawalsEnabled() ? "\n7. Withdraw" : ""
         }${paymentsEnabled() ? "\n8. Top up\n9. Repay loan" : ""}\n0. Exit`
       );
@@ -453,7 +456,9 @@ router.post("/", async (req, res) => {
       if (view === "menu") {
         if (input === "0") return end(res, "Thank you for using Exclusive Cooperative.");
         const wizard =
-          input === "7" && withdrawalsEnabled()
+          input === "6" && loansEnabled()
+            ? runLoanLimit
+            : input === "7" && withdrawalsEnabled()
             ? runWithdrawal
             : input === "8" && paymentsEnabled()
               ? runTopUp

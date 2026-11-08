@@ -33,9 +33,16 @@ export const withdrawalsEnabled = () =>
 const requireNameMatch = () =>
   String(process.env.USSD_WITHDRAW_REQUIRE_NAME_MATCH ?? "true").toLowerCase() !== "false";
 
+const DEFAULT_DAILY_LIMIT = 100000;
 const dailyLimit = () => {
-  const n = Number(process.env.USSD_WITHDRAW_DAILY_LIMIT ?? 100000);
-  return Number.isFinite(n) && n > 0 ? n : 0; // 0 = no extra cap
+  // A variable that exists but is blank (easy to leave behind on a hosting
+  // dashboard) uses the default; it must NOT silently switch the cap off.
+  // Set it to 0 to turn the cap off on purpose.
+  const raw = String(process.env.USSD_WITHDRAW_DAILY_LIMIT ?? "").trim();
+  if (raw === "") return DEFAULT_DAILY_LIMIT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return DEFAULT_DAILY_LIMIT; // unreadable value -> stay safe
+  return n; // 0 = no extra cap
 };
 
 const naira = (n) => `NGN ${Number(n || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;

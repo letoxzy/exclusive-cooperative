@@ -4,6 +4,7 @@ import multer from "multer";
 import Gallery from "../models/Gallery.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
+import { requirePermission } from "../middleware/adminPermission.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import cloudinary from "../config/cloudinary.js";
 
@@ -67,7 +68,7 @@ router.get("/:id", async (req, res) => {
 router.use(protect, adminOnly);
 
 // GET /api/gallery/admin/all
-router.get("/admin/all", async (req, res) => {
+router.get("/admin/all", requirePermission("gallery.manage"), async (req, res) => {
   try {
     const items = await Gallery.find().sort("-createdAt");
     res.json(items);
@@ -77,7 +78,7 @@ router.get("/admin/all", async (req, res) => {
 });
 
 // POST /api/gallery/admin
-router.post("/admin", upload.single("media"), async (req, res) => {
+router.post("/admin", requirePermission("gallery.manage"), upload.single("media"), async (req, res) => {
   try {
     const { title, description, category, isPublished } = req.body;
 
@@ -114,7 +115,7 @@ router.post("/admin", upload.single("media"), async (req, res) => {
 });
 
 // PATCH /api/gallery/admin/:id
-router.patch("/admin/:id", async (req, res) => {
+router.patch("/admin/:id", requirePermission("gallery.manage"), async (req, res) => {
   try {
     const allowedFields = ["title", "description", "category", "isPublished"];
     const updates = {};
@@ -161,7 +162,7 @@ router.patch("/admin/:id", async (req, res) => {
 });
 
 // DELETE /api/gallery/admin/:id
-router.delete("/admin/:id", async (req, res) => {
+router.delete("/admin/:id", requirePermission("gallery.manage"), async (req, res) => {
   try {
     const item = await Gallery.findById(req.params.id);
 

@@ -3,6 +3,8 @@ import { FaXmark } from "react-icons/fa6";
 import request from "../../utils/api";
 import "../../styles/kyc-review.css";
 import { useFlash } from "../../context/ToastContext.jsx";
+import { useAuth } from "../../context/AuthContext";
+import { hasPermission } from "../../utils/adminAccess";
 
 const label = (value) =>
   String(value || "not started")
@@ -61,6 +63,9 @@ function PhotoTile({ title, src, onZoom }) {
 }
 
 function KycReviewModal({ applicationId, token, onClose, onDone }) {
+  const { user } = useAuth();
+  // Only the Loan Officer (and Full Administrator) may decide; others may look.
+  const canDecide = hasPermission(user, "loan.eligibility");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -548,7 +553,7 @@ function KycReviewModal({ applicationId, token, onClose, onDone }) {
           </footer>
         )}
 
-        {view && isPending && (
+        {view && isPending && canDecide && (
           <footer className="kyc-review-footer">
 
             {needsConfirm && !rejecting && (

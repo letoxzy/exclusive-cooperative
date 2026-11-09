@@ -16,6 +16,7 @@ import {
 
 import AdminSidebar from "../components/admin/AdminSidebar";
 import MembershipModal from "../components/admin/MembershipModal";
+import { canOpenSection, hasPermission } from "../utils/adminAccess";
 import AddExistingMemberModal from "../components/admin/AddExistingMemberModal";
 import AdminNotifications from "../components/admin/AdminNotifications";
 import AdminActionModal from "../components/admin/AdminActionModal";
@@ -36,6 +37,8 @@ const statusLabel = (value) =>
 function AdminDashboard() {
   const toast = useToast();
   const { user, logout, refreshUser } = useAuth();
+  // What this office role may do (the server enforces the same rules).
+  const can = (...wanted) => hasPermission(user, ...wanted);
 
   const [activeSection, setActiveSection] = useState("overview");
 
@@ -108,6 +111,8 @@ function AdminDashboard() {
   ================================= */
 
   const loadRequests = useCallback(async () => {
+    if (!hasPermission(user, "savings.view", "savings.review")) return;
+
     const data = await request("/admin/savings-requests", {
       token: user.token,
     });
@@ -116,6 +121,8 @@ function AdminDashboard() {
   }, [user.token]);
 
   const loadMembers = useCallback(async () => {
+    if (!hasPermission(user, "members.view")) return;
+
     const data = await request("/admin/users", {
       token: user.token,
     });
@@ -124,6 +131,8 @@ function AdminDashboard() {
   }, [user.token]);
 
   const loadSecurityAlerts = useCallback(async () => {
+    if (!hasPermission(user, "members.view")) return;
+
     try {
       const data = await request("/admin/security-alerts", {
         token: user.token,
@@ -153,6 +162,8 @@ function AdminDashboard() {
   }, []);
 
   const loadApplications = useCallback(async () => {
+    if (!hasPermission(user, "membership.review", "membership.view")) return;
+
     const data = await request("/admin/membership", {
       token: user.token,
     });
@@ -182,6 +193,8 @@ function AdminDashboard() {
   }, [user?._id, loadApplications]);
 
   const loadLoans = useCallback(async () => {
+    if (!hasPermission(user, "loans.view")) return;
+
     const data = await request("/admin/loans", {
       token: user.token,
     });
@@ -190,6 +203,8 @@ function AdminDashboard() {
   }, [user.token]);
 
   const loadLoanEligibilityApplications = useCallback(async () => {
+    if (!hasPermission(user, "loan.eligibility", "loan.eligibility.view")) return;
+
     const data = await request("/admin/loan-eligibility-applications", {
       token: user.token,
     });
@@ -216,6 +231,8 @@ function AdminDashboard() {
   }, [user?._id, loadLoanEligibilityApplications]);
 
   const loadDividends = useCallback(async () => {
+    if (!hasPermission(user, "dividends.view")) return;
+
     const data = await request("/admin/dividends", {
       token: user.token,
     });
@@ -224,6 +241,8 @@ function AdminDashboard() {
   }, [user.token]);
 
   const loadLoanRepayments = useCallback(async () => {
+    if (!hasPermission(user, "repayments.view", "repayments.review")) return;
+
     const data = await request("/admin/loan-repayments", {
       token: user.token,
     });
@@ -232,6 +251,8 @@ function AdminDashboard() {
   }, [user.token]);
 
   const loadWithdrawals = useCallback(async () => {
+    if (!hasPermission(user, "withdrawals.view")) return;
+
     const data = await request("/admin/withdrawals", {
       token: user.token,
     });
@@ -344,6 +365,11 @@ function AdminDashboard() {
       setSavingCooperativeSettings(false);
     }
   };
+
+  // Staff who land on a tab their office role cannot use go back to Overview.
+  useEffect(() => {
+    if (!canOpenSection(user, activeSection)) setActiveSection("overview");
+  }, [user, activeSection]);
 
   /* ================================
      LOAD DATA WHEN SECTION CHANGES
@@ -946,6 +972,18 @@ function AdminDashboard() {
   const renderOverview = () => {
     return (
       <>
+        {user?.adminRoleLabel &&
+          Array.isArray(user.permissions) &&
+          !user.permissions.includes("*") && (
+            <section className="admin-card">
+              <p className="admin-subtitle">
+                You are signed in as <strong>{user.adminRoleLabel}</strong>.
+                The menu shows only the tabs your office handles, and the
+                figures on this page cover only what you are allowed to see.
+              </p>
+            </section>
+          )}
+
         <div className="admin-page-heading">
           <div>
             <p className="eyebrow">Dashboard</p>
@@ -1200,7 +1238,7 @@ function AdminDashboard() {
                       <td>{new Date(r.createdAt).toLocaleDateString()}</td>
 
                       <td className="actions-cell">
-                        {r.status === "pending" && (
+                        {r.status === "pending" && can("savings.review") && (
                           <>
                             <button
                               className="approve-btn"
@@ -1323,7 +1361,7 @@ function AdminDashboard() {
                       </td>
 
                       <td className="actions-cell">
-                        {loan.status === "pending" && (
+                        {loan.status === "pending" && can("loan.decide") && (
                           <>
                             <button
                               className="approve-btn"
@@ -1345,7 +1383,7 @@ function AdminDashboard() {
                           </>
                         )}
 
-                        {loan.status === "approved" && (
+                        {loan.status === "approved" && can("loan.disburse") && (
                           <button
                             className="approve-btn"
                             onClick={() => handleDisburseLoan(loan._id)}
@@ -1452,7 +1490,7 @@ function AdminDashboard() {
                       <td>{new Date(r.createdAt).toLocaleDateString()}</td>
 
                       <td className="actions-cell">
-                        {r.status === "pending" && (
+                        {r.status === "pending" && can("repayments.review") && (
                           <>
                             <button
                               className="approve-btn"
@@ -1622,7 +1660,7 @@ function AdminDashboard() {
                           : "—"}
                       </td>
                       <td className="actions-cell">
-                        {item.status === "processing" ? (
+                        {item.status === "processing" && can("withdrawals.sync") ? (
                           <button
                             className="view-btn"
                             onClick={() => handleWithdrawalSync(item._id)}
@@ -1716,7 +1754,7 @@ function AdminDashboard() {
               </div>
 
               <div className="dividend-summary-actions">
-                {selectedDividend.status !== "completed" && (
+                {selectedDividend.status !== "completed" && can("dividends.prepare") && (
                   <button
                     type="button"
                     className="btn-primary"
@@ -1731,7 +1769,7 @@ function AdminDashboard() {
                   </button>
                 )}
 
-                {selectedDividend.status === "calculated" &&
+                {can("dividends.approve") && selectedDividend.status === "calculated" &&
                   dividendEntries.length > 0 &&
                   !selectedDividend.approvedBy && (
                     <button
@@ -1751,7 +1789,7 @@ function AdminDashboard() {
                     <span className="admin-subtitle">Approved</span>
                   )}
 
-                {selectedDividend.status === "calculated" &&
+                {can("dividends.pay") && selectedDividend.status === "calculated" &&
                   dividendEntries.length > 0 && (
                     <button
                       type="button"
@@ -1817,7 +1855,7 @@ function AdminDashboard() {
                         </td>
 
                         <td className="actions-cell">
-                          {entry.status === "pending" && (
+                          {entry.status === "pending" && can("dividends.pay") && (
                             <button
                               className="approve-btn"
                               onClick={() =>
@@ -1863,13 +1901,15 @@ function AdminDashboard() {
             >
               Refresh
             </button>
-            <button
-            type="button"
-            className="btn-primary"
-            onClick={() => setShowCreateDividendForm((prev) => !prev)}
-          >
-            {showCreateDividendForm ? "Cancel" : "Create Dividend"}
-          </button></div>
+            {can("dividends.prepare") && (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => setShowCreateDividendForm((prev) => !prev)}
+              >
+                {showCreateDividendForm ? "Cancel" : "Create Dividend"}
+              </button>
+            )}</div>
         </div>
 
         {showCreateDividendForm && (
@@ -2156,13 +2196,15 @@ function AdminDashboard() {
             >
               Refresh
             </button>
-            <button
-              type="button"
-              className="admin-primary-btn"
-              onClick={() => setShowAddExistingMember(true)}
-            >
-              + Add Member
-            </button>
+            {can("members.add") && (
+              <button
+                type="button"
+                className="admin-primary-btn"
+                onClick={() => setShowAddExistingMember(true)}
+              >
+                + Add Member
+              </button>
+            )}
           </div>
         </div>
 
@@ -2279,13 +2321,15 @@ function AdminDashboard() {
                           <span>
                             ₦{Number(m.shareholding || 0).toLocaleString()}
                           </span>
-                          <button
-                            type="button"
-                            className="admin-secondary-btn member-shareholding-btn"
-                            onClick={() => handleShareholdingUpdate(m)}
-                          >
-                            Update
-                          </button>
+                          {can("members.shareholding") && (
+                            <button
+                              type="button"
+                              className="admin-secondary-btn member-shareholding-btn"
+                              onClick={() => handleShareholdingUpdate(m)}
+                            >
+                              Update
+                            </button>
+                          )}
                         </div>
                       </td>
 
@@ -2329,15 +2373,17 @@ function AdminDashboard() {
                           <span className="muted">Protected</span>
                         ) : (
                           <div className="member-action-stack">
-                            <button
-                              type="button"
-                              className="admin-secondary-btn"
-                              onClick={() => handleUssdActivation(m)}
-                              title={`Create a USSD activation code for ${m.fullName || "member"}`}
-                            >
-                              USSD Code
-                            </button>
-                            {m.securityLockedPermanently ? (
+                            {can("members.ussd") && (
+                              <button
+                                type="button"
+                                className="admin-secondary-btn"
+                                onClick={() => handleUssdActivation(m)}
+                                title={`Create a USSD activation code for ${m.fullName || "member"}`}
+                              >
+                                USSD Code
+                              </button>
+                            )}
+                            {m.securityLockedPermanently ? !can("members.unlock") ? null : (
                               <button
                                 type="button"
                                 className="admin-secondary-btn"
@@ -2346,7 +2392,7 @@ function AdminDashboard() {
                               >
                                 Unlock Account
                               </button>
-                            ) : (
+                            ) : !can("members.manage") ? null : (
                               <button
                                 type="button"
                                 className={
@@ -2366,18 +2412,20 @@ function AdminDashboard() {
                                   : "Block Account"}
                               </button>
                             )}
-                            <button
-                              type="button"
-                              className="reject-btn"
-                              onClick={() => handleDeleteMember(m)}
-                              disabled={deletingMemberId === m._id}
-                              title={`Delete ${m.fullName || "member"}`}
-                            >
-                              <FaTrash />
-                              {deletingMemberId === m._id
-                                ? "Deleting..."
-                                : "Delete Account"}
-                            </button>
+                            {can("members.delete") && (
+                              <button
+                                type="button"
+                                className="reject-btn"
+                                onClick={() => handleDeleteMember(m)}
+                                disabled={deletingMemberId === m._id}
+                                title={`Delete ${m.fullName || "member"}`}
+                              >
+                                <FaTrash />
+                                {deletingMemberId === m._id
+                                  ? "Deleting..."
+                                  : "Delete Account"}
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>
@@ -2539,7 +2587,7 @@ function AdminDashboard() {
                           Update
                         </button>
 
-                        {a.status === "pending" && (
+                        {a.status === "pending" && can("membership.review") && (
                           <>
                             <button
                               className="approve-btn"
@@ -3662,7 +3710,7 @@ function AdminDashboard() {
 
               <div className="admin-user-info">
                 <strong>{user?.fullName}</strong>
-                <span>Administrator</span>
+                <span>{user?.adminRoleLabel || "Administrator"}</span>
               </div>
             </div>
           </div>

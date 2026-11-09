@@ -2,10 +2,14 @@ import { useState } from "react";
 import request from "../../utils/api";
 import { naira, when } from "./adminFormat";
 import { useFlash } from "../../context/ToastContext.jsx";
+import { useAuth } from "../../context/AuthContext";
+import { hasPermission } from "../../utils/adminAccess";
 
 const toInput = (d) => d.toISOString().slice(0, 10);
 
 function ReconciliationPanel({ token }) {
+  const { user } = useAuth();
+  const canCredit = hasPermission(user, "reconciliation.credit");
   const today = new Date();
   const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
   const [from, setFrom] = useState(toInput(monthAgo));
@@ -154,14 +158,16 @@ function ReconciliationPanel({ token }) {
                         <td>{m.reference}</td>
                         <td>{naira(m.amount)}</td>
                         <td>
-                          <button
-                            type="button"
-                            className="admin-secondary-btn"
-                            disabled={crediting === m.reference}
-                            onClick={() => credit(m.reference)}
-                          >
-                            {crediting === m.reference ? "Crediting…" : "Verify & credit"}
-                          </button>
+                          {canCredit && (
+                            <button
+                              type="button"
+                              className="admin-secondary-btn"
+                              disabled={crediting === m.reference}
+                              onClick={() => credit(m.reference)}
+                            >
+                              {crediting === m.reference ? "Crediting…" : "Verify & credit"}
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

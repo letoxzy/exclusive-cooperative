@@ -19,6 +19,7 @@ import {
 
 import { protect } from "../middleware/authMiddleware.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
+import { requirePermission } from "../middleware/adminPermission.js";
 import { settleWithdrawal } from "../utils/withdrawalSettlement.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
@@ -111,7 +112,7 @@ router.get("/cooperative-settings", async (req, res) => {
 });
 
 // PUT /api/admin/cooperative-settings
-router.put("/cooperative-settings", async (req, res) => {
+router.put("/cooperative-settings", requirePermission("settings.manage"), async (req, res) => {
   try {
     const {
       loanMultiplier,
@@ -178,7 +179,7 @@ router.put("/cooperative-settings", async (req, res) => {
 */
 
 // GET /api/admin/users
-router.get("/users", async (req, res) => {
+router.get("/users", requirePermission("members.view"), async (req, res) => {
   try {
     const users = await User.find()
       .select(
@@ -225,7 +226,7 @@ router.get("/users", async (req, res) => {
   ============================
 */
 
-router.patch("/users/:id/block", async (req, res) => {
+router.patch("/users/:id/block", requirePermission("members.manage"), async (req, res) => {
   try {
     const member = await User.findById(req.params.id);
     if (!member) return res.status(404).json({ message: "Member account not found." });
@@ -271,7 +272,7 @@ router.patch("/users/:id/block", async (req, res) => {
 });
 
 // GET /api/admin/security-alerts
-router.get("/security-alerts", async (req, res) => {
+router.get("/security-alerts", requirePermission("members.view"), async (req, res) => {
   try {
     const alerts = await Notification.find({
       user: req.user._id,
@@ -293,7 +294,7 @@ router.get("/security-alerts", async (req, res) => {
 // Clears an automatic permanent security lock and resets the account's
 // authentication escalation. This does not change the separate manual
 // isBlocked status.
-router.patch("/users/:id/security-unlock", async (req, res) => {
+router.patch("/users/:id/security-unlock", requirePermission("members.unlock"), async (req, res) => {
   try {
     const member = await User.findById(req.params.id);
 
@@ -347,7 +348,7 @@ router.patch("/users/:id/security-unlock", async (req, res) => {
 // Issues a one-time code so a member without a smartphone can choose their own
 // USSD PIN. The code is returned ONCE here; only its hash is stored. Issuing
 // one for a member who already has a PIN is an in-person PIN reset.
-router.post("/members/:id/ussd-activation", async (req, res) => {
+router.post("/members/:id/ussd-activation", requirePermission("members.ussd"), async (req, res) => {
   try {
     const member = await User.findById(req.params.id).select(
       "fullName email role isApprovedMember isBlocked"
@@ -414,7 +415,7 @@ router.post("/members/:id/ussd-activation", async (req, res) => {
 
 // PATCH /api/admin/users/:id/shareholding
 // Updates a member's total cooperative shareholding value.
-router.patch("/users/:id/shareholding", async (req, res) => {
+router.patch("/users/:id/shareholding", requirePermission("members.shareholding"), async (req, res) => {
   try {
     const { shareholding } = req.body;
     const value = Number(shareholding);
@@ -482,7 +483,7 @@ router.patch("/users/:id/shareholding", async (req, res) => {
 // DELETE /api/admin/users/:id
 // Removes a member login account and its linked membership record.
 // Admin accounts are protected. Financial transaction history is preserved.
-router.delete("/users/:id", async (req, res) => {
+router.delete("/users/:id", requirePermission("members.delete"), async (req, res) => {
   try {
     const member = await User.findById(req.params.id);
 
@@ -540,7 +541,7 @@ router.delete("/users/:id", async (req, res) => {
 
 // GET /api/admin/deletion-requests?status=pending
 // Requests from the app and from the public "delete my account" web page.
-router.get("/deletion-requests", async (req, res) => {
+router.get("/deletion-requests", requirePermission("deletions.manage"), async (req, res) => {
   try {
     const filter = req.query.status ? { status: String(req.query.status) } : {};
     const requests = await AccountDeletionRequest.find(filter)
@@ -579,7 +580,7 @@ router.get("/deletion-requests", async (req, res) => {
 // POST /api/admin/deletion-requests/:id/withdrawal-access   { action: "grant" | "revoke" }
 // Lets a leaving member withdraw ALL their savings (ignores the 40% / once a
 // month rule) for a limited time, through the normal withdrawal screen.
-router.post("/deletion-requests/:id/withdrawal-access", async (req, res) => {
+router.post("/deletion-requests/:id/withdrawal-access", requirePermission("deletions.manage"), async (req, res) => {
   try {
     const action = String(req.body?.action || "");
     if (!["grant", "revoke"].includes(action)) {
@@ -676,7 +677,7 @@ router.post("/deletion-requests/:id/withdrawal-access", async (req, res) => {
 // PATCH /api/admin/deletion-requests/:id   { action: "complete" | "reject", note? }
 // "complete" deletes the account (same safety checks as deleting a member).
 // "reject" needs a note explaining why; the member is told.
-router.patch("/deletion-requests/:id", async (req, res) => {
+router.patch("/deletion-requests/:id", requirePermission("deletions.manage"), async (req, res) => {
   try {
     const { action } = req.body || {};
     const note = String(req.body?.note || "").trim().slice(0, 500);
@@ -784,7 +785,7 @@ router.patch("/deletion-requests/:id", async (req, res) => {
 // POST /api/admin/members/existing
 // Creates a login account and imports the member's existing membership data.
 router.post(
-  "/members/existing",
+  "/members/existing", requirePermission("members.add"),
   upload.fields([
     { name: "passportPhoto", maxCount: 1 },
     { name: "signature", maxCount: 1 },
@@ -1036,7 +1037,7 @@ router.post(
 */
 
 // GET /api/admin/savings-requests?status=pending
-router.get("/savings-requests", async (req, res) => {
+router.get("/savings-requests", requirePermission("savings.view", "savings.review"), async (req, res) => {
   try {
     const filter = req.query.status
       ? { status: req.query.status }
@@ -1060,7 +1061,7 @@ router.get("/savings-requests", async (req, res) => {
 
 // PATCH /api/admin/savings-requests/:id
 router.patch(
-  "/savings-requests/:id",
+  "/savings-requests/:id", requirePermission("savings.review"),
   async (req, res) => {
     try {
       const { action } = req.body;
@@ -1210,7 +1211,7 @@ router.patch(
 */
 
 // GET /api/admin/membership
-router.get("/membership", async (req, res) => {
+router.get("/membership", requirePermission("membership.review", "membership.view"), async (req, res) => {
   try {
     const apps = await Membership.find()
       .populate("user", "fullName email")
@@ -1264,7 +1265,7 @@ const EDITABLE_MEMBERSHIP_FIELDS = [
 
 // PATCH /api/admin/membership/:id
 router.patch(
-  "/membership/:id",
+  "/membership/:id", requirePermission("membership.review"),
   async (req, res) => {
     try {
       const updates = {};
@@ -1380,7 +1381,7 @@ router.patch(
 
 // GET /api/admin/loan-eligibility-applications?status=pending
 router.get(
-  "/loan-eligibility-applications",
+  "/loan-eligibility-applications", requirePermission("loan.eligibility", "loan.eligibility.view"),
   async (req, res) => {
     try {
       const filter = req.query.status
@@ -1411,7 +1412,7 @@ router.get(
 // record next to what Dojah returned (BVN record, ID document, live selfie).
 // Photos are fetched live from Dojah and are never stored in MongoDB.
 router.get(
-  "/loan-eligibility-applications/:id/verification",
+  "/loan-eligibility-applications/:id/verification", requirePermission("loan.eligibility", "loan.eligibility.view"),
   async (req, res) => {
     try {
       const application = await LoanEligibility.findById(req.params.id)
@@ -1540,7 +1541,7 @@ router.get(
 // PATCH /api/admin/loan-eligibility-applications/:id
 // { action: "approve" | "reject", rejectionReason?, confirmMismatch? }
 router.patch(
-  "/loan-eligibility-applications/:id",
+  "/loan-eligibility-applications/:id", requirePermission("loan.eligibility"),
   async (req, res) => {
     try {
       const {
@@ -1808,7 +1809,7 @@ router.patch(
   ============================
 */
 
-router.get("/loans", async (req, res) => {
+router.get("/loans", requirePermission("loans.view"), async (req, res) => {
   try {
     const filter = req.query.status
       ? { status: req.query.status }
@@ -1831,7 +1832,7 @@ router.get("/loans", async (req, res) => {
 });
 
 router.get(
-  "/loans/:id",
+  "/loans/:id", requirePermission("loans.view"),
   async (req, res) => {
     try {
       const loan =
@@ -1860,7 +1861,7 @@ router.get(
 );
 
 router.patch(
-  "/loans/:id",
+  "/loans/:id", requirePermission("loan.decide"),
   async (req, res) => {
     try {
       const {
@@ -2094,7 +2095,7 @@ router.patch(
 );
 
 router.patch(
-  "/loans/:id/disburse",
+  "/loans/:id/disburse", requirePermission("loan.disburse"),
   async (req, res) => {
     try {
       const loan =
@@ -2235,7 +2236,7 @@ router.patch(
 */
 
 router.get(
-  "/loan-repayments",
+  "/loan-repayments", requirePermission("repayments.view", "repayments.review"),
   async (req, res) => {
     try {
       const filter = req.query.status
@@ -2274,7 +2275,7 @@ router.get(
 );
 
 router.patch(
-  "/loan-repayments/:id",
+  "/loan-repayments/:id", requirePermission("repayments.review"),
   async (req, res) => {
     try {
       const { action } =
@@ -2438,7 +2439,7 @@ router.patch(
 */
 
 router.get(
-  "/withdrawals",
+  "/withdrawals", requirePermission("withdrawals.view"),
   async (req, res) => {
     try {
       const filter = req.query.status
@@ -2469,7 +2470,7 @@ router.get(
 );
 
 router.post(
-  "/withdrawals/:id/sync",
+  "/withdrawals/:id/sync", requirePermission("withdrawals.sync"),
   async (req, res) => {
     try {
       const withdrawal =
@@ -2622,7 +2623,7 @@ router.post(
 */
 
 router.get(
-  "/dividends",
+  "/dividends", requirePermission("dividends.view"),
   async (req, res) => {
     try {
       const distributions =
@@ -2660,7 +2661,7 @@ router.get(
 );
 
 router.post(
-  "/dividends",
+  "/dividends", requirePermission("dividends.prepare"),
   async (req, res) => {
     try {
       const {
@@ -2778,7 +2779,7 @@ router.post(
 );
 
 router.get(
-  "/dividends/:id",
+  "/dividends/:id", requirePermission("dividends.view"),
   async (req, res) => {
     try {
       const distribution =
@@ -2850,7 +2851,7 @@ async function completeDistributionIfDone(distributionId) {
   }
 }
 
-router.post("/dividends/:id/calculate", async (req, res) => {
+router.post("/dividends/:id/calculate", requirePermission("dividends.prepare"), async (req, res) => {
   try {
     const distribution = await DividendDistribution.findById(req.params.id);
 
@@ -2968,7 +2969,7 @@ router.post("/dividends/:id/calculate", async (req, res) => {
   }
 });
 
-router.post("/dividends/:id/approve", async (req, res) => {
+router.post("/dividends/:id/approve", requirePermission("dividends.approve"), async (req, res) => {
   try {
     const distribution = await DividendDistribution.findById(req.params.id);
 
@@ -3014,7 +3015,7 @@ router.post("/dividends/:id/approve", async (req, res) => {
 // GET /api/admin/dividends/:id/entries/:entryId/breakdown
 // Lists every approved repayment (with its interest portion) behind one
 // member's dividend figure, so the number can be checked line by line.
-router.get("/dividends/:id/entries/:entryId/breakdown", async (req, res) => {
+router.get("/dividends/:id/entries/:entryId/breakdown", requirePermission("dividends.view"), async (req, res) => {
   try {
     const distribution = await DividendDistribution.findById(req.params.id);
     const entry = distribution
@@ -3052,7 +3053,7 @@ router.get("/dividends/:id/entries/:entryId/breakdown", async (req, res) => {
   }
 });
 
-router.patch("/dividends/:id/entries/:entryId", async (req, res) => {
+router.patch("/dividends/:id/entries/:entryId", requirePermission("dividends.pay"), async (req, res) => {
   try {
     const distribution = await DividendDistribution.findById(req.params.id);
 
@@ -3119,7 +3120,7 @@ router.patch("/dividends/:id/entries/:entryId", async (req, res) => {
   }
 });
 
-router.patch("/dividends/:id/pay-all", async (req, res) => {
+router.patch("/dividends/:id/pay-all", requirePermission("dividends.pay"), async (req, res) => {
   try {
     const distribution = await DividendDistribution.findById(req.params.id);
 
@@ -3201,7 +3202,7 @@ const pageParams = (req) => {
 };
 
 // GET /api/admin/ledger/trial-balance?asOf=YYYY-MM-DD   (amounts in naira)
-router.get("/ledger/trial-balance", async (req, res) => {
+router.get("/ledger/trial-balance", requirePermission("ledger.view"), async (req, res) => {
   try {
     const tb = await trialBalance({ asOf: req.query.asOf });
     res.json({
@@ -3224,7 +3225,7 @@ router.get("/ledger/trial-balance", async (req, res) => {
 });
 
 // GET /api/admin/ledger/entries?page=&limit=&account=&user=&sourceType=&from=&to=
-router.get("/ledger/entries", async (req, res) => {
+router.get("/ledger/entries", requirePermission("ledger.view"), async (req, res) => {
   try {
     const { page, limit, skip } = pageParams(req);
     const q = {};
@@ -3263,7 +3264,7 @@ router.get("/ledger/entries", async (req, res) => {
 });
 
 // GET /api/admin/audit-logs?page=&limit=&action=&actor=
-router.get("/audit-logs", async (req, res) => {
+router.get("/audit-logs", requirePermission("audit.view"), async (req, res) => {
   try {
     const { page, limit, skip } = pageParams(req);
     const q = {};
@@ -3282,7 +3283,7 @@ router.get("/audit-logs", async (req, res) => {
 });
 
 // GET /api/admin/reports/summary - totals computed in the database, not the browser
-router.get("/reports/summary", async (req, res) => {
+router.get("/reports/summary", requirePermission("reports.view"), async (req, res) => {
   try {
     const sum = (rows) => Number(rows[0]?.total || 0);
 

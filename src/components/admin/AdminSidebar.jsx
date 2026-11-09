@@ -20,6 +20,8 @@ import {
 } from "react-icons/fa";
 
 import logo from "../../assets/logo.png";
+import { useAuth } from "../../context/AuthContext";
+import { canOpenSection } from "../../utils/adminAccess";
 
 const menuItems = [
   {
@@ -115,6 +117,10 @@ const menuItems = [
 ];
 
 function AdminSidebar({ activeSection, onNavigate, onLogout }) {
+  const { user } = useAuth();
+  // Each office only sees the tabs its role may use.
+  const visibleItems = menuItems.filter((item) => canOpenSection(user, item.id));
+
   return (
     <aside className="admin-sidebar">
       <div className="admin-brand">
@@ -128,7 +134,7 @@ function AdminSidebar({ activeSection, onNavigate, onLogout }) {
       <nav className="admin-navigation">
         <p className="admin-nav-label">MAIN MENU</p>
 
-        {menuItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
 
           return (

@@ -3,6 +3,7 @@ import SavingsTransaction from "../models/SavingsTransaction.js";
 import LoanRepayment from "../models/LoanRepayment.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
+import { requirePermission } from "../middleware/adminPermission.js";
 import { creditPaystackSavingsPayment } from "../utils/paystackSavingsSettlement.js";
 import { creditPaystackLoanRepayment } from "../utils/loanRepaymentSettlement.js";
 import { audit } from "../utils/audit.js";
@@ -56,7 +57,7 @@ async function fetchPaystackSuccesses(from, to) {
 
 // GET /api/admin/reconciliation/paystack?from=&to=
 // Compares what Paystack says it collected with what we recorded.
-router.get("/paystack", async (req, res) => {
+router.get("/paystack", requirePermission("reconciliation.view"), async (req, res) => {
   const win = parseWindow(req.query);
   if (win.error) return res.status(400).json({ message: win.error });
 
@@ -183,7 +184,7 @@ router.get("/paystack", async (req, res) => {
 // POST /api/admin/reconciliation/paystack/credit  { reference }
 // Re-verifies a payment directly with Paystack and credits it. Uses the same
 // idempotent crediting as the webhook, so running it twice never double-pays.
-router.post("/paystack/credit", async (req, res) => {
+router.post("/paystack/credit", requirePermission("reconciliation.credit"), async (req, res) => {
   const reference = String(req.body?.reference || "").trim();
   if (!reference) return res.status(400).json({ message: "Enter a payment reference." });
 

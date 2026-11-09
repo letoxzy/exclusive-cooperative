@@ -120,6 +120,14 @@ const userSchema = new mongoose.Schema(
     ussdActivationExpires: { type: Date, select: false },
     ussdActivationFailures: { type: Number, default: 0, select: false },
 
+    // Which office an administrator belongs to (see utils/adminPermissions.js).
+    // Only used when role is "admin"; existing administrators count as "full".
+    adminRole: {
+      type: String,
+      enum: ["full", "membership", "cash", "loan", "disbursement", "finance", "supervisor"],
+      default: "full",
+    },
+
     // Email sign-in verification code (see utils/loginOtp.js). Only a keyed
     // hash of the 6-digit code is stored; all fields are hidden by default.
     loginOtpHash: { type: String, default: null, select: false },

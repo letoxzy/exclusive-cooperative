@@ -20,6 +20,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || "",
+      icon: "/logo.png",
+      badge: "/logo.png",
       data: { url: data.url || "/dashboard" },
     }),
   );

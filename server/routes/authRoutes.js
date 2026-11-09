@@ -3,6 +3,7 @@ import crypto from "crypto";
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { adminAccessPayload } from "../utils/adminPermissions.js";
 import { validatePassword } from "../utils/passwordPolicy.js";
 import { recordLoginDevice } from "../utils/deviceTracker.js";
 import {
@@ -239,6 +240,9 @@ const buildLoginPayload = (user, token) => ({
   autoLockSeconds: user.autoLockSeconds,
   biometricEnabled: user.biometricEnabled,
   createdAt: user.createdAt,
+  // For administrators: which office they belong to and what it may do, so the
+  // admin page can show only their own tabs. Empty for ordinary members.
+  ...adminAccessPayload(user),
   token,
 });
 
@@ -519,7 +523,8 @@ router.post("/logout", (req, res) => {
 
 // GET /api/auth/me
 router.get("/me", protect, async (req, res) => {
-  res.json(req.user);
+  const plain = typeof req.user.toObject === "function" ? req.user.toObject() : req.user;
+  res.json({ ...plain, ...adminAccessPayload(req.user) });
 });
 
 export default router;

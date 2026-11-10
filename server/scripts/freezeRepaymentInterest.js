@@ -1,13 +1,3 @@
-// One-off: stamps repayments that were approved BEFORE per-repayment interest
-// was recorded, so dividends use stored figures instead of derived ones.
-//
-//   node scripts/freezeRepaymentInterest.js          -> dry run (counts only)
-//   node scripts/freezeRepaymentInterest.js --apply  -> writes the split
-//
-// approvedAt <- the record's updatedAt (the approval was its last write).
-// The split uses the loan's CURRENT terms, so a repayment approved while a
-// different overdue-charge total applied may differ by a small amount. Review
-// the dry-run count, back up the database, and run on staging first.
 import "dotenv/config";
 import mongoose from "mongoose";
 import connectDB from "../config/db.js";

@@ -1,6 +1,3 @@
-// Shows how many members WOULD get a contribution reminder right now,
-// without sending anything. Run from the server folder:
-//   npm run reminders:dry-run
 import "dotenv/config";
 import mongoose from "mongoose";
 import connectDB from "../config/db.js";

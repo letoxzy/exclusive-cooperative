@@ -105,11 +105,12 @@ function ChangePassword() {
       await refreshUser();
 
       setMessage(
-        "Password changed successfully. Redirecting to your dashboard...",
+        "Password changed successfully. Redirecting...",
       );
 
       setTimeout(() => {
-        navigate("/dashboard", {
+        // Staff go back to the admin page, members to their dashboard.
+        navigate(user?.role === "admin" ? "/admin" : "/dashboard", {
           replace: true,
         });
       }, 700);

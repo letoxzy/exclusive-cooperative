@@ -16,7 +16,7 @@ import {
 
 import AdminSidebar from "../components/admin/AdminSidebar";
 import MembershipModal from "../components/admin/MembershipModal";
-import { canOpenSection, hasPermission } from "../utils/adminAccess";
+import { canOpenSection, hasPermission, landingSection } from "../utils/adminAccess";
 import AddExistingMemberModal from "../components/admin/AddExistingMemberModal";
 import AdminNotifications from "../components/admin/AdminNotifications";
 import AdminActionModal from "../components/admin/AdminActionModal";
@@ -40,7 +40,9 @@ function AdminDashboard() {
   // What this office role may do (the server enforces the same rules).
   const can = (...wanted) => hasPermission(user, ...wanted);
 
-  const [activeSection, setActiveSection] = useState("overview");
+  // Each office lands on its own first tab (only the Full Administrator and
+  // Supervisor have Overview).
+  const [activeSection, setActiveSection] = useState(() => landingSection(user));
 
   const [requests, setRequests] = useState([]);
   const [members, setMembers] = useState([]);
@@ -288,7 +290,7 @@ function AdminDashboard() {
       if (section === "withdrawals") return await loadWithdrawals();
       if (section === "dividends") return await loadDividends();
       if (section === "transactions") return await Promise.all([loadRequests(), loadLoanRepayments(), loadLoans()]);
-      if (section === "reports") return await Promise.all([loadMembers(), loadLoans(), loadLoanRepayments(), loadDividends(), loadRequests()]);
+      if (section === "reports") return await Promise.all([loadMembers(), loadLoans(), loadLoanRepayments(), loadDividends(), loadApplications()]);
       if (section === "settings") return await Promise.all([loadCooperativeSettings(), refreshUser()]);
     } catch (err) {
       setError(err?.message || "Unable to refresh this section.");
@@ -368,7 +370,9 @@ function AdminDashboard() {
 
   // Staff who land on a tab their office role cannot use go back to Overview.
   useEffect(() => {
-    if (!canOpenSection(user, activeSection)) setActiveSection("overview");
+    if (!canOpenSection(user, activeSection)) {
+      setActiveSection(landingSection(user));
+    }
   }, [user, activeSection]);
 
   /* ================================
@@ -417,6 +421,22 @@ function AdminDashboard() {
       loader = loadDividends;
     } else if (activeSection === "withdrawals") {
       loader = loadWithdrawals;
+    } else if (activeSection === "loans") {
+      loader = loadLoans;
+    } else if (activeSection === "transactions") {
+      loader = async () => {
+        await Promise.all([loadRequests(), loadLoanRepayments(), loadLoans()]);
+      };
+    } else if (activeSection === "reports") {
+      loader = async () => {
+        await Promise.all([
+          loadMembers(),
+          loadLoans(),
+          loadLoanRepayments(),
+          loadDividends(),
+          loadApplications(),
+        ]);
+      };
     } else if (activeSection === "settings") {
       loader = loadCooperativeSettings;
     }
@@ -972,18 +992,6 @@ function AdminDashboard() {
   const renderOverview = () => {
     return (
       <>
-        {user?.adminRoleLabel &&
-          Array.isArray(user.permissions) &&
-          !user.permissions.includes("*") && (
-            <section className="admin-card">
-              <p className="admin-subtitle">
-                You are signed in as <strong>{user.adminRoleLabel}</strong>.
-                The menu shows only the tabs your office handles, and the
-                figures on this page cover only what you are allowed to see.
-              </p>
-            </section>
-          )}
-
         <div className="admin-page-heading">
           <div>
             <p className="eyebrow">Dashboard</p>
@@ -1057,12 +1065,14 @@ function AdminDashboard() {
                 <h2>Savings Overview</h2>
               </div>
 
-              <button
-                className="admin-link-btn"
-                onClick={() => setActiveSection("savings")}
-              >
-                View Requests
-              </button>
+              {canOpenSection(user, "savings") && (
+                <button
+                  className="admin-link-btn"
+                  onClick={() => setActiveSection("savings")}
+                >
+                  View Requests
+                </button>
+              )}
             </div>
 
             <div className="admin-big-number">
@@ -1093,12 +1103,14 @@ function AdminDashboard() {
                 <h2>Applications</h2>
               </div>
 
-              <button
-                className="admin-link-btn"
-                onClick={() => setActiveSection("membership")}
-              >
-                Review
-              </button>
+              {canOpenSection(user, "membership") && (
+                <button
+                  className="admin-link-btn"
+                  onClick={() => setActiveSection("membership")}
+                >
+                  Review
+                </button>
+              )}
             </div>
 
             <div className="admin-big-number">{pendingApplications}</div>
@@ -1121,12 +1133,14 @@ function AdminDashboard() {
               <h2>Recent Savings Requests</h2>
             </div>
 
-            <button
-              className="admin-link-btn"
-              onClick={() => setActiveSection("savings")}
-            >
-              View All
-            </button>
+            {canOpenSection(user, "savings") && (
+              <button
+                className="admin-link-btn"
+                onClick={() => setActiveSection("savings")}
+              >
+                View All
+              </button>
+            )}
           </div>
 
           {requests.length === 0 ? (
@@ -3208,10 +3222,12 @@ function AdminDashboard() {
             <span>Recorded Dividend Paid Amount</span>
             <strong>₦{totalDividendPaid.toLocaleString()}</strong>
           </div>
-          <div className="admin-mini-stat">
-            <span>Membership Applications</span>
-            <strong>{applications.length}</strong>
-          </div>
+          {can("membership.review", "membership.view") && (
+            <div className="admin-mini-stat">
+              <span>Membership Applications</span>
+              <strong>{applications.length}</strong>
+            </div>
+          )}
           <div className="admin-mini-stat">
             <span>Loan Applications</span>
             <strong>{loans.length}</strong>
@@ -3507,106 +3523,108 @@ function AdminDashboard() {
         </section>
 
         {/* COOPERATIVE CONFIGURATION */}
-        <section className="admin-card">
-          <div className="admin-card-header">
-            <div>
-              <p className="eyebrow">Cooperative</p>
-              <h2>Cooperative Configuration</h2>
-            </div>
-          </div>
-
-
-          <div className="admin-settings-note">
-            <strong>Manage the live cooperative settings</strong>
-            <p>
-              These values are used by the loan eligibility and repayment
-              screens across the website and mobile app.
-            </p>
-          </div>
-
-          <form
-            className="admin-settings-form"
-            onSubmit={saveCooperativeSettings}
-          >
-            <div className="admin-form-grid">
-              <label>
-                Loan eligibility multiplier
-                <input
-                  type="number"
-                  min="0.01"
-                  max="2"
-                  step="0.01"
-                  value={cooperativeSettings.loanMultiplier}
-                  onChange={(e) =>
-                    setCooperativeSettings((prev) => ({
-                      ...prev,
-                      loanMultiplier: e.target.value,
-                    }))
-                  }
-                  disabled={savingCooperativeSettings}
-                />
-                <span className="admin-settings-footnote">
-                  Maximum allowed: 2× current savings balance.
-                </span>
-              </label>
-
-              <label>
-                Repayment account name
-                <input
-                  type="text"
-                  value={cooperativeSettings.repaymentAccountName}
-                  onChange={(e) =>
-                    setCooperativeSettings((prev) => ({
-                      ...prev,
-                      repaymentAccountName: e.target.value,
-                    }))
-                  }
-                  disabled={savingCooperativeSettings}
-                />
-              </label>
-
-              <label>
-                Repayment bank
-                <input
-                  type="text"
-                  value={cooperativeSettings.repaymentBank}
-                  onChange={(e) =>
-                    setCooperativeSettings((prev) => ({
-                      ...prev,
-                      repaymentBank: e.target.value,
-                    }))
-                  }
-                  disabled={savingCooperativeSettings}
-                />
-              </label>
-
-              <label>
-                Repayment account number
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={10}
-                  value={cooperativeSettings.repaymentAccountNumber}
-                  onChange={(e) =>
-                    setCooperativeSettings((prev) => ({
-                      ...prev,
-                      repaymentAccountNumber: e.target.value.replace(/\D/g, ""),
-                    }))
-                  }
-                  disabled={savingCooperativeSettings}
-                />
-              </label>
+        {can("settings.manage") && (
+          <section className="admin-card">
+            <div className="admin-card-header">
+              <div>
+                <p className="eyebrow">Cooperative</p>
+                <h2>Cooperative Configuration</h2>
+              </div>
             </div>
 
-            <button
-              type="submit"
-              className="update-btn"
-              disabled={savingCooperativeSettings}
+
+            <div className="admin-settings-note">
+              <strong>Manage the live cooperative settings</strong>
+              <p>
+                These values are used by the loan eligibility and repayment
+                screens across the website and mobile app.
+              </p>
+            </div>
+
+            <form
+              className="admin-settings-form"
+              onSubmit={saveCooperativeSettings}
             >
-              {savingCooperativeSettings ? "Saving…" : "Save configuration"}
-            </button>
-          </form>
-        </section>
+              <div className="admin-form-grid">
+                <label>
+                  Loan eligibility multiplier
+                  <input
+                    type="number"
+                    min="0.01"
+                    max="2"
+                    step="0.01"
+                    value={cooperativeSettings.loanMultiplier}
+                    onChange={(e) =>
+                      setCooperativeSettings((prev) => ({
+                        ...prev,
+                        loanMultiplier: e.target.value,
+                      }))
+                    }
+                    disabled={savingCooperativeSettings}
+                  />
+                  <span className="admin-settings-footnote">
+                    Maximum allowed: 2× current savings balance.
+                  </span>
+                </label>
+
+                <label>
+                  Repayment account name
+                  <input
+                    type="text"
+                    value={cooperativeSettings.repaymentAccountName}
+                    onChange={(e) =>
+                      setCooperativeSettings((prev) => ({
+                        ...prev,
+                        repaymentAccountName: e.target.value,
+                      }))
+                    }
+                    disabled={savingCooperativeSettings}
+                  />
+                </label>
+
+                <label>
+                  Repayment bank
+                  <input
+                    type="text"
+                    value={cooperativeSettings.repaymentBank}
+                    onChange={(e) =>
+                      setCooperativeSettings((prev) => ({
+                        ...prev,
+                        repaymentBank: e.target.value,
+                      }))
+                    }
+                    disabled={savingCooperativeSettings}
+                  />
+                </label>
+
+                <label>
+                  Repayment account number
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={cooperativeSettings.repaymentAccountNumber}
+                    onChange={(e) =>
+                      setCooperativeSettings((prev) => ({
+                        ...prev,
+                        repaymentAccountNumber: e.target.value.replace(/\D/g, ""),
+                      }))
+                    }
+                    disabled={savingCooperativeSettings}
+                  />
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                className="update-btn"
+                disabled={savingCooperativeSettings}
+              >
+                {savingCooperativeSettings ? "Saving…" : "Save configuration"}
+              </button>
+            </form>
+          </section>
+        )}
       </>
     );
   };
@@ -3616,6 +3634,8 @@ function AdminDashboard() {
   ================================= */
 
   const renderContent = () => {
+    if (!canOpenSection(user, activeSection)) return null;
+
     switch (activeSection) {
       case "overview":
         return renderOverview();
@@ -3693,13 +3713,19 @@ function AdminDashboard() {
 
           <div className="admin-topbar-actions">
             <AdminNotifications
-              applications={applications}
-              requests={requests}
-              loans={loans}
-              loanEligibilityApplications={loanEligibilityApplications}
-              loanRepayments={loanRepayments}
-              withdrawals={withdrawals}
-              securityAlerts={securityAlerts}
+              applications={canOpenSection(user, "membership") ? applications : []}
+              requests={canOpenSection(user, "savings") ? requests : []}
+              loans={canOpenSection(user, "loan-requests") ? loans : []}
+              loanEligibilityApplications={
+                canOpenSection(user, "loan-eligibility")
+                  ? loanEligibilityApplications
+                  : []
+              }
+              loanRepayments={
+                canOpenSection(user, "repayments") ? loanRepayments : []
+              }
+              withdrawals={canOpenSection(user, "withdrawals") ? withdrawals : []}
+              securityAlerts={canOpenSection(user, "members") ? securityAlerts : []}
               onNavigate={setActiveSection}
             />
 

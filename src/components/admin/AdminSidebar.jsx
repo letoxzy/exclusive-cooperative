@@ -21,7 +21,7 @@ import {
 
 import logo from "../../assets/logo.png";
 import { useAuth } from "../../context/AuthContext";
-import { canOpenSection } from "../../utils/adminAccess";
+import { visibleSections } from "../../utils/adminAccess";
 
 const menuItems = [
   {
@@ -119,7 +119,10 @@ const menuItems = [
 function AdminSidebar({ activeSection, onNavigate, onLogout }) {
   const { user } = useAuth();
   // Each office only sees the tabs its role may use.
-  const visibleItems = menuItems.filter((item) => canOpenSection(user, item.id));
+  const itemsById = Object.fromEntries(menuItems.map((item) => [item.id, item]));
+  const visibleItems = visibleSections(user)
+    .map((id) => itemsById[id])
+    .filter(Boolean);
 
   return (
     <aside className="admin-sidebar">

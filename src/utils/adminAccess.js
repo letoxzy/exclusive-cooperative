@@ -1,12 +1,34 @@
 /**
- * Which admin tabs and actions an administrator's office role may use.
+ * Which admin tabs and actions an administrator's office may use.
  *
- * The server decides this (see utils/adminPermissions.js on the backend) and
- * enforces it on every admin request. The website only uses the same list to
- * hide tabs and buttons the server would refuse, so staff are not shown things
- * they cannot do. The signed-in user carries `permissions` (from login or
- * /auth/me); "*" means everything (the Full Administrator).
+ * The server decides this (utils/adminPermissions.js on the backend) and
+ * enforces it on every admin request. The website only uses the same
+ * information to hide tabs and buttons the server would refuse, so each office
+ * sees just its own work. The signed-in user carries:
+ *   permissions  what the office may do ("*" = everything, the Full Administrator)
+ *   sections     the tabs the office sees, in its own order (first = landing tab)
  */
+
+export const SECTION_ORDER = [
+  "overview",
+  "members",
+  "membership",
+  "savings",
+  "loans",
+  "loan-eligibility",
+  "loan-requests",
+  "repayments",
+  "dividends",
+  "transactions",
+  "withdrawals",
+  "reports",
+  "ledger",
+  "reconciliation",
+  "deletions",
+  "audit",
+  "gallery",
+  "settings",
+];
 
 export const hasPermission = (user, ...wanted) => {
   if (user?.role !== "admin") return false;
@@ -18,8 +40,8 @@ export const hasPermission = (user, ...wanted) => {
   return wanted.some((permission) => have.includes(permission));
 };
 
-// A tab shows when the user holds at least one of these.
-export const SECTION_PERMISSIONS = {
+// Used only when an older server does not send `sections`.
+const SECTION_PERMISSIONS = {
   overview: ["overview.view"],
   members: ["members.view"],
   membership: ["membership.review", "membership.view"],
@@ -37,10 +59,25 @@ export const SECTION_PERMISSIONS = {
   deletions: ["deletions.manage"],
   audit: ["audit.view"],
   gallery: ["gallery.manage"],
-  settings: ["settings.manage"],
 };
 
-export const canOpenSection = (user, sectionId) => {
-  const needed = SECTION_PERMISSIONS[sectionId];
-  return needed ? hasPermission(user, ...needed) : false;
+/** The tabs this administrator sees, in the order they are shown. */
+export const visibleSections = (user) => {
+  if (user?.role !== "admin") return [];
+
+  if (Array.isArray(user.sections)) {
+    return user.sections.filter((id) => SECTION_ORDER.includes(id));
+  }
+
+  // Everyone keeps "settings" (their own name and password).
+  return SECTION_ORDER.filter(
+    (id) =>
+      id === "settings" || hasPermission(user, ...(SECTION_PERMISSIONS[id] || [])),
+  );
 };
+
+export const canOpenSection = (user, sectionId) =>
+  visibleSections(user).includes(sectionId);
+
+/** The tab shown right after signing in. */
+export const landingSection = (user) => visibleSections(user)[0] || "settings";

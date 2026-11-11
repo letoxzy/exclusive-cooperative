@@ -1,10 +1,3 @@
-// One-off: turns today's balances into OPENING journal entries so the ledger
-// starts in agreement with the database. Safe to re-run (idempotent references).
-//
-//   node scripts/backfillLedger.js          -> dry run (prints what it would post)
-//   node scripts/backfillLedger.js --apply  -> posts the entries
-//
-// Run it on a STAGING COPY first, with a database backup taken.
 import "dotenv/config";
 import mongoose from "mongoose";
 import connectDB from "../config/db.js";

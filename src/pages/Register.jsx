@@ -6,10 +6,52 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { getPasswordChecks, isStrongPassword } from "../utils/passwordPolicy";
 import { useFlash } from "../context/ToastContext.jsx";
 
+const MIN_AGE = 18;
+const MAX_AGE = 110;
+
+// "YYYY-MM-DD" from a date input -> age in whole years (null if not a real date).
+function ageFromDateOfBirth(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+  if (!match) return null;
+
+  const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) {
+    return null;
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - y;
+  if (today.getMonth() + 1 < m || (today.getMonth() + 1 === m && today.getDate() < d)) {
+    age -= 1;
+  }
+  return age;
+}
+
+// Same date format the date input uses, N years before today.
+function yearsAgo(years) {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// 0803..., 803..., 234803... and +234803... are all fine.
+function isNigerianPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return (
+    digits.length === 10 ||
+    (digits.length === 11 && digits.startsWith("0")) ||
+    (digits.length === 13 && digits.startsWith("234"))
+  );
+}
+
 function Register() {
   const [form, setForm] = useState({
     fullName: "",
     email: "",
+    phone: "",
+    dateOfBirth: "",
     password: "",
     confirmPassword: "",
   });
@@ -38,8 +80,26 @@ function Register() {
   const update = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const age = ageFromDateOfBirth(form.dateOfBirth);
+  const isUnderage = age !== null && age < MIN_AGE;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!isNigerianPhone(form.phone)) {
+      setError("Enter a valid Nigerian phone number, for example 0803 123 4567.");
+      return;
+    }
+
+    if (age === null || age > MAX_AGE) {
+      setError("Enter your date of birth.");
+      return;
+    }
+
+    if (isUnderage) {
+      setError("You must be at least 18 years old to register.");
+      return;
+    }
 
     if (!isStrongPassword(form.password)) {
       setError(
@@ -57,7 +117,13 @@ function Register() {
     setLoading(true);
 
     try {
-      await register(form.fullName, form.email, form.password);
+      await register(
+        form.fullName,
+        form.email,
+        form.password,
+        form.phone,
+        form.dateOfBirth,
+      );
       navigate("/membership");
     } catch (err) {
       setError(err.message);
@@ -96,6 +162,49 @@ function Register() {
               value={form.email}
               onChange={update("email")}
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="phone">Phone Number *</label>
+            <input
+              id="phone"
+              type="tel"
+              required
+              autoComplete="tel"
+              inputMode="tel"
+              placeholder="0803 123 4567"
+              value={form.phone}
+              onChange={update("phone")}
+            />
+            <small className="field-hint">
+              You can use this number to log in.
+            </small>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="dateOfBirth">Date of Birth *</label>
+            <input
+              id="dateOfBirth"
+              type="date"
+              required
+              autoComplete="bday"
+              min={yearsAgo(MAX_AGE)}
+              max={yearsAgo(MIN_AGE)}
+              value={form.dateOfBirth}
+              onChange={update("dateOfBirth")}
+            />
+            {age !== null && (
+              <small className={`field-hint${isUnderage ? " field-hint-error" : ""}`}>
+                {isUnderage
+                  ? "You must be at least 18 years old to register."
+                  : `Age: ${age} years`}
+              </small>
+            )}
+            {age === null && (
+              <small className="field-hint">
+                You must be 18 or older to register.
+              </small>
+            )}
           </div>
 
           <div className="form-group">

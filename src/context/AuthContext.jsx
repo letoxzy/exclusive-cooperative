@@ -18,8 +18,9 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email, password) => {
-    const data = await request("/auth/login", { method: "POST", body: { email, password } });
+  // `identifier` is an email address, a phone number or a full name.
+  const login = async (identifier, password) => {
+    const data = await request("/auth/login", { method: "POST", body: { identifier, password } });
     // When email verification is on, the password step only returns a
     // challenge. The member is NOT signed in until verifyLogin succeeds.
     if (data.otpRequired) return data;
@@ -39,10 +40,10 @@ export function AuthProvider({ children }) {
   const resendLoginCode = (challengeToken) =>
     request("/auth/login/resend", { method: "POST", body: { challengeToken } });
 
-  const register = async (fullName, email, password) => {
+  const register = async (fullName, email, password, phone, dateOfBirth) => {
     const data = await request("/auth/register", {
       method: "POST",
-      body: { fullName, email, password },
+      body: { fullName, email, password, phone, dateOfBirth },
     });
     setUser({ ...data, token: "cookie" });
     return data;

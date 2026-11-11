@@ -4,6 +4,12 @@ import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { adminAccessPayload } from "../utils/adminPermissions.js";
+import {
+  checkDateOfBirth,
+  findLoginUserId,
+  phoneAlreadyUsed,
+  toStoredPhone,
+} from "../utils/memberIdentity.js";
 import { validatePassword } from "../utils/passwordPolicy.js";
 import { recordLoginDevice } from "../utils/deviceTracker.js";
 import {
@@ -92,10 +98,30 @@ const sendPasswordResetEmail = async ({ email, link }) => {
 // POST /api/auth/register
 router.post("/register", async (req, res) => {
   try {
-    const { fullName, email, password } = req.body;
+    const { password, phone, dateOfBirth } = req.body;
+    const fullName = String(req.body?.fullName || "").trim().replace(/\s+/g, " ");
+    const email = String(req.body?.email || "").trim().toLowerCase();
 
-    if (!fullName || !email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
+    if (!fullName || !email || !password || !phone || !dateOfBirth) {
+      return res.status(400).json({
+        message: "Full name, email, phone number, date of birth and password are required",
+      });
+    }
+
+    if (fullName.length < 2) {
+      return res.status(400).json({ message: "Enter your full name." });
+    }
+
+    const storedPhone = toStoredPhone(phone);
+    if (!storedPhone) {
+      return res.status(400).json({ message: "Enter a valid Nigerian phone number." });
+    }
+
+    // The age rule is enforced here, on the server, so it cannot be bypassed
+    // by editing the website or the app.
+    const dob = checkDateOfBirth(dateOfBirth);
+    if (!dob.ok) {
+      return res.status(400).json({ code: dob.code, message: dob.message });
     }
 
     const passwordError = validatePassword(password);
@@ -108,7 +134,19 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ message: "An account with this email already exists" });
     }
 
-    const user = await User.create({ fullName, email, password });
+    if (await phoneAlreadyUsed(storedPhone)) {
+      return res.status(400).json({
+        message: "An account with this phone number already exists. Try logging in instead.",
+      });
+    }
+
+    const user = await User.create({
+      fullName,
+      email,
+      password,
+      phone: storedPhone,
+      dateOfBirth: dob.date,
+    });
 
     const token = generateToken(user._id);
     setAuthCookie(res, token);
@@ -131,6 +169,15 @@ router.post("/register", async (req, res) => {
       token,
     });
   } catch (err) {
+    if (err?.code === 11000) {
+      const field = Object.keys(err.keyPattern || {})[0];
+      return res.status(400).json({
+        message:
+          field === "phone"
+            ? "An account with this phone number already exists. Try logging in instead."
+            : "An account with this email already exists",
+      });
+    }
     res.status(500).json({ message: err.message });
   }
 });
@@ -246,17 +293,27 @@ const buildLoginPayload = (user, token) => ({
   token,
 });
 
+// One message for "no such account", "name matches several members" and "wrong
+// password", so nobody can use sign-in to find out who is a member.
+const INVALID_LOGIN_MESSAGE =
+  "Invalid login details. Check what you typed, or sign in with your email address.";
+
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
-    const emailValue = String(req.body?.email || "").trim().toLowerCase();
+    // Members may sign in with their email, phone number or full name. (The
+    // mobile app of an older version still sends it as `email`.)
+    const identifier = String(req.body?.identifier ?? req.body?.email ?? "").trim();
     const passwordValue = String(req.body?.password || "");
-    const user = await User.findOne({ email: emailValue }).select(
-      "+securityFailedAttempts +securityLockLevel +securityLockedUntil"
-    );
+    const userId = await findLoginUserId(identifier);
+    const user = userId
+      ? await User.findById(userId).select(
+          "+securityFailedAttempts +securityLockLevel +securityLockedUntil"
+        )
+      : null;
 
     if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({ message: INVALID_LOGIN_MESSAGE });
     }
 
     if (user.isBlocked) {
@@ -312,7 +369,7 @@ router.post("/login", async (req, res) => {
 
       return res.status(401).json({
         code: "INVALID_CREDENTIALS",
-        message: "Invalid email or password",
+        message: INVALID_LOGIN_MESSAGE,
       });
     }
 

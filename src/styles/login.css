@@ -1,1 +1,14 @@
 @import "./auth.css";
+
+/* The login page does not load forgot-password.css, so style the link here
+   exactly as that page does. */
+.forgot-password-link {
+  text-align: right;
+  margin: -5px 0 16px;
+  font-size: 13px;
+}
+
+.forgot-password-link a {
+  color: var(--gold);
+  font-weight: 600;
+}

@@ -13,6 +13,12 @@ const userSchema = new mongoose.Schema(
     },
     password: { type: String, required: true },
 
+    // Collected at registration. The phone number is stored as +234XXXXXXXXXX
+    // and is unique, so a member can sign in with it. (Members who registered
+    // before this existed have neither; their phone is on their membership form.)
+    phone: { type: String, trim: true, unique: true, sparse: true },
+    dateOfBirth: { type: Date },
+
     // Password-reset token fields. The raw token is never stored; only a
     // SHA-256 hash is saved, and the token expires after one hour.
     passwordResetToken: {

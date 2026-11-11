@@ -131,3 +131,17 @@
 .password-toggle:hover {
   color: var(--navy);
 }
+
+/* Small helper text under a field (login and register) */
+.auth-card .field-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.auth-card .field-hint-error {
+  color: #dc2626;
+  font-weight: 600;
+}

@@ -1,3 +1,23 @@
+// Manage office staff accounts for the admin page.
+//
+//   node scripts/staffAdmin.js list
+//   node scripts/staffAdmin.js create [--dry-run] [--promote]
+//   node scripts/staffAdmin.js role <email> <role>
+//   node scripts/staffAdmin.js reset <email>
+//   node scripts/staffAdmin.js disable <email>
+//   node scripts/staffAdmin.js enable <email>
+//
+// "create" reads these from .env (each can hold several comma-separated emails):
+//   STAFF_MEMBERSHIP_EMAIL   STAFF_CASH_EMAIL   STAFF_LOAN_EMAIL
+//   STAFF_DISBURSEMENT_EMAIL STAFF_FINANCE_EMAIL STAFF_SUPERVISOR_EMAIL
+// and optionally matching names, e.g. STAFF_CASH_NAME=Ada Obi,Tunde Bello
+//
+// Every new account gets its OWN random temporary password (printed once) and
+// must choose a new password the first time it signs in. The main administrator
+// (ADMIN_EMAIL, role "full") is never changed by this tool.
+//
+// Safety: an email that already belongs to an ordinary member is skipped unless
+// you add --promote, because promoting turns that member into an administrator.
 import "dotenv/config";
 import crypto from "crypto";
 import connectDB from "../config/db.js";
@@ -13,6 +33,8 @@ const STAFF_ROLE_KEYS = ADMIN_ROLE_KEYS.filter((k) => k !== "full");
 const normalize = (e) => String(e || "").trim().toLowerCase();
 const list = (v) => String(v || "").split(",").map((x) => x.trim()).filter(Boolean);
 
+// A random password with upper, lower, digit and symbol (so it always passes the
+// password rules), e.g. "Kq7#mT2vXp9!".
 function tempPassword() {
   const pick = (chars) => chars[crypto.randomInt(chars.length)];
   const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -85,7 +107,7 @@ async function cmdCreate() {
         if (names[i]) existing.fullName = fullName;
         let temp = "";
         if (!wasAdmin) {
-
+          // Promoted member: replace their password and force a change.
           temp = newTemp();
           existing.password = temp;
           existing.mustChangePassword = true;
@@ -147,7 +169,7 @@ async function cmdRole() {
     process.exit(1);
   }
   user.adminRole = arg2;
-  user.sessionsValidAfter = new Date(); 
+  user.sessionsValidAfter = new Date(); // sign out so the new role applies cleanly
   await user.save();
   console.log(`${user.email} is now: ${ADMIN_ROLES[arg2].label}`);
 }
@@ -171,7 +193,7 @@ async function cmdDisable(disable) {
     process.exit(1);
   }
   user.isBlocked = disable;
-  if (disable) user.sessionsValidAfter = new Date(); 
+  if (disable) user.sessionsValidAfter = new Date(); // signs them out everywhere
   await user.save();
   console.log(`${user.email} is now ${disable ? "DISABLED and signed out everywhere" : "enabled"}.`);
 }

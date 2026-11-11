@@ -6,7 +6,7 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import "../styles/login.css";
 
 function Login() {
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ identifier: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   useFlash(error, "error");
@@ -58,7 +58,7 @@ function Login() {
     setLoading(true);
 
     try {
-      const data = await login(form.email, form.password);
+      const data = await login(form.identifier, form.password);
 
       // Password accepted -> a code was emailed; continue on the code page.
       if (data.otpRequired) {
@@ -95,14 +95,22 @@ function Login() {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="email">Email Address *</label>
+            <label htmlFor="identifier">Email, phone number or name *</label>
             <input
-              id="email"
-              type="email"
+              id="identifier"
+              type="text"
               required
-              value={form.email}
-              onChange={update("email")}
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="Email, phone number or full name"
+              value={form.identifier}
+              onChange={update("identifier")}
             />
+            <small className="field-hint">
+              Signing in with your name only works if no other member has the
+              same name. If it does not work, use your email or phone number.
+            </small>
           </div>
 
           <div className="form-group">

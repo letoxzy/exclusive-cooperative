@@ -41,14 +41,7 @@ connectDB().then(async () => {
 });
 
 const app = express();
-
-// Render (and most hosts) put a proxy in front of the app. Without this,
-// req.ip is the PROXY's address, so express-rate-limit counts every member
-// together: 50 requests per 15 minutes for ALL users combined.
 app.set("trust proxy", 1);
-
-// Security headers. Loaded defensively so the server still starts if the
-// package has not been installed yet (run: npm install).
 try {
   const { default: helmet } = await import("helmet");
   app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
@@ -95,30 +88,18 @@ app.use(cookieParser());
 
 app.use(
   express.json({
-    // Paystack's webhook signature is computed over the exact bytes it
-    // sent. Re-serializing the parsed body with JSON.stringify() usually
-    // matches, but isn't guaranteed to byte-for-byte (key order, number
-    // formatting, etc.), which would falsely reject a genuine webhook.
-    // Capturing the raw buffer here lets the webhook routes verify
-    // against the real payload instead.
     verify: (req, res, buf) => {
       req.rawBody = buf;
     },
   })
 );
 
-// Brute-force protection: limit how often one IP can hit the auth
-// endpoints (login, register, password reset). The per-account lockout
-// already handles repeated failures on one account; this stops an
-// attacker from spraying attempts across many accounts or IPs.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many attempts. Please try again later." },
-  // The app calls GET /auth/me on every launch and screen refresh. It is a
-  // session check, not a sign-in attempt, so it must not use up the budget.
   skip: (req) => req.method === "GET" && req.path === "/me",
 });
 
@@ -149,10 +130,6 @@ app.get("/", (req, res) =>
 app.use((req, res) => {
   res.status(404).json({ message: "Not found" });
 });
-
-// Global error handler: never leak internal error details or stack
-// traces to clients in production.
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error(err);
   const status = err.status || 500;

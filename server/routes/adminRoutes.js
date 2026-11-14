@@ -181,7 +181,9 @@ router.put("/cooperative-settings", requirePermission("settings.manage"), async 
 // GET /api/admin/users
 router.get("/users", requirePermission("members.view"), async (req, res) => {
   try {
-    const users = await User.find()
+    // Members only. Administrator and staff accounts are not members, so they
+    // are left out of the Members tab and of every count built from this list.
+    const users = await User.find({ role: { $ne: "admin" } })
       .select(
         "fullName email role membershipType savingsBalance contributionFrequency shareholding withdrawalReserved avatarUrl isApprovedMember isLoanEligible mustChangePassword isBlocked blockedAt blockedBy blockReason biometricEnabled autoLockSeconds securityFailedAttempts securityLockLevel securityLockedUntil securityLockedPermanently securityLockedAt securityLockReason createdAt updatedAt"
       )
@@ -2897,6 +2899,7 @@ router.post("/dividends/:id/calculate", requirePermission("dividends.prepare"), 
 
     // Only approved, interest-bearing members qualify.
     const eligibleMembers = await User.find({
+      role: "member", // never an administrator or staff account
       isApprovedMember: true,
       membershipType: "interest-bearing",
     }).select("_id");

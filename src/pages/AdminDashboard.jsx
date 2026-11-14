@@ -129,7 +129,9 @@ function AdminDashboard() {
       token: user.token,
     });
 
-    setMembers(data);
+    // Administrator and staff accounts are not members. The server already
+    // leaves them out; this keeps the counts right if an older server answers.
+    setMembers((Array.isArray(data) ? data : []).filter((m) => m.role !== "admin"));
   }, [user.token]);
 
   const loadSecurityAlerts = useCallback(async () => {

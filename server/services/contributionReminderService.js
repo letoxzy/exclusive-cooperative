@@ -7,19 +7,6 @@ import { getContributionStatus, MINIMUM_CONTRIBUTION } from "../utils/contributi
 import { reminderConfig, isReminderDue } from "../utils/reminderSchedule.js";
 import { gateAllowsContribution } from "../utils/contributionGate.js";
 
-/**
- * Contribution reminders.
- *
- * Once per period (day / week / month, matching the member's chosen
- * contribution frequency), members who have NOT yet made an approved
- * contribution in that period get a "Contribution Reminder" notification
- * (in-app + push, and SMS where enabled; see utils/smsNotify.js).
- *
- * - OFF unless CONTRIBUTION_REMINDERS_ENABLED=true.
- * - De-duplicated by period in the Notification collection, so restarts and
- *   hourly re-checks can never send the same reminder twice.
- * - Only sends between CONTRIBUTION_REMINDER_START_HOUR and _END_HOUR (Lagos).
- */
 
 const LABEL = { Daily: "today", Weekly: "this week", Monthly: "this month" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

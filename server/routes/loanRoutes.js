@@ -25,6 +25,20 @@ const uploadReceipt = multer({
 });
 
 
+/*
+  Loan rules
+  ----------
+  - A member must first submit a Full Loan Application (BVN +
+    bio-data pulled from their approved Membership record) and have
+    an admin approve it. Only then are they "loan eligible" and can
+    submit an actual loan request via "Apply for Loan".
+  - Once loan eligible, a member can request up to the configured
+    loan multiplier of their current savings balance (savings/contributions
+    are a separate concern — this route never changes savingsBalance).
+  - Repayment period is 3, 6, or 12 months.
+  - Interest rate scales with term: 3mo = 5%, 6mo = 7%, 12mo = 10%.
+*/
+
 const DEFAULT_COOPERATIVE_SETTINGS = {
   loanMultiplier: 2,
   repaymentAccountName: "Exclusive Cooperative Multipurpose Society Limited",
@@ -53,6 +67,10 @@ const INTEREST_RATE_BY_TERM = {
 
 const BVN_REGEX = /^\d{11}$/;
 
+// Total repayment = principal + interest for the whole term
+// (flat rate on the original amount, not compounding).
+// "interest-free" members are charged 0% regardless of term — they
+// also don't earn dividends (handled separately in dividend routes).
 export function calculateLoanTerms(amount, months, membershipType) {
   const interestRate =
     membershipType === "interest-free" ? 0 : INTEREST_RATE_BY_TERM[months];
@@ -62,6 +80,14 @@ export function calculateLoanTerms(amount, months, membershipType) {
   return { interestRate, totalRepayment };
 }
 
+
+/*
+  GET /api/loans/cooperative-config
+
+  Returns the current cooperative configuration used by member-facing
+  loan/repayment screens. The repayment account details are intentionally
+  the cooperative's published payment destination.
+*/
 router.get("/cooperative-config", async (req, res) => {
   try {
     const settings = await getCooperativeSettings();
@@ -79,6 +105,12 @@ router.get("/cooperative-config", async (req, res) => {
   }
 });
 
+/*
+  GET /api/loans/eligibility-application/me
+
+  Returns the member's most recent Full Loan Application (or null if
+  they haven't submitted one yet).
+*/
 router.get(
   "/eligibility-application/me",
   protect,
@@ -149,6 +181,9 @@ router.get(
   }
 );
 
+// Shared eligibility checks for the actual loan request ("Apply for
+// Loan"). Savings is intentionally kept separate here — this only
+// reads req.user.savingsBalance, never touches it.
 async function getEligibilityBlockers(userId, requestedAmount, eligibleAmount) {
   if (eligibleAmount <= 0) {
     return "You must have savings with the cooperative before applying for a loan.";
@@ -176,7 +211,13 @@ async function getEligibilityBlockers(userId, requestedAmount, eligibleAmount) {
   return null;
 }
 
+/*
+  GET /api/loans/eligibility
 
+  Returns the member's current loan eligibility. "canApply" is only
+  true once the member has an admin-approved Full Loan Application
+  AND their savings-based eligible amount is above zero.
+*/
 router.get("/eligibility", protect, requireApprovedMember, async (req, res) => {
   try {
     const settings = await getCooperativeSettings();

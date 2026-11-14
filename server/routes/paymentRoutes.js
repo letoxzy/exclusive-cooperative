@@ -6,7 +6,7 @@ import Loan from "../models/Loan.js";
 import LoanRepayment from "../models/LoanRepayment.js";
 import mongoose from "mongoose";
 import { protect } from "../middleware/authMiddleware.js";
-import { requireApprovedMember } from "../middleware/membershipMiddleware.js";
+import { memberOnly, requireApprovedMember } from "../middleware/membershipMiddleware.js";
 import { getContributionStatus } from "../utils/contributionRules.js";
 import { creditPaystackSavingsPayment } from "../utils/paystackSavingsSettlement.js";
 import { creditPaystackLoanRepayment } from "../utils/loanRepaymentSettlement.js";
@@ -219,7 +219,7 @@ router.post(
 // { loanId, amount, mobile?, returnUrl? }
 // Starts a Paystack checkout for a loan repayment. The member's balance is
 // only changed after Paystack confirms the payment (verify or webhook).
-router.post("/paystack/loan-repayment/initialize", protect, async (req, res) => {
+router.post("/paystack/loan-repayment/initialize", protect, memberOnly, async (req, res) => {
   try {
     const { loanId, mobile, returnUrl } = req.body || {};
     const amount = round2(req.body?.amount);

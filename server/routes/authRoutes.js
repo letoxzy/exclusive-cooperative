@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { adminAccessPayload } from "../utils/adminPermissions.js";
+import { channelOf } from "../utils/loginAlerts.js";
 import {
   checkDateOfBirth,
   findLoginUserId,
@@ -43,18 +44,13 @@ const PASSWORD_RESET_MESSAGE =
 const hashResetToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
-// Sends the JWT as an httpOnly cookie so the website never has to store
-// it in JavaScript-readable storage. The JSON response still includes the
-// token for the mobile app, which keeps using the Bearer header.
 const isProduction = process.env.NODE_ENV === "production";
 
 const authCookieOptions = {
   httpOnly: true,
   secure: isProduction,
-  // "none" is required for cross-site cookies (Vercel website -> Render API);
-  // it requires secure: true, which is why both are production-only.
   sameSite: isProduction ? "none" : "lax",
-  maxAge: 30 * 24 * 60 * 60 * 1000, // matches the 30-day JWT lifetime
+  maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
 const setAuthCookie = (res, token) => {
@@ -117,8 +113,6 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ message: "Enter a valid Nigerian phone number." });
     }
 
-    // The age rule is enforced here, on the server, so it cannot be bypassed
-    // by editing the website or the app.
     const dob = checkDateOfBirth(dateOfBirth);
     if (!dob.ok) {
       return res.status(400).json({ code: dob.code, message: dob.message });
@@ -195,8 +189,6 @@ router.post("/forgot-password", async (req, res) => {
       "+passwordResetToken +passwordResetExpires"
     );
 
-    // Always return the same message whether or not the account exists.
-    // This prevents the endpoint from revealing registered email addresses.
     if (!user) {
       return res.json({ message: PASSWORD_RESET_MESSAGE });
     }
@@ -287,22 +279,16 @@ const buildLoginPayload = (user, token) => ({
   autoLockSeconds: user.autoLockSeconds,
   biometricEnabled: user.biometricEnabled,
   createdAt: user.createdAt,
-  // For administrators: which office they belong to and what it may do, so the
-  // admin page can show only their own tabs. Empty for ordinary members.
   ...adminAccessPayload(user),
   token,
 });
 
-// One message for "no such account", "name matches several members" and "wrong
-// password", so nobody can use sign-in to find out who is a member.
 const INVALID_LOGIN_MESSAGE =
   "Invalid login details. Check what you typed, or sign in with your email address.";
 
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
-    // Members may sign in with their email, phone number or full name. (The
-    // mobile app of an older version still sends it as `email`.)
     const identifier = String(req.body?.identifier ?? req.body?.email ?? "").trim();
     const passwordValue = String(req.body?.password || "");
     const userId = await findLoginUserId(identifier);
@@ -373,8 +359,12 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Step 2 of sign-in: the password was right, so email a one-time code and
-    // stop here. No session (cookie/token) is issued until /login/verify.
+    if (user.role === "admin" && channelOf(req) === "mobile") {
+      return res.status(403).json({
+        message: "Administrator and staff accounts must sign in on the website.",
+      });
+    }
+
     if (loginOtpRequiredFor(user)) {
       const otp = await createLoginOtp(user._id);
 

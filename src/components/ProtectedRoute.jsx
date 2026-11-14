@@ -10,6 +10,12 @@ function ProtectedRoute({ children, allowPasswordChange = false }) {
     return <Navigate to="/change-password" replace />;
   }
 
+  // Administrator and staff accounts work on the admin page only. The member
+  // pages (dashboard, profile, withdrawals, loans...) are for members.
+  if (user.role === "admin" && !allowPasswordChange) {
+    return <Navigate to="/admin" replace />;
+  }
+
   return children;
 }
 

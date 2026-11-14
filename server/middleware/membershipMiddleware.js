@@ -1,8 +1,19 @@
-// Must run after `protect`.
-// Blocks cooperative financial actions until the member's
-// membership application has been approved by an admin.
+export const ADMIN_NOT_MEMBER_MESSAGE =
+  "Administrator and staff accounts cannot use member services. Use your own member account for personal savings, loans or withdrawals.";
+
+export const memberOnly = (req, res, next) => {
+  if (req.user?.role === "admin") {
+    return res.status(403).json({ message: ADMIN_NOT_MEMBER_MESSAGE });
+  }
+
+  next();
+};
 
 export const requireApprovedMember = (req, res, next) => {
+  if (req.user?.role === "admin") {
+    return res.status(403).json({ message: ADMIN_NOT_MEMBER_MESSAGE });
+  }
+
   if (!req.user.isApprovedMember) {
     return res.status(403).json({
       message:

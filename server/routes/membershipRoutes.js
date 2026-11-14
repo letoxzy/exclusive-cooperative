@@ -4,6 +4,7 @@ import Membership from "../models/Membership.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { memberOnly } from "../middleware/membershipMiddleware.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 
 const router = express.Router();
@@ -13,7 +14,7 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // GET /api/membership/me
-router.get("/me", protect, async (req, res) => {
+router.get("/me", protect, memberOnly, async (req, res) => {
   const application = await Membership.findOne({ user: req.user._id });
   res.json(application);
 });
@@ -48,7 +49,7 @@ const MEMBER_EDITABLE_FIELDS = [
   "beneficiaryRelationship",
 ];
 
-router.patch("/me", protect, async (req, res) => {
+router.patch("/me", protect, memberOnly, async (req, res) => {
   try {
     const application = await Membership.findOne({ user: req.user._id });
 
@@ -108,6 +109,7 @@ router.patch("/me", protect, async (req, res) => {
 router.post(
   "/",
   protect,
+  memberOnly,
   upload.fields([{ name: "passportPhoto" }, { name: "signature" }]),
   async (req, res) => {
     try {

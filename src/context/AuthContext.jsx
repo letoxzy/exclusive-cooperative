@@ -8,6 +8,9 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Restore the session on first load by asking the backend who the
+  // login cookie belongs to. The token itself is never stored in the
+  // browser — it lives in an httpOnly cookie scripts cannot read.
   useEffect(() => {
     request("/auth/me")
       .then((data) => setUser({ ...data, token: "cookie" }))
@@ -15,10 +18,11 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-
+  // `identifier` is an email address, a phone number or a full name.
   const login = async (identifier, password) => {
     const data = await request("/auth/login", { method: "POST", body: { identifier, password } });
-
+    // When email verification is on, the password step only returns a
+    // challenge. The member is NOT signed in until verifyLogin succeeds.
     if (data.otpRequired) return data;
     setUser({ ...data, token: "cookie" });
     return data;

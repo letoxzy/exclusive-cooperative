@@ -2257,7 +2257,6 @@ function AdminDashboard() {
                 ["active", "Active"],
                 ["blocked", "Blocked"],
                 ["security-locked", "Security Locked"],
-                ["admin", "Admin"],
                 ["interest-bearing", "Interest-Bearing"],
                 ["interest-free", "Interest-Free"],
               ].map(([value, label]) => (

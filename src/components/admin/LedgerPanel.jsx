@@ -86,7 +86,7 @@ function LedgerPanel({ token }) {
           <p className="empty-state">
             {loading
               ? "Loading…"
-              : "The ledger is empty. Set LEDGER_ENABLED=true on the server and run the backfill to start recording."}
+              : "The ledger is empty."}
           </p>
         ) : (
           <div className="admin-table-wrap">

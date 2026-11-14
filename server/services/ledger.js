@@ -3,14 +3,6 @@ import JournalEntry from "../models/JournalEntry.js";
 import { toKobo } from "../utils/money.js";
 import { repaymentPortions } from "../utils/dividendBasis.js";
 
-/*
-  Double-entry ledger service. Every money movement posts ONE balanced journal
-  entry through postJournalEntry(). Amounts passed to the helper builders are
-  naira (what the rest of the app uses); they are converted to integer kobo.
-
-  Controlled by LEDGER_ENABLED=true so it can be switched off instantly.
-  When off, every post* helper is a no-op.
-*/
 
 export const ACCOUNTS = {
   BANK: "1000",

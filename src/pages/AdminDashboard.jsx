@@ -23,6 +23,7 @@ import AdminActionModal from "../components/admin/AdminActionModal";
 import AdminNoticeModal from "../components/admin/AdminNoticeModal";
 import GalleryManagement from "../components/admin/GalleryManagement";
 import LedgerPanel from "../components/admin/LedgerPanel";
+import StatisticsPanel from "../components/admin/StatisticsPanel";
 import AuditLogPanel from "../components/admin/AuditLogPanel";
 import DeletionRequestsPanel from "../components/admin/DeletionRequestsPanel";
 import ReconciliationPanel from "../components/admin/ReconciliationPanel";
@@ -3670,6 +3671,9 @@ function AdminDashboard() {
 
       case "withdrawals":
         return renderWithdrawals();
+
+      case "statistics":
+        return <StatisticsPanel token={user.token} />;
 
       case "reports":
         return renderReports();

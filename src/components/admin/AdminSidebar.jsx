@@ -10,6 +10,7 @@ import {
   FaExchangeAlt,
   FaMoneyCheckAlt,
   FaChartBar,
+  FaChartPie,
   FaCog,
   FaImages,
   FaSignOutAlt,
@@ -78,6 +79,11 @@ const menuItems = [
     id: "withdrawals",
     label: "Withdrawals",
     icon: FaMoneyCheckAlt,
+  },
+  {
+    id: "statistics",
+    label: "Statistics",
+    icon: FaChartPie,
   },
   {
     id: "reports",

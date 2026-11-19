@@ -1,10 +1,41 @@
 /* Exclusive Cooperative - service worker for website push notifications.
    Keep this file at the site root (public/sw.js) so it is served from /sw.js. */
 
-self.addEventListener("install", () => self.skipWaiting());
+// App install support: when the site cannot be reached, opening a page shows a
+// friendly offline screen instead of the browser's error. Nothing else is
+// cached, so members always get the latest pages and live account data.
+const OFFLINE_CACHE = "offline-v1";
+const OFFLINE_URL = "/offline.html";
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(OFFLINE_CACHE)
+      .then((cache) => cache.addAll([OFFLINE_URL, "/icons/icon-192.png"]))
+      .then(() => self.skipWaiting()),
+  );
+});
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches
+      .keys()
+      .then((names) =>
+        Promise.all(
+          names.filter((name) => name !== OFFLINE_CACHE).map((name) => caches.delete(name)),
+        ),
+      )
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  // Only page navigations are handled; API calls and files go straight to the network.
+  if (event.request.mode !== "navigate") return;
+
+  event.respondWith(
+    fetch(event.request).catch(() => caches.match(OFFLINE_URL)),
+  );
 });
 
 self.addEventListener("push", (event) => {

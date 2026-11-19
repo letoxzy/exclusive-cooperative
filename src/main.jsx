@@ -6,6 +6,10 @@ import { ToastProvider } from "./context/ToastContext.jsx";
 import "./styles/global.css";
 import App from "./App.jsx";
 import { HelmetProvider } from "react-helmet-async";
+import { initPwa } from "./utils/pwa";
+
+// Makes the website installable as an app (see utils/pwa.js).
+initPwa();
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

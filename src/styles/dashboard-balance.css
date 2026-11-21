@@ -1,0 +1,202 @@
+.dashboard-refresh.dashboard-page .dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 24px;
+  padding: 26px 28px 28px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 24px;
+  background-color: var(--d-forest);
+  background-image:
+    radial-gradient(120% 150% at 100% 0%, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, var(--d-forest) 0%, var(--d-forest-deep) 100%);
+  box-shadow: 0 12px 30px rgba(5, 74, 48, 0.22);
+  color: #fff;
+}
+
+/* Main figure: Locked Savings */
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-card:first-child {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 0 4px;
+  border: 0;
+  background: transparent;
+}
+
+/* The three smaller figures: tiles, no lines */
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-card:not(:first-child) {
+  grid-column: auto;
+  grid-row: auto;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-card:nth-child(2) {
+  border: 0;
+}
+
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-figure {
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-card:first-child .dash-figure {
+  font-size: clamp(1.7rem, 1.1rem + 2vw, 2.6rem);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-figure.gold {
+  color: var(--d-gold-light);
+}
+
+.dashboard-refresh.dashboard-page .dashboard-grid .eye-toggle {
+  width: 36px;
+  height: 36px;
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ---------- Tablets ---------- */
+@media (max-width: 860px) {
+  .dashboard-refresh.dashboard-page .dashboard-grid {
+    padding: 24px 22px 24px;
+  }
+
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-card:first-child {
+    padding: 0 0 4px;
+  }
+
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-card:not(:first-child) {
+    padding: 14px 16px;
+    border: 0;
+  }
+}
+
+/* ---------- Phones: two tiles side by side, the third full width ---------- */
+@media (max-width: 640px) {
+  .dashboard-refresh.dashboard-page .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 20px 16px 16px;
+    border-radius: 22px;
+  }
+
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-card:first-child {
+    grid-column: 1 / -1;
+    padding: 0 2px 6px;
+  }
+
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-card:not(:first-child) {
+    padding: 13px 14px;
+    border: 0;
+  }
+
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-card:last-child {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-label {
+    font-size: 0.8rem;
+  }
+
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-figure {
+    font-size: 1.05rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .dashboard-refresh.dashboard-page .dashboard-grid {
+    padding: 18px 12px 12px;
+  }
+
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-card:first-child .dash-figure {
+    font-size: 1.55rem;
+  }
+
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-card:not(:first-child) {
+    padding: 12px;
+  }
+}
+
+/* ---------- Long amounts: keep every number whole, never split ---------- */
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-figure {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-figure[data-size="lg"] {
+  font-size: 1.02rem;
+}
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-figure[data-size="xl"] {
+  font-size: 0.88rem;
+}
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-card:first-child .dash-figure[data-size="lg"] {
+  font-size: clamp(1.45rem, 0.95rem + 1.7vw, 2.15rem);
+}
+.dashboard-refresh.dashboard-page .dashboard-grid .dash-card:first-child .dash-figure[data-size="xl"] {
+  font-size: clamp(1.15rem, 0.8rem + 1.4vw, 1.8rem);
+}
+
+@media (max-width: 640px) {
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-figure[data-size="lg"] {
+    font-size: 0.92rem;
+  }
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-figure[data-size="xl"] {
+    font-size: 0.8rem;
+  }
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-card:first-child .dash-figure[data-size="lg"] {
+    font-size: 1.5rem;
+  }
+  .dashboard-refresh.dashboard-page .dashboard-grid .dash-card:first-child .dash-figure[data-size="xl"] {
+    font-size: 1.2rem;
+  }
+
+  /* When any figure is long, show the three as full-width rows. */
+  .dashboard-refresh.dashboard-page .dashboard-grid.long-figures .dash-card:not(:first-child) {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 12px;
+  }
+  .dashboard-refresh.dashboard-page .dashboard-grid.long-figures .dash-card:not(:first-child) .dash-figure {
+    margin-left: auto;
+  }
+}

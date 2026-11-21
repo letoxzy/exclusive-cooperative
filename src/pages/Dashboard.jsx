@@ -5,8 +5,17 @@ import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
 import "../styles/dashboard.css";
 import "../styles/dashboard-refresh.css";
+import "../styles/dashboard-balance.css";
 import { useFlash } from "../context/ToastContext.jsx";
 import CreditCelebrations from "../components/CreditCelebrations";
+
+// Long amounts get a smaller font so the whole number always fits on one line.
+const figureSize = (text) => {
+  const length = String(text ?? "").length;
+  if (length > 17) return "xl";
+  if (length > 13) return "lg";
+  return "md";
+};
 
 function Dashboard() {
   const { user, logout, refreshUser } = useAuth();
@@ -581,7 +590,15 @@ function Dashboard() {
           SAVINGS + LOAN ELIGIBILITY
       ====================================== */}
 
-      <section className="dashboard-grid">
+      <section
+        className={`dashboard-grid ${
+          [user?.shareholding, eligibleLoan, outstandingLoanAmount].some(
+            (value) => String(displayMoney(value)).length > 12,
+          )
+            ? "long-figures"
+            : ""
+        }`}
+      >
         <div className="dash-card">
           <div className="dash-card-top">
             <span className="dash-label">Locked Savings</span>
@@ -595,7 +612,10 @@ function Dashboard() {
             </button>
           </div>
 
-          <span className="dash-figure">
+          <span
+            className="dash-figure"
+            data-size={figureSize(displayMoney(user?.savingsBalance))}
+          >
             {displayMoney(user?.savingsBalance)}
           </span>
         </div>
@@ -603,7 +623,10 @@ function Dashboard() {
         <div className="dash-card">
           <span className="dash-label">Shareholding</span>
 
-          <span className="dash-figure gold">
+          <span
+            className="dash-figure gold"
+            data-size={figureSize(displayMoney(user?.shareholding))}
+          >
             {displayMoney(user?.shareholding)}
           </span>
         </div>
@@ -611,13 +634,21 @@ function Dashboard() {
         <div className="dash-card">
           <span className="dash-label">Loan Eligibility (2x savings)</span>
 
-          <span className="dash-figure gold">{displayMoney(eligibleLoan)}</span>
+          <span
+            className="dash-figure gold"
+            data-size={figureSize(displayMoney(eligibleLoan))}
+          >
+            {displayMoney(eligibleLoan)}
+          </span>
         </div>
 
         <div className="dash-card">
           <span className="dash-label">Outstanding Loan</span>
 
-          <span className="dash-figure">
+          <span
+            className="dash-figure"
+            data-size={figureSize(displayMoney(outstandingLoanAmount))}
+          >
             {displayMoney(outstandingLoanAmount)}
           </span>
         </div>

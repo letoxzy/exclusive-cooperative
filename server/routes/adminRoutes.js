@@ -464,6 +464,13 @@ router.patch("/users/:id/shareholding", requirePermission("members.shareholding"
         message:
           `Your cooperative shareholding has been updated from ₦${previousShareholding.toLocaleString()} ` +
           `to ₦${value.toLocaleString()}.`,
+        // Structured values so the mobile app can tell a real increase from
+        // a reduction or an unchanged save, without reading the message text.
+        data: {
+          kind: value > previousShareholding ? "shareholding-increase" : "shareholding-change",
+          previous: previousShareholding,
+          current: value,
+        },
       });
     } catch (notificationError) {
       console.error(
@@ -3102,6 +3109,11 @@ router.patch("/dividends/:id/entries/:entryId", requirePermission("dividends.pay
         type: "dividend",
         title: "Dividend Paid",
         message: `Your dividend of ₦${Number(paid.dividendAmount || 0).toLocaleString()} has been paid.`,
+        data: {
+          kind: "dividend-paid",
+          amount: Number(paid.dividendAmount || 0),
+          entryId: String(paid._id),
+        },
       });
     } catch (err) {
       console.error("Dividend notification error:", err.message);
@@ -3170,6 +3182,11 @@ router.patch("/dividends/:id/pay-all", requirePermission("dividends.pay"), async
           type: "dividend",
           title: "Dividend Paid",
           message: `Your dividend of ₦${Number(entry.dividendAmount || 0).toLocaleString()} has been paid.`,
+          data: {
+            kind: "dividend-paid",
+            amount: Number(entry.dividendAmount || 0),
+            entryId: String(entry._id),
+          },
         }).catch((err) => console.error("Dividend notification error:", err.message))
       )
     );

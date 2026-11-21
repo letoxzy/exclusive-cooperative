@@ -11,6 +11,7 @@ import {
   FaMoneyCheckAlt,
   FaChartBar,
   FaChartPie,
+  FaToggleOn,
   FaCog,
   FaImages,
   FaSignOutAlt,
@@ -114,6 +115,11 @@ const menuItems = [
     id: "gallery",
     label: "Gallery",
     icon: FaImages,
+  },
+  {
+    id: "services",
+    label: "Service Controls",
+    icon: FaToggleOn,
   },
   {
     id: "settings",

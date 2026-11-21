@@ -28,6 +28,7 @@ export const SECTION_ORDER = [
   "deletions",
   "audit",
   "gallery",
+  "services",
   "settings",
 ];
 
@@ -61,6 +62,7 @@ const SECTION_PERMISSIONS = {
   deletions: ["deletions.manage"],
   audit: ["audit.view"],
   gallery: ["gallery.manage"],
+  services: ["services.view", "services.manage"],
 };
 
 /** The tabs this administrator sees, in the order they are shown. */

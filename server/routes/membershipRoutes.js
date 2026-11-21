@@ -1,4 +1,5 @@
 import express from "express";
+import { requireService } from "../middleware/requireService.js";
 import multer from "multer";
 import Membership from "../models/Membership.js";
 import User from "../models/User.js";
@@ -110,6 +111,7 @@ router.post(
   "/",
   protect,
   memberOnly,
+  requireService("membership_applications"),
   upload.fields([{ name: "passportPhoto" }, { name: "signature" }]),
   async (req, res) => {
     try {

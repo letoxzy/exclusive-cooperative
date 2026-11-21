@@ -1,5 +1,6 @@
 import { requireAppPin } from "../middleware/requireAppPin.js";
 import express from "express";
+import { requireService } from "../middleware/requireService.js";
 import multer from "multer";
 import Loan from "../models/Loan.js";
 import LoanRepayment from "../models/LoanRepayment.js";
@@ -280,7 +281,7 @@ router.get("/eligibility", protect, requireApprovedMember, async (req, res) => {
     purpose: "Business expansion"
   }
 */
-router.post("/", protect, requireApprovedMember, requireAppPin("LOAN_REQUIRE_PIN"), idempotent("loans:create"), async (req, res) => {
+router.post("/", protect, requireApprovedMember, requireService("loan_applications"), requireAppPin("LOAN_REQUIRE_PIN"), idempotent("loans:create"), async (req, res) => {
   try {
     const {
       loanType,
@@ -477,7 +478,7 @@ router.get("/:id", protect, memberOnly, async (req, res) => {
   This does NOT change the balance yet — an admin has to confirm it first,
   same pattern as savings deposit requests.
 */
-router.post("/:id/repayments", protect, memberOnly, uploadReceipt.single("receipt"), async (req, res) => {
+router.post("/:id/repayments", protect, memberOnly, requireService("payments"), uploadReceipt.single("receipt"), async (req, res) => {
   try {
     // Members now repay online through Paystack. This receipt-upload route is
     // kept only so older app versions keep working; set

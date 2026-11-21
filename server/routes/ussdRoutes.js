@@ -25,6 +25,7 @@ import {
 import { runWithdrawal, withdrawalsEnabled } from "../utils/ussdWithdrawal.js";
 import { runTopUp, runRepayment, paymentsEnabled } from "../utils/ussdPayments.js";
 import { loansEnabled, runLoanLimit } from "../utils/ussdLoan.js";
+import { getServiceState } from "../utils/serviceControls.js";
 import { callInternal } from "../utils/internalApi.js";
 import { alertSecurityChange } from "../utils/securityAlerts.js";
 
@@ -455,6 +456,21 @@ router.post("/", async (req, res) => {
       const input = inputs[idx];
       if (view === "menu") {
         if (input === "0") return end(res, "Thank you for using Exclusive Cooperative.");
+
+        // An office switch can turn a service off without a redeploy.
+        const lockKey =
+          input === "6" && loansEnabled()
+            ? "loan_applications"
+            : input === "7" && withdrawalsEnabled()
+              ? "withdrawals"
+              : (input === "8" || input === "9") && paymentsEnabled()
+                ? "payments"
+                : null;
+        if (lockKey) {
+          const state = await getServiceState(lockKey);
+          if (!state.available) return end(res, state.message);
+        }
+
         const wizard =
           input === "6" && loansEnabled()
             ? runLoanLimit

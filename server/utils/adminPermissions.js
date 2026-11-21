@@ -1,3 +1,15 @@
+/**
+ * Office roles for administrators.
+ *
+ * Every staff member still has role "admin" (so everything that already checks
+ * for an administrator keeps working). `adminRole` decides WHICH admin actions
+ * that person may use. The server enforces it on every admin route with
+ * requirePermission(); the website only hides what the server would refuse.
+ *
+ * "full" is the existing administrator account: it can do everything.
+ */
+
+// Every tab on the admin page, in the order they normally appear.
 export const ALL_SECTIONS = [
   "overview",
   "members",
@@ -17,9 +29,20 @@ export const ALL_SECTIONS = [
   "deletions",
   "audit",
   "gallery",
+  "services",
   "settings",
 ];
 
+/**
+ * `sections` are the tabs the office sees (in its own order; the first one is
+ * where it lands after signing in). `permissions` are what the server lets it
+ * do, and also decide which data its tabs may load.
+ *
+ * "overview" is only for the Full Administrator and the Supervisor: it totals
+ * savings, members, applications and repayments, and an office that cannot see
+ * all of that data would be shown wrong numbers. Every office keeps "settings"
+ * for its own name and password.
+ */
 export const ADMIN_ROLES = {
   full: {
     label: "Full Administrator",
@@ -75,6 +98,7 @@ export const ADMIN_ROLES = {
       "ledger.view",
       "reports.view",
       "statistics.view",
+      "services.manage",
       "dividends.view",
       "dividends.prepare",
       "transactions.view",
@@ -91,6 +115,7 @@ export const ADMIN_ROLES = {
       "reports",
       "ledger",
       "dividends",
+      "services",
       "settings",
     ],
   },
@@ -107,6 +132,7 @@ export const ADMIN_ROLES = {
       "members.delete",
       "deletions.manage",
       "settings.manage",
+      "services.manage",
       "audit.view",
       "ledger.view",
       "reports.view",
@@ -139,6 +165,7 @@ export const ADMIN_ROLES = {
       "reconciliation",
       "deletions",
       "audit",
+      "services",
       "settings",
     ],
   },

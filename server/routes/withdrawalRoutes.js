@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import express from "express";
+import { requireService } from "../middleware/requireService.js";
 import crypto from "crypto";
 import mongoose from "mongoose";
 import User from "../models/User.js";
@@ -263,6 +264,7 @@ router.post(
   "/verify-account",
   protect,
   requireApprovedMember,
+  requireService("withdrawals"),
   async (req, res) => {
     try {
       const accountNumber = String(
@@ -488,6 +490,7 @@ router.post(
   "/",
   protect,
   requireApprovedMember,
+  requireService("withdrawals"),
   idempotent("withdrawals:create"),
   async (req, res) => {
     try {

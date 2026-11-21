@@ -1,0 +1,39 @@
+.credit-stack { display: grid; gap: 12px; margin-bottom: 24px; }
+
+.credit-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: var(--gold-soft, #fbf5de);
+  border: 1px solid var(--gold, #c9a227);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.credit-icon {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #fff;
+  color: #a86a00;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+}
+
+.credit-text { flex: 1; min-width: 0; }
+.credit-text strong { display: block; font-size: 15px; color: var(--navy, #0f1b2d); }
+.credit-text p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--text, #334155); }
+
+.credit-close {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted, #64748b);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 14px;
+}
+.credit-close:hover { color: var(--navy, #0f1b2d); }

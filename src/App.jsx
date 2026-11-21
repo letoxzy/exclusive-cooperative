@@ -6,7 +6,7 @@ import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
 import PushPrompt from "./components/PushPrompt";
-import InstallPrompt from "./components/InstallPrompt";
+import ServiceUnavailableModal from "./components/ServiceUnavailableModal";
 
 // Lazy-loaded pages
 const Home = lazy(() => import("./pages/Home"));
@@ -45,7 +45,7 @@ function App() {
       {!isAdminPage && <Navbar />}
 
       <PushPrompt />
-      <InstallPrompt />
+      <ServiceUnavailableModal />
 
       <div className={!isAdminPage ? "site-content" : ""}>
         <Suspense

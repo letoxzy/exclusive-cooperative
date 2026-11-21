@@ -1,8 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-// Uploaded files (avatars, membership photos) are served as static files
-// from the server root, not under /api — this strips that suffix so we
-// can build image URLs like `${API_ORIGIN}/${avatarPath}`.
+
 export const API_ORIGIN = API_URL.replace(/\/api\/?$/, "");
 
 async function request(path, { method = "GET", body, token, isFormData } = {}) {
@@ -21,8 +19,6 @@ async function request(path, { method = "GET", body, token, isFormData } = {}) {
       body: isFormData ? body : body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    // The browser could not reach the server at all (no internet, the server is
-    // restarting, or the request was blocked). It says only "Failed to fetch".
     const error = new Error(
       "Cannot reach the server. Check your internet connection and try again.",
     );
@@ -38,6 +34,18 @@ async function request(path, { method = "GET", body, token, isFormData } = {}) {
     error.status = res.status;
     error.retryAfterSeconds = data.retryAfterSeconds;
     error.attemptsLeft = data.attemptsLeft;
+
+    // A service an administrator has switched off. Tell the popup that sits at
+    // the top of the app, so the member sees the notice wherever they clicked.
+    if (data.code === "SERVICE_UNAVAILABLE") {
+      error.service = data.service;
+      window.dispatchEvent(
+        new CustomEvent("service-unavailable", {
+          detail: { service: data.service, message: error.message },
+        }),
+      );
+    }
+
     throw error;
   }
   return data;

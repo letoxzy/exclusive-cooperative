@@ -28,6 +28,12 @@ import { memberDeletionBlockers, deleteMemberAccount } from "../utils/memberDele
 import AccountDeletionRequest from "../models/AccountDeletionRequest.js";
 import { applyPaymentToLoan } from "../utils/loanRepaymentSettlement.js";
 import { audit } from "../utils/audit.js";
+import ServiceControl from "../models/ServiceControl.js";
+import {
+  getAllServiceStates,
+  invalidateServiceCache,
+  isKnownService,
+} from "../utils/serviceControls.js";
 import { issueActivation } from "../utils/ussdActivation.js";
 import { normalizeNgPhone } from "../sms.js";
 import { makerCheckerEnabled, sameAdmin } from "../utils/fourEyes.js";
@@ -168,6 +174,72 @@ router.put("/cooperative-settings", requirePermission("settings.manage"), async 
     res.status(500).json({
       message: "Failed to save cooperative settings.",
     });
+  }
+});
+
+// GET /api/admin/services
+// Every switchable service and whether it is on or off right now.
+router.get("/services", requirePermission("services.view", "services.manage"), async (req, res) => {
+  try {
+    invalidateServiceCache();
+    res.json({ services: await getAllServiceStates({ fresh: true }) });
+  } catch (err) {
+    console.error("Load services error:", err);
+    res.status(500).json({ message: "Failed to load services." });
+  }
+});
+
+// PATCH /api/admin/services/:key   { enabled?: boolean, message?: string }
+// Turns a service on or off. While it is off, members who try to use it get the
+// "not available at the moment" notice, in the app, on the website and by USSD.
+router.patch("/services/:key", requirePermission("services.manage"), async (req, res) => {
+  try {
+    const key = String(req.params.key || "");
+    if (!isKnownService(key)) {
+      return res.status(404).json({ message: "That service does not exist." });
+    }
+
+    const set = {};
+
+    if (req.body?.enabled !== undefined) {
+      if (typeof req.body.enabled !== "boolean") {
+        return res.status(400).json({ message: "enabled must be true or false." });
+      }
+      set.enabled = req.body.enabled;
+    }
+
+    if (req.body?.message !== undefined) {
+      const message = String(req.body.message || "").trim();
+      if (message.length > 200) {
+        return res.status(400).json({ message: "The message can be at most 200 characters." });
+      }
+      set.message = message;
+    }
+
+    if (Object.keys(set).length === 0) {
+      return res.status(400).json({ message: "Nothing to update." });
+    }
+
+    set.updatedBy = req.user._id;
+    set.updatedByName = String(req.user.fullName || req.user.email || "").trim();
+
+    const before = await ServiceControl.findOne({ key }).lean();
+    await ServiceControl.findOneAndUpdate(
+      { key },
+      { $set: set, $setOnInsert: { key } },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+    invalidateServiceCache();
+
+    await audit(req, "service.update", "Service", key, {
+      from: before ? { enabled: before.enabled !== false, message: before.message || "" } : { enabled: true, message: "" },
+      to: { enabled: set.enabled, message: set.message },
+    });
+
+    res.json({ services: await getAllServiceStates({ fresh: true }) });
+  } catch (err) {
+    console.error("Update service error:", err);
+    res.status(500).json({ message: "Failed to update the service." });
   }
 });
 

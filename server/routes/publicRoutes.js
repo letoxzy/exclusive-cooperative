@@ -2,10 +2,31 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import User from "../models/User.js";
 import AccountDeletionRequest from "../models/AccountDeletionRequest.js";
+import { getAllServiceStates } from "../utils/serviceControls.js";
 
 const router = express.Router();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// GET /api/public/services
+// Which services are on or off right now. The website and the app read this to
+// show the "not available at the moment" notice. No sign-in needed, and it
+// holds nothing private.
+router.get("/services", async (req, res) => {
+  try {
+    const services = await getAllServiceStates();
+    res.set("Cache-Control", "no-store");
+    res.json({
+      services: Object.fromEntries(
+        services.map((s) => [s.key, { available: s.available, message: s.message }]),
+      ),
+    });
+  } catch (err) {
+    // Fail open: if this cannot be read, report everything as available.
+    res.set("Cache-Control", "no-store");
+    res.json({ services: {} });
+  }
+});
 
 // Anyone on the internet can call this, so keep it tightly limited.
 const deletionLimiter = rateLimit({

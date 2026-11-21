@@ -6,6 +6,7 @@ import request from "../utils/api";
 import "../styles/dashboard.css";
 import "../styles/dashboard-refresh.css";
 import { useFlash } from "../context/ToastContext.jsx";
+import CreditCelebrations from "../components/CreditCelebrations";
 
 function Dashboard() {
   const { user, logout, refreshUser } = useAuth();
@@ -569,6 +570,12 @@ function Dashboard() {
           </span>
         </div>
       )}
+
+      {/* =====================================
+          DIVIDEND / SHAREHOLDING CONGRATULATIONS
+      ====================================== */}
+
+      <CreditCelebrations token={user?.token} hidden={!showBalances} />
 
       {/* =====================================
           SAVINGS + LOAN ELIGIBILITY

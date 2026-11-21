@@ -1,4 +1,5 @@
 import express from "express";
+import { requireService } from "../middleware/requireService.js";
 import crypto from "crypto";
 import LoanEligibility from "../models/LoanEligibility.js";
 import Membership from "../models/Membership.js";
@@ -83,7 +84,7 @@ router.get("/status", protect, requireApprovedMember, async (req, res) => {
 // POST /api/kyc/start   { consent: true }
 // Creates (or restarts) the member's verification attempt and returns the
 // server-issued reference id that the Dojah widget must be opened with.
-router.post("/start", protect, requireApprovedMember, async (req, res) => {
+router.post("/start", protect, requireApprovedMember, requireService("bvn_verification"), async (req, res) => {
   try {
     if (req.body?.consent !== true) {
       return res.status(400).json({

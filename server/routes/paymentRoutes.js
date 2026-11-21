@@ -1,4 +1,5 @@
 import express from "express";
+import { requireService } from "../middleware/requireService.js";
 import crypto from "crypto";
 import SavingsTransaction from "../models/SavingsTransaction.js";
 import Membership from "../models/Membership.js";
@@ -117,6 +118,7 @@ router.post(
   "/paystack/initialize",
   protect,
   requireApprovedMember,
+  requireService("payments"),
   async (req, res) => {
     const { amount, mobile, returnUrl } = req.body;
 
@@ -219,7 +221,7 @@ router.post(
 // { loanId, amount, mobile?, returnUrl? }
 // Starts a Paystack checkout for a loan repayment. The member's balance is
 // only changed after Paystack confirms the payment (verify or webhook).
-router.post("/paystack/loan-repayment/initialize", protect, memberOnly, async (req, res) => {
+router.post("/paystack/loan-repayment/initialize", protect, memberOnly, requireService("payments"), async (req, res) => {
   try {
     const { loanId, mobile, returnUrl } = req.body || {};
     const amount = round2(req.body?.amount);

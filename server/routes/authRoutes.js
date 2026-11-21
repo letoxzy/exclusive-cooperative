@@ -1,4 +1,5 @@
 import express from "express";
+import { requireService } from "../middleware/requireService.js";
 import crypto from "crypto";
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
@@ -97,7 +98,7 @@ const sendPasswordResetEmail = async ({ email, link }) => {
 };
 
 // POST /api/auth/register
-router.post("/register", async (req, res) => {
+router.post("/register", requireService("registrations"), async (req, res) => {
   try {
     const { password, phone, dateOfBirth } = req.body;
     const fullName = String(req.body?.fullName || "").trim().replace(/\s+/g, " ");

@@ -1,9 +1,3 @@
-/* Exclusive Cooperative - service worker for website push notifications.
-   Keep this file at the site root (public/sw.js) so it is served from /sw.js. */
-
-// App install support: when the site cannot be reached, opening a page shows a
-// friendly offline screen instead of the browser's error. Nothing else is
-// cached, so members always get the latest pages and live account data.
 const OFFLINE_CACHE = "offline-v1";
 const OFFLINE_URL = "/offline.html";
 

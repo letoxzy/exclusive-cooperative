@@ -43,6 +43,8 @@ export async function createNotificationAndPush({
         data: {
           type,
           ...(data || {}),
+          // Lets the app open this exact notification when it is tapped.
+          notificationId: String(notification._id),
         },
       });
     }

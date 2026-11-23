@@ -18,6 +18,7 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import galleryRoutes from "./routes/galleryRoutes.js";
 import reconciliationRoutes from "./routes/reconciliationRoutes.js";
 import manualContributionRoutes from "./routes/manualContributionRoutes.js";
+import savingsSummaryRoutes from "./routes/savingsSummaryRoutes.js";
 import { appConfigHandler, appGate } from "./middleware/appGate.js";
 import { startLoanOverdueScheduler } from "./services/loanOverdueService.js";
 import { startContributionReminderScheduler } from "./services/contributionReminderService.js";
@@ -108,6 +109,7 @@ app.get("/api/app-config", appConfigHandler);
 app.use("/api", appGate);
 
 app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/users/me/savings-summary", savingsSummaryRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/security", securityRoutes);
 app.use("/api/membership", membershipRoutes);

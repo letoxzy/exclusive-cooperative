@@ -396,6 +396,8 @@ router.get(
 
       res.json({
         savingsBalance: savings,
+        // What the member has now: total contributed minus withdrawals already paid.
+        currentBalance: await savingsOwed(req.user),
         withdrawalPercentage: WITHDRAWAL_PERCENTAGE * 100,
         administrativeFee: ADMINISTRATIVE_FEE,
         currentMonthContribution,

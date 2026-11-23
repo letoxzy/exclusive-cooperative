@@ -299,7 +299,7 @@ function Withdrawals() {
               Math.max(0, loanAvailable - value)
             )}`
           : `Remaining savings after this withdrawal: ${money(
-              Math.max(0, Number(data.savingsBalance || 0) - value)
+              Math.max(0, Number(data.currentBalance ?? data.savingsBalance ?? 0) - value)
             )}`
       }`,
     );
@@ -597,7 +597,7 @@ function Withdrawals() {
       <section className="withdrawal-balance-grid">
         <div className="withdrawal-balance-card savings-card">
           <span>Current Savings</span>
-          <strong>{loading ? "Loading..." : money(data.savingsBalance)}</strong>
+          <strong>{loading ? "Loading..." : money(data.currentBalance ?? data.savingsBalance)}</strong>
           <small>Member savings balance</small>
         </div>
 
@@ -673,7 +673,7 @@ function Withdrawals() {
             </div>
 
             <div className="source-panel-grid">
-              <div><span>Current Savings</span><strong>{money(data.savingsBalance)}</strong></div>
+              <div><span>Current Savings</span><strong>{money(data.currentBalance ?? data.savingsBalance)}</strong></div>
               <div><span>This Month's Contributions</span><strong>{money(data.monthlyContributionTotal)}</strong></div>
               <div><span>Available to Withdraw</span><strong>{money(savingsAvailable)}</strong></div>
             </div>

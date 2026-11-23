@@ -49,6 +49,27 @@ function Dashboard() {
 
   const [showBalances, setShowBalances] = useState(true);
 
+  // What the member has now (total contributed minus withdrawals already paid).
+  const [savingsSummary, setSavingsSummary] = useState(null);
+  const [summaryFailed, setSummaryFailed] = useState(false);
+
+  useEffect(() => {
+    if (!user?._id || !user?.token) return undefined;
+    let alive = true;
+    request("/users/me/savings-summary", { token: user.token })
+      .then((data) => {
+        if (!alive) return;
+        setSavingsSummary(data);
+        setSummaryFailed(false);
+      })
+      .catch(() => {
+        if (alive) setSummaryFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [user?._id, user?.token, user?.savingsBalance]);
+
   // Persist the member's balance visibility preference on this device.
   useEffect(() => {
     if (!user?._id) return;
@@ -99,6 +120,14 @@ function Dashboard() {
   // When hidden, shows dots instead of the real figure — same idea as a
   // bank app hiding your balance until you tap to reveal it.
   const displayMoney = (value) => (showBalances ? money(value) : "••••••");
+
+  // Shown while loading; falls back to the total only if the summary cannot load.
+  const headlineSavings = savingsSummary
+    ? savingsSummary.currentBalance
+    : summaryFailed
+      ? user?.savingsBalance
+      : null;
+  const headlineText = headlineSavings === null ? "…" : displayMoney(headlineSavings);
 
   const formatDate = (value) => {
     if (!value) return "—";
@@ -612,12 +641,23 @@ function Dashboard() {
             </button>
           </div>
 
-          <span
-            className="dash-figure"
-            data-size={figureSize(displayMoney(user?.savingsBalance))}
-          >
-            {displayMoney(user?.savingsBalance)}
+          <span className="dash-figure" data-size={figureSize(headlineText)}>
+            {headlineText}
           </span>
+
+          {savingsSummary && showBalances && (
+            <div className="dash-subline">
+              <span>Total contributed {money(savingsSummary.totalContributed)}</span>
+              {savingsSummary.withdrawn > 0 && (
+                <span>Withdrawn {money(savingsSummary.withdrawn)}</span>
+              )}
+              {savingsSummary.pending > 0 && (
+                <span className="pending">
+                  Pending withdrawal {money(savingsSummary.pending)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="dash-card">
@@ -632,7 +672,7 @@ function Dashboard() {
         </div>
 
         <div className="dash-card">
-          <span className="dash-label">Loan Eligibility (2x savings)</span>
+          <span className="dash-label">Loan Eligibility (2x total contributed)</span>
 
           <span
             className="dash-figure gold"

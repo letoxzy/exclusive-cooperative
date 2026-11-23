@@ -20,6 +20,15 @@ const savingsTransactionSchema = new mongoose.Schema(
       default: "Monthly",
     },
     contributionPeriod: { type: String, default: null, index: true },
+
+    // Contributions the office recorded for money paid by hand (Excel / paper
+    // register) before online payments went live.
+    source: { type: String, default: null }, // "manual-entry"
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    batchId: { type: String, default: null },
+    reversedAt: { type: Date, default: null },
+    reversedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    reversalReason: { type: String, default: "" },
   },
   { timestamps: true }
 );

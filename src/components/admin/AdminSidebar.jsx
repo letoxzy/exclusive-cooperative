@@ -12,6 +12,7 @@ import {
   FaChartBar,
   FaChartPie,
   FaToggleOn,
+  FaFileExcel,
   FaCog,
   FaImages,
   FaSignOutAlt,
@@ -115,6 +116,11 @@ const menuItems = [
     id: "gallery",
     label: "Gallery",
     icon: FaImages,
+  },
+  {
+    id: "manualsavings",
+    label: "Manual Contributions",
+    icon: FaFileExcel,
   },
   {
     id: "services",

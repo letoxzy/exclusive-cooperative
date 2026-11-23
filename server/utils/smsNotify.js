@@ -83,6 +83,9 @@ async function buildText({ userId, type, title, message }) {
 }
 
 function allowedByKind(data) {
+  // A notification can opt out of SMS with data: { sms: false } (used for
+  // contributions the office records in bulk, so nobody is texted by surprise).
+  if (data?.sms === false) return false;
   if (data?.kind === "contribution-reminder") {
     const frequencies = String(process.env.SMS_CONTRIBUTION_REMINDER_FREQUENCIES ?? "Weekly,Monthly")
       .split(",")

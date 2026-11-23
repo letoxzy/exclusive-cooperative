@@ -25,6 +25,7 @@ import GalleryManagement from "../components/admin/GalleryManagement";
 import LedgerPanel from "../components/admin/LedgerPanel";
 import StatisticsPanel from "../components/admin/StatisticsPanel";
 import ServiceControlsPanel from "../components/admin/ServiceControlsPanel";
+import ManualContributionsPanel from "../components/admin/ManualContributionsPanel";
 import AuditLogPanel from "../components/admin/AuditLogPanel";
 import DeletionRequestsPanel from "../components/admin/DeletionRequestsPanel";
 import ReconciliationPanel from "../components/admin/ReconciliationPanel";
@@ -3678,6 +3679,9 @@ function AdminDashboard() {
 
       case "services":
         return <ServiceControlsPanel token={user.token} />;
+
+      case "manualsavings":
+        return <ManualContributionsPanel token={user.token} />;
 
       case "reports":
         return renderReports();

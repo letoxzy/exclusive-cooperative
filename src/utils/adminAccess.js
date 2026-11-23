@@ -1,14 +1,3 @@
-/**
- * Which admin tabs and actions an administrator's office may use.
- *
- * The server decides this (utils/adminPermissions.js on the backend) and
- * enforces it on every admin request. The website only uses the same
- * information to hide tabs and buttons the server would refuse, so each office
- * sees just its own work. The signed-in user carries:
- *   permissions  what the office may do ("*" = everything, the Full Administrator)
- *   sections     the tabs the office sees, in its own order (first = landing tab)
- */
-
 export const SECTION_ORDER = [
   "overview",
   "members",
@@ -29,6 +18,7 @@ export const SECTION_ORDER = [
   "audit",
   "gallery",
   "services",
+  "manualsavings",
   "settings",
 ];
 
@@ -63,6 +53,7 @@ const SECTION_PERMISSIONS = {
   audit: ["audit.view"],
   gallery: ["gallery.manage"],
   services: ["services.view", "services.manage"],
+  manualsavings: ["manualsavings.view", "manualsavings.record", "manualsavings.reverse"],
 };
 
 /** The tabs this administrator sees, in the order they are shown. */

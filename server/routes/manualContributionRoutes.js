@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import User from "../models/User.js";
 import SavingsTransaction from "../models/SavingsTransaction.js";
 import JournalEntry from "../models/JournalEntry.js";
+import Withdrawal from "../models/Withdrawal.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
 import { requirePermission } from "../middleware/adminPermission.js";
@@ -13,6 +14,7 @@ import { postSavingsDeposit, reverseEntry, ledgerEnabled } from "../services/led
 import {
   getContributionWindow,
   getMemberContributionFrequency,
+  WITHDRAWABLE_PERCENTAGE,
 } from "../utils/contributionRules.js";
 import { createNotificationAndPush } from "../utils/createNotification.js";
 import {
@@ -503,8 +505,9 @@ router.post("/import", requirePermission("manualsavings.record"), async (req, re
 });
 
 // POST /api/admin/manual-contributions/:id/reverse   { reason }
-// Undoes a recorded contribution (for example a wrong amount). Only allowed
-// while the member still has that money in their balance.
+// Undoes a recorded contribution (for example a wrong amount). Blocked if the
+// member has already withdrawn (or has a pending withdrawal) more than 40% of
+// that month's contributions would allow without this entry.
 router.post("/:id/reverse", requirePermission("manualsavings.reverse"), async (req, res) => {
   try {
     const reason = String(req.body?.reason || "").trim();
@@ -531,15 +534,43 @@ router.post("/:id/reverse", requirePermission("manualsavings.reverse"), async (r
       outcome = await runAtomic(async (session) => {
         const opts = session ? { session } : {};
 
-        // 1. Take the money back, but only if the member still has it
-        //    (not withdrawn, not held for a pending withdrawal).
-        const debited = await User.findOneAndUpdate(
+        // 0. Withdrawals never reduce the savings balance; they use up the
+        //    member's 40% allowance for that month. So the real question is
+        //    whether the member has already withdrawn more than 40% of what
+        //    that month's contributions would be WITHOUT this entry. If so,
+        //    reversing would leave them over-withdrawn.
+        const dateKey = todayLagosKey(new Date(txn.createdAt));
+        const [year, month] = dateKey.split("-").map(Number);
+        const monthStart = new Date(year, month - 1, 1); // same month bounds the withdrawal page uses
+        const monthEnd = new Date(year, month, 1);
+
+        const monthContributions = await SavingsTransaction.find(
+          { user: txn.user, status: "approved", createdAt: { $gte: monthStart, $lt: monthEnd } },
+          null,
+          opts,
+        ).select("amount");
+        const monthTotal = monthContributions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+        const withdrawals = await Withdrawal.find(
           {
-            _id: txn.user,
-            $expr: {
-              $gte: ["$savingsBalance", { $add: [amount, { $ifNull: ["$withdrawalReserved", 0] }] }],
-            },
+            user: txn.user,
+            source: "savings",
+            withdrawalCycle: dateKey.slice(0, 7),
+            status: { $in: ["processing", "success"] },
           },
+          null,
+          opts,
+        ).select("amount");
+        const alreadyWithdrawn = withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+
+        const allowanceAfter = Math.max(0, monthTotal - amount) * WITHDRAWABLE_PERCENTAGE;
+        if (alreadyWithdrawn > 0 && alreadyWithdrawn > allowanceAfter + 0.005) {
+          throw Object.assign(new Error("OVERDRAWN"), { code: "OVERDRAWN", alreadyWithdrawn });
+        }
+
+        // 1. Take the amount off the savings balance (never below zero).
+        const debited = await User.findOneAndUpdate(
+          { _id: txn.user, savingsBalance: { $gte: amount } },
           { $inc: { savingsBalance: -amount } },
           { new: true, ...opts },
         );
@@ -574,10 +605,14 @@ router.post("/:id/reverse", requirePermission("manualsavings.reverse"), async (r
         return { savingsBalance: debited.savingsBalance };
       });
     } catch (err) {
+      if (err?.code === "OVERDRAWN") {
+        return res.status(409).json({
+          message: `Cannot reverse this: the member has already withdrawn or requested ${naira(err.alreadyWithdrawn)} against that month's contributions. Removing this entry would leave them over-withdrawn. Please ask the finance officer to handle it.`,
+        });
+      }
       if (err?.code === "INSUFFICIENT") {
         return res.status(409).json({
-          message:
-            "Cannot reverse this: the member's balance is now lower than this entry (they may have withdrawn, or a withdrawal is pending). Please ask the finance officer to handle it.",
+          message: "Cannot reverse this: it would take the member's savings balance below zero.",
         });
       }
       if (err?.code === "ALREADY") {

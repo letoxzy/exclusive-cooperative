@@ -1,4 +1,5 @@
 import express from "express";
+import { buildTransactionHistory } from "../utils/transactionHistory.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
@@ -582,116 +583,36 @@ router.get("/me/savings-requests", protect, async (req, res) => {
 });
 
 // GET /api/users/me/transactions
-// Member transaction history
+// Member transaction history.
+//   (default)    completed savings and repayments, every withdrawal  (what the website uses)
+//   ?view=full   also pending and rejected savings and repayments, for the app
 router.get("/me/transactions", protect, async (req, res) => {
   try {
-    const [
-      savingsTransactions,
-      repayments,
-      loans,
-      withdrawals,
-      dividendEntries,
-    ] = await Promise.all([
+    const full = req.query.view === "full";
+
+    const [savings, repayments, loans, withdrawals, dividends] = await Promise.all([
       SavingsTransaction.find({
         user: req.user._id,
-        status: "approved",
+        ...(full ? {} : { status: "approved" }),
       }).sort("-createdAt"),
 
       LoanRepayment.find({
         user: req.user._id,
-        status: "approved",
+        ...(full ? {} : { status: "approved" }),
       }).sort("-createdAt"),
 
       Loan.find({
         user: req.user._id,
-        status: {
-          $in: ["active", "completed"],
-        },
-        disbursedDate: {
-          $ne: null,
-        },
+        status: { $in: ["active", "completed"] },
+        disbursedDate: { $ne: null },
       }).sort("-disbursedDate"),
 
-      Withdrawal.find({
-        user: req.user._id,
-      }).sort("-createdAt"),
+      Withdrawal.find({ user: req.user._id }).sort("-createdAt"),
 
-      DividendEntry.find({
-        user: req.user._id,
-        status: "paid",
-      }).sort("-paidDate"),
+      DividendEntry.find({ user: req.user._id, status: "paid" }).sort("-paidDate"),
     ]);
 
-    const transactions = [
-      // SAVINGS
-      ...savingsTransactions.map((transaction) => ({
-        id: `savings-${transaction._id}`,
-        type: "Savings Deposit",
-        description: "Savings top-up",
-        amount: Number(transaction.amount || 0),
-        status: transaction.status,
-        direction: "credit",
-        reference: transaction.reference || null,
-        date: transaction.createdAt,
-      })),
-
-      // LOAN REPAYMENTS
-      ...repayments.map((repayment) => ({
-        id: `repayment-${repayment._id}`,
-        type: "Loan Repayment",
-        description:
-          repayment.method === "paystack"
-            ? "Loan repayment (Paystack)"
-            : "Loan repayment confirmed",
-        amount: Number(repayment.amount || 0),
-        status: repayment.status,
-        direction: "debit",
-        reference: repayment.reference || repayment._id,
-        date: repayment.approvedAt || repayment.updatedAt || repayment.createdAt,
-      })),
-
-      // LOAN DISBURSEMENTS
-      ...loans.map((loan) => ({
-        id: `loan-${loan._id}`,
-        type: "Loan Disbursement",
-        description: `${loan.loanType || "Loan"} loan disbursed (not savings)`,
-        amount: Number(loan.amount || 0),
-        status: "approved",
-        direction: "credit",
-        reference: loan._id,
-        date: loan.disbursedDate || loan.createdAt,
-      })),
-
-      // WITHDRAWALS
-      ...withdrawals.map((withdrawal) => ({
-        id: `withdrawal-${withdrawal._id}`,
-        type: "Withdrawal",
-        description: `${withdrawal.bankName} ····${withdrawal.accountNumberLast4}`,
-        amount: Number(withdrawal.amount || 0),
-        status: withdrawal.status,
-        direction: "debit",
-        reference: withdrawal.reference,
-        date: withdrawal.paidAt || withdrawal.createdAt,
-      })),
-
-      // DIVIDENDS
-      ...dividendEntries.map((entry) => ({
-        id: `dividend-${entry._id}`,
-        type: "Dividend",
-        description: "Dividend paid",
-        amount: Number(entry.dividendAmount || 0),
-        status: entry.status,
-        direction: "credit",
-        reference: entry._id,
-        date: entry.paidDate || entry.createdAt,
-      })),
-    ].sort(
-      (a, b) =>
-        new Date(b.date || 0) -
-        new Date(a.date || 0)
-    );
-
-    res.json(transactions);
+    res.json(buildTransactionHistory({ savings, repayments, loans, withdrawals, dividends }));
   } catch (err) {
     console.error("Transaction history error:", err);
 

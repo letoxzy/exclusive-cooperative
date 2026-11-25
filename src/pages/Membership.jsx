@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "../context/AuthContext";
 import request from "../utils/api";
@@ -96,6 +96,96 @@ const sections = [
   { id: 5, label: "Declaration" },
 ];
 
+// What each step needs before the applicant can continue.
+// (Same fields the form has always required; the optional ones are not listed.)
+const STEP_REQUIREMENTS = {
+  1: [
+    ["fullName", "Full Name"],
+    ["gender", "Gender"],
+    ["phone", "Phone Number"],
+    ["email", "Email Address"],
+    ["employmentStatus", "Employment status"],
+    ["lga", "LGA"],
+    ["dob", "Date of Birth"],
+    ["maritalStatus", "Marital Status"],
+    ["whatsapp", "WhatsApp No"],
+    ["occupation", "Occupation"],
+    ["stateOfOrigin", "State of Origin"],
+    ["address", "Residential Address"],
+    ["passportPhoto", "Passport Photograph"],
+  ],
+  2: [
+    ["membershipType", "Membership Type"],
+    ["frequency", "Preferred Frequency"],
+    ["voluntarySavings", "Voluntary savings"],
+    ["referralSource", "How you heard about the society"],
+    ["proposedAmount", "Proposed Monthly Amount"],
+    ["startDate", "Expected Start Date"],
+    ["membershipCategory", "Membership Category"],
+  ],
+  3: [
+    ["kinName", "Full Name"],
+    ["kinPhone", "Phone Number"],
+    ["kinAddress", "Address"],
+    ["kinRelationship", "Relationship"],
+    ["kinAltPhone", "Alternative No."],
+  ],
+  4: [
+    ["beneficiaryName", "Full Name"],
+    ["beneficiaryPhone", "Phone Number"],
+    ["beneficiaryAddress", "Address"],
+    ["beneficiaryRelationship", "Relationship"],
+  ],
+  5: [
+    ["declarationName", "Applicant's Name"],
+    ["declarationDate", "Date"],
+    ["signature", "Signature"],
+    ["declarationPhone", "Phone"],
+    ["agreed", "Declaration confirmation"],
+  ],
+};
+
+const MIN_MONTHLY_AMOUNT = 10000;
+
+const isEmpty = (value) =>
+  value === null ||
+  value === undefined ||
+  value === false ||
+  (typeof value === "string" && value.trim() === "");
+
+/**
+ * Checks one step. Returns { fieldName: "message" } for everything wrong,
+ * or an empty object when the step is complete.
+ */
+function validateStep(stepId, form) {
+  const problems = {};
+
+  (STEP_REQUIREMENTS[stepId] || []).forEach(([key, label]) => {
+    if (isEmpty(form[key])) problems[key] = `${label} is required`;
+  });
+
+  if (!problems.email && stepId === 1 && !/^\S+@\S+\.\S+$/.test(form.email.trim())) {
+    problems.email = "Email Address must be a valid email";
+  }
+
+  if (!problems.proposedAmount && stepId === 2) {
+    const amount = Number(form.proposedAmount);
+    if (!Number.isFinite(amount) || amount < MIN_MONTHLY_AMOUNT) {
+      problems.proposedAmount = `Proposed Monthly Amount must be at least ₦${MIN_MONTHLY_AMOUNT.toLocaleString("en-NG")}`;
+    }
+  }
+
+  return problems;
+}
+
+const labelFor = (key) => {
+  for (const list of Object.values(STEP_REQUIREMENTS)) {
+    const found = list.find(([k]) => k === key);
+    if (found) return found[1];
+  }
+  return key;
+};
+
 function Membership() {
   const { user } = useAuth();
   const [form, setForm] = useState({
@@ -110,6 +200,25 @@ function Membership() {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [existingApp, setExistingApp] = useState(null);
+
+  // One step at a time.
+  const [step, setStep] = useState(1);
+  const [maxStep, setMaxStep] = useState(1); // furthest step reached (earlier ones can be revisited)
+  const [problems, setProblems] = useState({}); // { field: message } for the step being shown
+  const formRef = useRef(null);
+  const topRef = useRef(null);
+  const firstRender = useRef(true);
+  const totalSteps = sections.length;
+  const percent = Math.round(((step - 1) / totalSteps) * 100);
+
+  // Bring the new step into view (matters most on phones).
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [step]);
 
   useEffect(() => {
     if (!user) return;
@@ -126,16 +235,80 @@ function Membership() {
       [field]:
         type === "checkbox" ? checked : type === "file" ? files[0] : value,
     }));
+    setProblems((prev) => {
+      if (!(field in prev)) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  // Shows what is missing and takes the applicant to the first problem.
+  const showProblems = (found) => {
+    setProblems(found);
+    const first = Object.keys(found)[0];
+    requestAnimationFrame(() => {
+      const el = formRef.current?.querySelector(`#${first}, [name="${first}"]`);
+      el?.focus?.({ preventScroll: true });
+      el?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    });
+  };
+
+  const goBack = () => {
+    setProblems({});
+    setStep((current) => Math.max(1, current - 1));
+  };
+
+  const goNext = () => {
+    const found = validateStep(step, form);
+    if (Object.keys(found).length > 0) {
+      showProblems(found);
+      return;
+    }
+    setProblems({});
+    const next = Math.min(totalSteps, step + 1);
+    setMaxStep((current) => Math.max(current, next));
+    setStep(next);
+  };
+
+  // Clicking a step in the tracker: going back is always allowed; going
+  // forward only to a step already reached, and only if this one is complete.
+  const goToStep = (target) => {
+    if (target === step || target > maxStep) return;
+    if (target < step) {
+      setProblems({});
+      setStep(target);
+      return;
+    }
+    const found = validateStep(step, form);
+    if (Object.keys(found).length > 0) {
+      showProblems(found);
+      return;
+    }
+    setProblems({});
+    setStep(target);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.agreed) {
-      setError("Please confirm the declaration before submitting.");
+    // Pressing Enter inside a field on steps 1 to 4 means "Next", not "Submit".
+    if (step < totalSteps) {
+      goNext();
       return;
     }
 
+    // Final check of every step, in case something was changed after it was completed.
+    for (const sectionInfo of sections) {
+      const found = validateStep(sectionInfo.id, form);
+      if (Object.keys(found).length > 0) {
+        setStep(sectionInfo.id);
+        showProblems(found);
+        return;
+      }
+    }
+
+    setProblems({});
     setError("");
     setLoading(true);
 
@@ -239,17 +412,85 @@ function Membership() {
           </p>
         </header>
 
-        <nav className="section-tracker" aria-hidden="true">
-          {sections.map((s) => (
-            <div key={s.id} className="tracker-item">
-              <span className="tracker-index">{s.id}</span>
-              <span className="tracker-label">{s.label}</span>
-            </div>
-          ))}
-        </nav>
+        <div className="wizard-progress" ref={topRef}>
+          <div className="wizard-meta">
+            <span>
+              Step {step} of {totalSteps}
+            </span>
+            <span>{percent}% complete</span>
+          </div>
 
-        <form className="membership-form" onSubmit={handleSubmit}>
+          <nav className="section-tracker" aria-label="Application progress">
+            {sections.map((sectionInfo) => {
+              const state =
+                sectionInfo.id < step
+                  ? "done"
+                  : sectionInfo.id === step
+                    ? "active"
+                    : "todo";
+              const clickable =
+                sectionInfo.id !== step && sectionInfo.id <= maxStep;
+
+              return (
+                <div key={sectionInfo.id} className={`tracker-item ${state}`}>
+                  <button
+                    type="button"
+                    className="tracker-btn"
+                    disabled={!clickable}
+                    aria-current={state === "active" ? "step" : undefined}
+                    aria-label={`Step ${sectionInfo.id}: ${sectionInfo.label}${
+                      state === "done" ? " (completed)" : ""
+                    }`}
+                    onClick={() => goToStep(sectionInfo.id)}
+                  >
+                    <span className="tracker-index">
+                      {state === "done" ? "✓" : sectionInfo.id}
+                    </span>
+                  </button>
+                  <span className="tracker-label">{sectionInfo.label}</span>
+                </div>
+              );
+            })}
+          </nav>
+
+          <div className="wizard-bar" aria-hidden="true">
+            <span style={{ width: `${percent}%` }} />
+          </div>
+        </div>
+
+        {/* Highlights the fields that still need attention on this step. */}
+        {Object.keys(problems).length > 0 && (
+          <style>
+            {Object.keys(problems)
+              .map(
+                (key) =>
+                  `#${key}{border-color:#b42318 !important;box-shadow:0 0 0 3px rgba(180,35,24,.12) !important}` +
+                  `.form-group:has([name="${key}"]) .pill-group{outline:1.5px solid #b42318;outline-offset:4px;border-radius:12px}` +
+                  `.agree-checkbox:has([name="${key}"]){color:#b42318}`,
+              )
+              .join("")}
+          </style>
+        )}
+
+        <form
+          className="membership-form"
+          onSubmit={handleSubmit}
+          noValidate
+          ref={formRef}
+        >
+          {Object.keys(problems).length > 0 && (
+            <div className="step-alert" role="alert">
+              <strong>Please complete the highlighted fields to continue.</strong>
+              <ul>
+                {Object.entries(problems).map(([key, message]) => (
+                  <li key={key}>{message || labelFor(key)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* 1. PERSONAL INFORMATION */}
+          {step === 1 && (
           <section className="form-card" id="personal-info">
             <h2>
               <span className="section-number">1</span> Personal Information
@@ -432,17 +673,21 @@ function Membership() {
                   id="passportPhoto"
                   type="file"
                   accept="image/*"
-                  required
+                  required={!form.passportPhoto}
                   onChange={update("passportPhoto")}
                 />
                 {form.passportPhoto && (
-                  <span className="file-name">{form.passportPhoto.name}</span>
+                  <span className="file-name">
+                    Selected: {form.passportPhoto.name}
+                  </span>
                 )}
               </div>
             </div>
           </section>
+          )}
 
           {/* 2. MEMBERSHIP & SAVINGS */}
+          {step === 2 && (
           <section className="form-card" id="membership-savings">
             <h2>
               <span className="section-number">2</span> Membership & Savings
@@ -612,8 +857,10 @@ function Membership() {
               </div>
             </div>
           </section>
+          )}
 
           {/* 3. NEXT OF KIN */}
+          {step === 3 && (
           <section className="form-card" id="next-of-kin">
             <h2>
               <span className="section-number">3</span> Next of Kin / Emergency
@@ -693,8 +940,10 @@ function Membership() {
               </div>
             </div>
           </section>
+          )}
 
           {/* 4. BENEFICIARY */}
+          {step === 4 && (
           <section className="form-card" id="beneficiary">
             <h2>
               <span className="section-number">4</span> Beneficiary / Nominee
@@ -759,8 +1008,10 @@ function Membership() {
               </div>
             </div>
           </section>
+          )}
 
           {/* 5. DECLARATION */}
+          {step === 5 && (
           <section className="form-card" id="declaration">
             <h2>
               <span className="section-number">5</span> Applicant's Declaration
@@ -812,11 +1063,13 @@ function Membership() {
                   id="signature"
                   type="file"
                   accept="image/*"
-                  required
+                  required={!form.signature}
                   onChange={update("signature")}
                 />
                 {form.signature && (
-                  <span className="file-name">{form.signature.name}</span>
+                  <span className="file-name">
+                    Selected: {form.signature.name}
+                  </span>
                 )}
               </div>
 
@@ -835,6 +1088,7 @@ function Membership() {
             <label className="agree-checkbox">
               <input
                 type="checkbox"
+                name="agreed"
                 checked={form.agreed}
                 onChange={update("agreed")}
               />
@@ -842,16 +1096,31 @@ function Membership() {
               cooperative's rules and policies.
             </label>
           </section>
+          )}
 
+          <div className="wizard-nav">
+            {step > 1 ? (
+              <button type="button" className="back-btn" onClick={goBack}>
+                ← Back
+              </button>
+            ) : (
+              <span />
+            )}
 
-          <div className="submit-row">
-            <p className="fee-note">
-              First 200 members are exempt from the application form fee.
-            </p>
-            <button type="submit" className="submit-btn" disabled={loading}>
-              {loading ? "Submitting..." : "Submit Application"}
-            </button>
+            {step < totalSteps ? (
+              <button type="submit" className="submit-btn">
+                Next →
+              </button>
+            ) : (
+              <button type="submit" className="submit-btn" disabled={loading}>
+                {loading ? "Submitting..." : "Submit Application"}
+              </button>
+            )}
           </div>
+
+          <p className="fee-note wizard-fee">
+            First 200 members are exempt from the application form fee.
+          </p>
         </form>
       </div>
     </>

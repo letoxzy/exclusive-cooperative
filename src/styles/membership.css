@@ -32,48 +32,180 @@
   margin: 0 auto;
 }
 
-/* ---------- Section tracker ---------- */
-.section-tracker {
+/* ---------- Step-by-step header ---------- */
+.wizard-progress {
+  margin-bottom: 28px;
+  scroll-margin-top: 110px;
+}
+
+.wizard-meta {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 36px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+  margin-bottom: 14px;
+  padding: 0 4px;
+}
+
+.section-tracker {
+  display: flex;
+  margin-bottom: 18px;
 }
 
 .tracker-item {
   flex: 1;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 9px;
   text-align: center;
 }
 
-.tracker-index {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
+/* The line that joins one step to the next */
+.tracker-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: calc(50% + 26px);
+  right: calc(-50% + 26px);
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.25s ease;
+}
+
+.tracker-item.done:not(:last-child)::after {
   background: var(--navy);
-  color: var(--white);
-  font-size: 13px;
+}
+
+.tracker-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.tracker-btn:disabled {
+  cursor: default;
+}
+
+.tracker-btn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.tracker-index {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #e6e9e8;
+  color: var(--muted);
+  font-size: 14px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.tracker-item.done .tracker-index {
+  background: var(--navy);
+  color: var(--white);
+}
+
+.tracker-item.active .tracker-index {
+  background: var(--navy);
+  color: var(--white);
+  box-shadow: 0 0 0 5px var(--navy-soft);
 }
 
 .tracker-label {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   display: none;
+}
+
+.tracker-item.active .tracker-label {
+  color: var(--text);
+  font-weight: 700;
 }
 
 @media (min-width: 640px) {
   .tracker-label {
     display: block;
   }
+}
+
+.wizard-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.wizard-bar span {
+  display: block;
+  height: 100%;
+  background: var(--navy);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* ---------- What still needs attention ---------- */
+.step-alert {
+  background: #fdecea;
+  border: 1px solid #f5b5b5;
+  color: #b42318;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  font-size: 13.5px;
+}
+
+.step-alert ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+}
+
+/* ---------- Back / Next ---------- */
+.wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.back-btn {
+  background: var(--white);
+  color: var(--navy);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 13px 24px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.back-btn:hover {
+  border-color: var(--navy);
+}
+
+.wizard-fee {
+  text-align: center;
+  margin-top: 18px;
+}
+
+.wizard-nav .submit-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
 }
 
 /* ---------- Form cards ---------- */
@@ -323,5 +455,18 @@
 
   .submit-btn {
     width: 100%;
+  }
+
+  .wizard-nav .submit-btn,
+  .wizard-nav .back-btn {
+    width: auto;
+    flex: 1;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .tracker-item:not(:last-child)::after {
+    left: calc(50% + 22px);
+    right: calc(-50% + 22px);
   }
 }

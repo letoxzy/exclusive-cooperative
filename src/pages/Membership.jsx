@@ -376,8 +376,12 @@ function Membership() {
           <h2>Application received</h2>
           <p>
             Thank you, {form.fullName.split(" ")[0] || "there"}. Your membership
-            application has been recorded. Our team will reach out to you on{" "}
-            {form.phone || "the number you provided"} once it's reviewed.
+            application has been successfully received and recorded.
+
+            Our team will review your application within approximately 2–3 business
+            days. Once the review is complete, we will contact you on{" "}
+            {form.phone || "the phone number you provided"} with an update
+            regarding your application.
           </p>
         </div>
       </div>

@@ -7,7 +7,7 @@ const sections = [
     h: "Who we are",
     p: [
       "Exclusive (Oshodi/Isolo) Cooperative Multipurpose Society Limited (“the Cooperative”, “we”) operates this website and the Exclusive Cooperative mobile app. We are the data controller for the personal data described here.",
-      "Contact: exclusivecooperative@gmail.com, Oshodi/Isolo, Lagos. Registration number: [REGISTRATION NUMBER].",
+      "Contact: exclusivecooperative@gmail.com, Oshodi/Isolo, Lagos. Registration number: LSCS 20635.",
     ],
   },
   {
@@ -48,7 +48,7 @@ const sections = [
   {
     h: "How long we keep it",
     p: [
-      "We keep your data while your membership is active. After you delete your account we remove your personal profile, but we must keep financial and accounting records (savings, loans, repayments, payment references) and verification records for [RETENTION PERIOD, e.g. 6 years] to meet cooperative, tax and anti-money-laundering obligations. Those records are not used for any other purpose.",
+      "We keep your personal data while your membership is active. If you close your account or your membership ends, we will delete or anonymise personal profile information that we no longer need. However, we may retain financial and accounting records, including savings, loans, repayments and payment references, for at least six (6) years where required for tax, accounting and legal compliance. Verification and identity records will be retained only for the period required by applicable laws and regulatory obligations. These retained records will be securely stored and used only for legitimate legal, regulatory and record-keeping purposes.",
     ],
   },
   {
@@ -69,7 +69,7 @@ const sections = [
   },
   {
     h: "Changes",
-    p: ["We may update this policy. The date below shows the latest version. Last updated: [DATE]."],
+    p: ["We may update this policy. The date below shows the latest version. Last updated: Monday, October 23, 2026."],
   },
 ];
 
